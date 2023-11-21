@@ -65,7 +65,7 @@ mod stable_coin {
         pub fn instantiate(
             initial_token_supply: Amount,
             token_symbol: String,
-            mut token_metadata: Metadata,
+            token_metadata: Metadata,
         ) -> (Component<Self>, Bucket) {
             let provider_name = token_metadata
                 .get("provider_name")
@@ -97,7 +97,6 @@ mod stable_coin {
                 ])));
 
             // Create tokens resource with initial supply
-            token_metadata.insert("provider", provider_name.clone());
             let initial_tokens = ResourceBuilder::fungible()
                 .initial_supply(initial_token_supply)
                 .with_token_symbol(token_symbol)

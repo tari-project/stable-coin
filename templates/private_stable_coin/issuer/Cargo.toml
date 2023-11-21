@@ -1,12 +1,13 @@
 [workspace]
 [package]
-name = "tari-stable-coin"
+name = "private_stable_coin_issuer"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 tari_template_lib = { git = "https://github.com/tari-project/tari-dan.git", branch = "development" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
+private_stable_coin_common = { path = "../common" }
 
 [dev-dependencies]
 tari_template_test_tooling = { git = "https://github.com/tari-project/tari-dan.git", branch = "development" }
