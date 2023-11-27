@@ -86,6 +86,7 @@ mod stable_coin {
             let user_auth_resource = ResourceBuilder::non_fungible()
                 .add_metadata("provider_name", provider_name)
                 .depositable(require_admin.clone())
+                .recallable(require_admin.clone())
                 .update_non_fungible_data(require_admin.clone())
                 .build();
 
@@ -104,7 +105,6 @@ mod stable_coin {
                 // Access rules
                 .mintable(require_admin.clone())
                 .burnable(require_admin.clone())
-                // .recallable(require_admin.clone())
                 .depositable(require_user.clone())
                 .withdrawable(require_user.clone())
                 .build_bucket();
@@ -185,29 +185,21 @@ mod stable_coin {
             badge
         }
 
-        // TODO: Implement recall
-        // pub fn recall_user_tokens(&mut self, vault_id: VaultId) {
-        //     let manager = ResourceManager::get(self.user_auth_resource);
-        //     let recalled = manager.recall_all(vault_id);
-        //     self.token_vault.deposit(recalled);
-        //     emit_event("recall_user_tokens", [("vault_id", vault_id.to_string())]);
-        // }
-        //
-        // pub fn blacklist_user(&mut self, vault_id: VaultId, user_id: UserId) {
-        //     let non_fungible_id: NonFungibleId = user_id.into();
-        //
-        //     let manager = ResourceManager::get(self.user_auth_resource);
-        //     let recalled = manager.recall_non_fungibles(vault_id, [non_fungible_id]);
-        //     manager.update_non_fungible_data(
-        //         non_fungible_id,
-        //         &UserMutableData {
-        //             is_blacklisted: true,
-        //         },
-        //     );
-        //
-        //     self.blacklisted_users.deposit(recalled);
-        //     emit_event("blacklist_user", [("user_id", user_id.to_string())]);
-        // }
+        pub fn blacklist_user(&mut self, vault_id: VaultId, user_id: UserId) {
+            let non_fungible_id: NonFungibleId = user_id.into();
+
+            let manager = ResourceManager::get(self.user_auth_resource);
+            let recalled = manager.recall_non_fungible(vault_id, non_fungible_id.clone());
+            manager.update_non_fungible_data(
+                non_fungible_id,
+                &UserMutableData {
+                    is_blacklisted: true,
+                },
+            );
+
+            self.blacklisted_users.deposit(recalled);
+            emit_event("blacklist_user", [("user_id", user_id.to_string())]);
+        }
 
         pub fn remove_from_blacklist(&mut self, user_id: UserId) -> Bucket {
             let non_fungible_id: NonFungibleId = user_id.into();
