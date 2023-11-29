@@ -66,7 +66,7 @@ mod stable_coin {
             initial_token_supply: Amount,
             token_symbol: String,
             token_metadata: Metadata,
-        ) -> (Component<Self>, Bucket) {
+        ) -> Bucket {
             let provider_name = token_metadata
                 .get("provider_name")
                 .expect("provider_name metadata entry is required");
@@ -112,6 +112,7 @@ mod stable_coin {
             // Create component access rules
             let component_access_rules = AccessRules::new()
                 .add_method_rule("total_supply", AccessRule::AllowAll)
+                .add_method_rule("withdraw", require_admin.clone())
                 .default(require_admin);
 
             // Create component
@@ -125,7 +126,7 @@ mod stable_coin {
             // Access is entirely controlled by anyone with an admin badge
             .with_owner_rule(OwnerRule::None)
             .create();
-            (component, admin_badge)
+            admin_badge
         }
 
         /// Increase token supply by amount.
