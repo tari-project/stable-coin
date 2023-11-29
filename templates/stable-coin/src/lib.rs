@@ -112,7 +112,6 @@ mod stable_coin {
             // Create component access rules
             let component_access_rules = AccessRules::new()
                 .add_method_rule("total_supply", AccessRule::AllowAll)
-                .add_method_rule("withdraw", require_admin.clone())
                 .default(require_admin);
 
             // Create component
