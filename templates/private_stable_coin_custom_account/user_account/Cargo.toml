@@ -5,7 +5,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tari_template_lib = { git = "https://github.com/tari-project/tari-dan.git", branch = "development" }
+#tari_template_lib = { git = "https://github.com/tari-project/tari-dan.git", branch = "development" }
+tari_template_lib = { path = "../../../../dan/dan_layer/template_lib"}
 private_stable_coin_common = { path = "../common" }
 
 serde = { version = "1.0", default-features = false, features = ["derive"] }

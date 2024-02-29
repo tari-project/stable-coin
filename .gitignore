@@ -34,7 +34,7 @@ report
 
 # Ignore DataStore, Database and Log files
 *.mdb
-/data/
+data/
 *.sqlite3
 keys.json
 node_modules
