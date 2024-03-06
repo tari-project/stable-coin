@@ -34,33 +34,47 @@ function maybeProcessTag(maybeTag: any): any {
 }
 
 function processTag(item: any): any {
-    switch (item.Tag?.[0]) {
-        case BinaryTag.VaultId:
-            if (!item.Tag[1]?.Bytes) {
-                return item;
-            }
-            return tagToHex("vault", item.Tag[1]);
-        case BinaryTag.ComponentAddress:
-            if (!item.Tag[1]?.Bytes) {
-                return item;
-            }
-            return tagToHex("component", item.Tag[1]);
-        case BinaryTag.ResourceAddress:
-            if (!item.Tag[1]?.Bytes) {
-                return item;
-            }
-            return tagToHex("resource", item.Tag[1]);
-        default:
-            return item;
-    }
+    return convertTaggedValueToString(item.Tag[0], item.Tag[1].Bytes);
+    // switch (item.Tag?.[0]) {
+    //     case BinaryTag.VaultId:
+    //         if (!item.Tag[1]?.Bytes) {
+    //             return item;
+    //         }
+    //         return bytesToAddressString("vault", item.Tag[1].Bytes);
+    //     case BinaryTag.ComponentAddress:
+    //         if (!item.Tag[1]?.Bytes) {
+    //             return item;
+    //         }
+    //         return bytesToAddressString("component", item.Tag[1].Bytes);
+    //     case BinaryTag.ResourceAddress:
+    //         if (!item.Tag[1]?.Bytes) {
+    //             return item;
+    //         }
+    //         return bytesToAddressString("resource", item.Tag[1].Bytes);
+    //     default:
+    //         return item;
+    // }
 }
 
-function tagToHex(type: String, tag: any): string {
-    const hex = Array.from(tag.Bytes, function (byte) {
+function bytesToAddressString(type: String, tag: ArrayLike<unknown>): string {
+    const hex = Array.from(tag, function (byte) {
         return ('0' + (byte & 0xFF).toString(16)).slice(-2);
     }).join('');
 
     return `${type}_${hex}`;
+}
+
+export function convertTaggedValueToString(tag: number, value: any): string | any {
+    switch (tag) {
+        case BinaryTag.VaultId:
+            return bytesToAddressString("vault", value);
+        case BinaryTag.ComponentAddress:
+            return bytesToAddressString("component", value);
+        case BinaryTag.ResourceAddress:
+            return bytesToAddressString("resource", value);
+        default:
+            return value;
+    }
 }
 
 

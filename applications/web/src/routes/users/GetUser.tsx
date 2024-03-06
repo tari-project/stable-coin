@@ -22,54 +22,34 @@
 
 import "./Style.css";
 import Grid from "@mui/material/Grid";
-import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import {StyledPaper} from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import useActiveIssuer, {ActiveIssuer} from "../../store/activeIssuer.ts";
-import {Alert, CircularProgress, MenuItem, Select, TextField} from "@mui/material";
+import {Alert, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
-import {useNavigate, useParams} from "react-router-dom";
 import {useEffect} from "react";
 import * as cbor from '../../cbor';
-import {SimpleTransactionResult} from "../../types.ts";
-import useSettings from "../../store/settings.ts";
-import activeIssuer from "../../store/activeIssuer.ts";
+import ManageUser from "./ManageUser.tsx";
+import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
 
 interface Props {
+    issuerId: ComponentAddress,
+    adminAuthBadge?: ResourceAddress,
+
 }
 
-function GetUser(_props: Props) {
+function GetUser(props: Props) {
     const {provider} = useTariProvider();
-    const {settings} = useSettings();
 
     const [isBusy, setIsBusy] = React.useState(false);
     const [error, setError] = React.useState<Error | null>(null);
     const [formValues, setFormValues] = React.useState({});
     const [validity, setValidity] = React.useState({});
-    const [issuerComponents, setIssuerComponents] = React.useState<ActiveIssuer[] | null>(null);
     const [userAuthBadge, setUserAuthBadge] = React.useState<string | null>(null);
     const [userData, setUserData] = React.useState<object | null>(null);
 
     useEffect(() => {
-        if (!isBusy && settings.template && !error && issuerComponents === null) {
-            setIsBusy(true);
-            const getIssuerComponents = provider.listSubstates(settings.template, "Component")
-                .then((substates) => {
-                    setIssuerComponents(substates.filter((s) => s.template_address === settings.template));
-                });
-
-            Promise.allSettled([getIssuerComponents])
-                .catch((e) => setError(e))
-                .finally(() => setIsBusy(false));
-        }
-    }, [isBusy, error, issuerComponents]);
-
-    useEffect(() => {
-        if (!formValues.issuerComponent) {
-            return;
-        }
-        provider.getSubstate(formValues.issuerComponent)
+        provider.getSubstate(props.issuerId)
             .then((issuer) => {
                 const {value} = issuer;
                 const structMap = value.substate.Component.body.state as [object, object][];
@@ -91,7 +71,7 @@ function GetUser(_props: Props) {
 
     const isValid = Object.values(validity).every((v) => v);
 
-    const getUser = async (values) => {
+    const getUser = async (userId) => {
         if (!userAuthBadge) {
             return;
         }
@@ -100,9 +80,10 @@ function GetUser(_props: Props) {
         setError(null);
         setUserData(null);
         try {
-            const substate = await provider.getSubstate(`${userAuthBadge} nft_u64:${values.userId}`);
+            const substate = await provider.getSubstate(`${userAuthBadge} nft_u64:${userId}`);
             setUserData(substate as object);
         } catch (e) {
+            console.error(e);
             setError(e);
         } finally {
             setIsBusy(false);
@@ -112,7 +93,6 @@ function GetUser(_props: Props) {
     return (
         <>
             <StyledPaper sx={{padding: 6}}>
-                {error && <Alert severity="error">{error.message || error}</Alert>}
                 <Grid container spacing={2}>
                     <Grid item xs={12} md={12} lg={12}>
                         <h2>User</h2>
@@ -120,26 +100,8 @@ function GetUser(_props: Props) {
                     <Grid item xs={12} md={12} lg={12}>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
-                            await getUser(formValues);
+                            await getUser(formValues.userId);
                         }}>
-                            <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
-                                <Select
-                                    name="issuerComponent"
-                                    label="Isser Component"
-                                    fullWidth
-                                    required
-                                    onChange={set}
-                                    displayEmpty
-                                    value={formValues.issuerComponent || ""}
-                                >
-                                    {!issuerComponents && <MenuItem disabled>Loading...</MenuItem>}
-                                    {issuerComponents?.map((c, i) => (
-                                        <MenuItem key={i}
-                                                  value={c.substate_id.Component}>{c.substate_id.Component}</MenuItem>
-                                    ))}
-                                </Select>
-                                {userAuthBadge && <Alert severity="info">Admin Badge: {userAuthBadge}</Alert>}
-                            </Grid>
                             <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
                                 <TextField
                                     name="userId"
@@ -154,21 +116,38 @@ function GetUser(_props: Props) {
                                 />
                                 {validity.userId === false && <Alert severity="error">User ID must be a number</Alert>}
                             </Grid>
-                            <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
-                                <Button type="submit" disabled={isBusy || !isValid} variant="contained">Get</Button>
+                            <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left", paddingBottom: 4}}>
+                                <Button type="submit" disabled={isBusy || !isValid} variant="contained">Load</Button>
                             </Grid>
+                            {error && <Alert severity="error">{error.message}</Alert>}
                         </form>
                     </Grid>
                 </Grid>
-                <Grid container spacing={2}>
-                    <Grid item xs={12} md={12} lg={12}>
-                        {userData && <pre>{JSON.stringify(cbor.userData, null, 2)}</pre>}
-                    </Grid>
-                </Grid>
+                {userData && (
+                    <ManageUser
+                        issuerId={props.issuerId}
+                        adminBadge={props.adminAuthBadge}
+                        userBadge={userData.record.substate_id.NonFungible}
+                        badgeData={userData.value.substate.NonFungible.data}
+                        badgeMutableData={userData.value.substate.NonFungible.mutable_data}
+                    />
+                )}
             </StyledPaper>
         </>
     )
 }
 
+function UserData({userData}: { userData: object }) {
+    return (
+        <>
+            {Object.entries(userData).map(([key, value], i) => (
+                <>
+                    <Grid key={i} item xs={4} md={4} lg={4}>{key}</Grid>
+                    <Grid key={`k-${i}`} item xs={8} md={8} lg={8}>{value.toString()}</Grid>
+                </>
+            ))}
+        </>
+    )
+}
 
 export default GetUser;

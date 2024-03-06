@@ -54,14 +54,20 @@ function Detail({label, value}: { label: string, value: string }) {
 }
 
 function IssuerDetails({issuer}: IssuerDetailsProps) {
+    const navigate = useNavigate();
+    const params = useParams();
     return (
         <StyledPaper sx={{padding: 6}}>
-            <Grid container spacing={2}>
+            <Grid container spacing={2} sx={{paddingBottom: 4}}>
                 <Detail label="Component ID" value={issuer.id}/>
                 <Detail label="Resource Address" value={issuer.vault.resourceAddress}/>
                 <Detail label="Revealed Vault Supply" value={issuer.vault.revealedAmount.toString()}/>
                 <Detail label="Admin Badge Resource" value={issuer.adminAuthResource}/>
                 <Detail label="User Badge Resource" value={issuer.userAuthResource}/>
+            </Grid>
+            <Grid container spacing={2}>
+                <Button variant="contained" color="secondary"
+                        onClick={() => navigate(`/issuers/${params.issuerId}/users`)}>Manage Users</Button>
             </Grid>
         </StyledPaper>
     );
@@ -79,7 +85,7 @@ function Issuer(props: Props) {
     const params = useParams();
     const navigate = useNavigate();
 
-    if (!params.id || !provider) {
+    if (!params.issuerId || !provider) {
         useEffect(() => {
             navigate("/");
         }, []);
@@ -89,7 +95,7 @@ function Issuer(props: Props) {
     function load() {
         if (!isLoading && !activeIssuer && !error) {
             setIsLoading(true);
-            const getComponent = provider.getSubstate(params.id!)
+            const getComponent = provider.getSubstate(params.issuerId!)
                 .then(async (issuer) => {
                     const {substate} = issuer.value;
                     const {substate_id, version} = issuer.record;

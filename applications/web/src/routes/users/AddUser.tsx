@@ -22,77 +22,44 @@
 
 import "./Style.css";
 import Grid from "@mui/material/Grid";
-import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import {StyledPaper} from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import useActiveIssuer, {ActiveIssuer} from "../../store/activeIssuer.ts";
-import {Alert, CircularProgress, MenuItem, Select, TextField} from "@mui/material";
+import {Alert, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
-import {useNavigate, useParams} from "react-router-dom";
-import {useEffect} from "react";
-import * as cbor from '../../cbor';
-import {SimpleTransactionResult} from "../../types.ts";
-import useSettings from "../../store/settings.ts";
-import activeIssuer from "../../store/activeIssuer.ts";
+import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
 
 interface Props {
+    issuerId: ComponentAddress,
+    adminAuthBadge?: ResourceAddress,
 }
 
-function AddUser(_props: Props) {
+function AddUser(props: Props) {
     const {provider} = useTariProvider();
-    const {settings} = useSettings();
 
     const [isBusy, setIsBusy] = React.useState(false);
     const [error, setError] = React.useState<Error | null>(null);
     const [formValues, setFormValues] = React.useState({});
     const [validity, setValidity] = React.useState({});
-    const [issuerComponents, setIssuerComponents] = React.useState<ActiveIssuer[] | null>(null);
-    const [adminAuthBadge, setAdminAuthBadge] = React.useState<string | null>(null);
     const [success, setSuccess] = React.useState<string | null>(null);
-
-    useEffect(() => {
-        if (!isBusy && settings.template && !error && issuerComponents === null) {
-            setIsBusy(true);
-            const getIssuerComponents = provider.listSubstates(settings.template, "Component")
-                .then((substates) => {
-                    setIssuerComponents(substates.filter((s) => s.template_address === settings.template));
-                });
-
-            Promise.allSettled([getIssuerComponents])
-                .catch((e) => setError(e))
-                .finally(() => setIsBusy(false));
-        }
-    }, [isBusy, error, issuerComponents]);
-
-    useEffect(() => {
-        if (!formValues.issuerComponent) {
-            return;
-        }
-        provider.getSubstate(formValues.issuerComponent)
-            .then((issuer) => {
-                const {value} = issuer;
-                const structMap = value.substate.Component.body.state as [object, object][];
-                const adminAuthBadge = cbor
-                    .getValueByPath(structMap, "$.admin_auth_resource");
-                setAdminAuthBadge(adminAuthBadge);
-            })
-            .catch((e) => setError(e))
-            .finally(() => setIsBusy(false));
-    }, [formValues]);
 
     const set = (e) => {
         setFormValues({...formValues, [e.target.name]: e.target.value});
     }
 
     const validate = (e) => {
-        setValidity({...validity, [e.target.name]: e.target.validity.valid});
+        if (e.target.value) {
+            setValidity({...validity, [e.target.name]: e.target.validity.valid});
+        } else {
+            delete validity[e.target.name];
+            setValidity(validity);
+        }
     }
 
     const isValid = Object.values(validity).every((v) => v);
 
     const createUser = async (values) => {
-        if (!adminAuthBadge) {
+        if (!props.adminAuthBadge) {
             return;
         }
 
@@ -100,13 +67,13 @@ function AddUser(_props: Props) {
         setError(null);
         setSuccess(null);
         try {
-            const result = await provider.createUser(values.issuerComponent, adminAuthBadge, values.userId, values.userAccount);
+            const result = await provider.createUser(props.issuerId, props.adminAuthBadge, values.userId, values.userAccount);
             if (result.rejectReason) {
                 setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
                 return;
             }
             console.log(result.accept?.up_substates);
-            const [_t, id, _val] = result.accept?.up_substates?.filter(([type, _id, _v]) => type === "NonFungible").find(([type, id, _v]) => id.endsWith(`nft_u64:${values.userId}`));
+            const [_t, id, _val] = result.accept?.up_substates?.filter(([type, _id, _v]) => type === "NonFungible").find(([_type, id, _v]) => id.endsWith(`nft_u64:${values.userId}`));
             setSuccess(`User created in transaction ${result.transactionId}. User badge: ${JSON.stringify(id)}`);
         } catch (e) {
             setError(e);
@@ -118,7 +85,7 @@ function AddUser(_props: Props) {
     return (
         <>
             <StyledPaper sx={{padding: 6}}>
-                {error && <Alert severity="error">{error.message || error}</Alert>}
+                {error && <Alert severity="error">{error.message}</Alert>}
                 {success && <Alert severity="success">{success}</Alert>}
                 <Grid container spacing={2}>
                     <Grid item xs={12} md={12} lg={12}>
@@ -130,22 +97,7 @@ function AddUser(_props: Props) {
                             await createUser(formValues);
                         }}>
                             <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
-                                <Select
-                                    name="issuerComponent"
-                                    label="Isser Component"
-                                    fullWidth
-                                    required
-                                    onChange={set}
-                                    displayEmpty
-                                    value={formValues.issuerComponent || ""}
-                                >
-                                    {!issuerComponents && <MenuItem disabled>Loading...</MenuItem>}
-                                    {issuerComponents?.map((c, i) => (
-                                        <MenuItem key={i}
-                                                  value={c.substate_id.Component}>{c.substate_id.Component}</MenuItem>
-                                    ))}
-                                </Select>
-                                {adminAuthBadge && <Alert severity="info">Admin Badge: {adminAuthBadge}</Alert>}
+                                <Alert severity="info">Admin Badge: {props.adminAuthBadge}</Alert>
                             </Grid>
                             <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
                                 <TextField
@@ -167,7 +119,7 @@ function AddUser(_props: Props) {
                                     placeholder="component_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                     label="User Account Component"
                                     fullWidth
-                                    inputProps={{pattern: "^component_[0-9a-fA-F]{64}$"}}
+                                    inputProps={{pattern: "^component_[0-9a-fA-F]{56}$"}}
                                     required
                                     onChange={set}
                                     onBlur={validate}

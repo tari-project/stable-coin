@@ -62,8 +62,7 @@ export class SimpleTransactionResult {
                     case "Vault":
                         return ["Vault", id.Vault, val.substate.Vault];
                     case "NonFungible":
-                        // TODO: not correct
-                        return ["NonFungible", `${id.NonFungible.resource_address} nft_u64:${id.NonFungible.id.Uint64}`, val.substate.NonFungible];
+                        return ["NonFungible", id.NonFungible, val.substate.NonFungible];
                     default:
                         console.log("Unknown substate type", id);
                         return null;

@@ -2,7 +2,7 @@ import {providers} from '@tariproject/tarijs';
 import {TariProvider} from "@tariproject/tarijs/dist/providers";
 import {Account} from "@tariproject/tarijs/dist/providers/types";
 import {NewIssuerParams, SimpleTransactionResult} from "./types.ts";
-import {Instruction} from "@tariproject/typescript-bindings";
+import {ComponentAddress, Instruction, ResourceAddress} from "@tariproject/typescript-bindings";
 
 const {
     TariProvider,
@@ -160,15 +160,15 @@ export default class TariWallet<TProvider extends TariProvider> {
         return SimpleTransactionResult.from(result);
     }
 
-    public increaseSupply(component_address: string, badge_resource: string, amount: number, fee: number = 2000) {
+    public increaseSupply(component_address: ComponentAddress, badge_resource: ResourceAddress, amount: number, fee: number = 2000) {
         return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, fee)
     }
 
-    public decreaseSupply(component_address: string, badge_resource: string, amount: number, fee: number = 2000) {
+    public decreaseSupply(component_address: ComponentAddress, badge_resource: ResourceAddress, amount: number, fee: number = 2000) {
         return this.callRestrictedMethod(component_address, badge_resource, "decrease_supply", [amount], empty, fee)
     }
 
-    public transfer(issuerComponent: string, badgeResource: string, destAccount: string, amount: number, fee: number = 2000) {
+    public transfer(issuerComponent: ComponentAddress, badgeResource: ResourceAddress, destAccount: string, amount: number, fee: number = 2000) {
         return this.callRestrictedMethod(issuerComponent, badgeResource, "withdraw", [amount], () => [
                 {
                     PutLastInstructionOutputOnWorkspace: {key: [1]}
@@ -185,7 +185,7 @@ export default class TariWallet<TProvider extends TariProvider> {
         )
     }
 
-    async callRestrictedMethod(component_address: string, badge_resource: string, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, fee: number = 2000) {
+    async callRestrictedMethod(component_address: ComponentAddress, badge_resource: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, fee: number = 2000) {
         const account = await this.provider.getAccount();
 
         const fee_instructions = [
@@ -259,8 +259,20 @@ export default class TariWallet<TProvider extends TariProvider> {
             }
         ];
 
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "create_new_user", [userId], addBadgeToUserAccount, 2000);
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "create_new_user", [userId, userAccount], addBadgeToUserAccount, 2000);
     }
+
+    public async revokeUserAccess(
+        issuerComponent: ComponentAddress,
+        adminBadgeResource: ResourceAddress,
+        userId: number,
+        vaultId: string,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "blacklist_user", [vaultId, userId], [], fee);
+    }
+
+
 }
 
 

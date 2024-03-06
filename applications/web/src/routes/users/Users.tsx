@@ -23,18 +23,15 @@
 import "./Style.css";
 import Grid from "@mui/material/Grid";
 import SecondaryHeading from "../../components/SecondaryHeading.tsx";
-import {StyledPaper} from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import useActiveIssuer, {ActiveIssuer} from "../../store/activeIssuer.ts";
 import {Alert, CircularProgress} from "@mui/material";
-import Button from "@mui/material/Button";
 import {useNavigate, useParams} from "react-router-dom";
 import {useEffect} from "react";
 import * as cbor from '../../cbor';
-import {SimpleTransactionResult} from "../../types.ts";
 import AddUser from "./AddUser.tsx";
 import GetUser from "./GetUser.tsx";
+import {ResourceAddress} from "@tariproject/typescript-bindings";
 
 interface Props {
 }
@@ -42,6 +39,10 @@ interface Props {
 function Users(props: Props) {
     const {provider} = useTariProvider();
     const navigate = useNavigate();
+    const params = useParams();
+    const [adminAuthBadge, setAdminAuthBadge] = React.useState<ResourceAddress | null>(null);
+    const [isBusy, setIsBusy] = React.useState(false);
+    const [error, setError] = React.useState<Error | null>(null);
 
     if (!provider) {
         useEffect(() => {
@@ -50,6 +51,20 @@ function Users(props: Props) {
         return <></>;
     }
 
+    useEffect(() => {
+        setIsBusy(true);
+        provider.getSubstate(params.issuerId!)
+            .then((issuer) => {
+                const {value} = issuer;
+                const structMap = value.substate.Component.body.state as [object, object][];
+                const adminAuthBadge = cbor
+                    .getValueByPath(structMap, "$.admin_auth_resource");
+                setAdminAuthBadge(adminAuthBadge);
+            })
+            .catch((e) => setError(e))
+            .finally(() => setIsBusy(false));
+    }, []);
+
 
     return (
         <>
@@ -57,10 +72,10 @@ function Users(props: Props) {
                 <SecondaryHeading>Users</SecondaryHeading>
             </Grid>
             <Grid item xs={12} md={12} lg={12}>
-                <AddUser/>
+                {isBusy ? <CircularProgress/> : <AddUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!}/>}
             </Grid>
             <Grid item xs={12} md={12} lg={12}>
-                <GetUser/>
+                {isBusy ? <CircularProgress/> : <GetUser adminAuthBadge={adminAuthBadge} issuerId={params.issuerId!}/>}
             </Grid>
         </>
     );

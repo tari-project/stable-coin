@@ -42,6 +42,7 @@ impl Display for UserId {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UserData {
     pub user_id: UserId,
+    pub user_account: ComponentAddress,
     pub created_at: u64,
 }
 
@@ -266,7 +267,11 @@ mod template {
             badge
         }
 
-        pub fn create_new_user(&mut self, user_id: UserId) -> Bucket {
+        pub fn create_new_user(
+            &mut self,
+            user_id: UserId,
+            user_account: ComponentAddress,
+        ) -> Bucket {
             // TODO: configurable?
             const DEFAULT_EXCHANGE_LIMIT: Amount = Amount::new(1_000);
 
@@ -274,6 +279,7 @@ mod template {
                 user_id.into(),
                 &UserData {
                     user_id,
+                    user_account,
                     // TODO: real time not implemented
                     created_at: 0,
                 },

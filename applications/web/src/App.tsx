@@ -37,7 +37,7 @@ const breadcrumbRoutes = [
     },
     {
         label: "Issuers",
-        path: "/issuers/:id",
+        path: "/issuers/:issuerId",
         dynamic: false,
     }, {
         label: "users",
@@ -57,9 +57,9 @@ export default function App() {
                 <Route path="/" element={<Layout breadcrumbRoutes={breadcrumbRoutes}/>}>
                     <Route index element={<Home/>}/>
                     <Route path="issuers">
-                        <Route path=":id" element={<Issuer/>}/>
+                        <Route path=":issuerId/users" element={<Users/>}/>
+                        <Route path=":issuerId" element={<Issuer/>}/>
                     </Route>
-                    <Route path="users" element={<Users/>}/>
                     <Route path="*" element={<ErrorPage/>}/>
                 </Route>
             </Routes>
