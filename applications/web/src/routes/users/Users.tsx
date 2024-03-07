@@ -75,7 +75,7 @@ function Users(props: Props) {
                 {isBusy ? <CircularProgress/> : <AddUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!}/>}
             </Grid>
             <Grid item xs={12} md={12} lg={12}>
-                {isBusy ? <CircularProgress/> : <GetUser adminAuthBadge={adminAuthBadge} issuerId={params.issuerId!}/>}
+                {isBusy ? <CircularProgress/> : <GetUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!}/>}
             </Grid>
         </>
     );

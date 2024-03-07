@@ -28,6 +28,9 @@ import {Alert, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
 import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
 import {convertTaggedValueToString} from "../../cbor.ts";
+import * as cbor from "../../cbor.ts";
+import {SimpleTransactionResult, splitOnce} from "../../types.ts";
+import {BoxHeading2} from "../../components/StyledComponents.ts";
 
 interface Props {
     issuerId: ComponentAddress
@@ -36,6 +39,7 @@ interface Props {
     adminAuthBadge: ResourceAddress,
     badgeData: object,
     badgeMutableData: object,
+    onChange?: (result: SimpleTransactionResult) => void,
 }
 
 function ManageUser(props: Props) {
@@ -43,20 +47,89 @@ function ManageUser(props: Props) {
 
     const [isBusy, setIsBusy] = React.useState(false);
     const [error, setError] = React.useState<Error | null>(null);
+    const [success, setSuccess] = React.useState<string | null>(null);
+    const [wrappedExchangeLimit, setWrappedExchangeLimit] = React.useState<number>(props.badgeMutableData.wrapped_exchange_limit);
+
+    const [tag, v] = props.badgeData.user_account!['@@TAGGED@@'];
+    const userAccount = convertTaggedValueToString(tag, v);
+    const [userBadgeResource, _nft] = splitOnce(props.userBadge, ' ')!;
 
     const handleOnRevoke = async () => {
-
-        if (!props.badgeData.user_account) {
-            throw new Error("No account address found in badge data");
-        }
-
         setIsBusy(true);
+        setSuccess(null);
 
         try {
-            const [tag, v] = props.badgeData.user_account;
-            const substate = await provider.getSubstate(convertTaggedValueToString(tag, v));
-            console.log(substate);
-            // const resp = await provider.revokeUserAccess(props.issuerId, props.adminAuthBadge, props.userId, vaultId)
+            const substate = await provider.getSubstate(userAccount);
+            const vaults = cbor.getValueByPath(substate.value.substate.Component.body.state, "$.vaults");
+            const vaultToRevoke = vaults[userBadgeResource];
+            if (!vaultToRevoke) {
+                throw new Error(`User does not have a stable coin user badge ${userBadgeResource}`)
+            }
+
+            const result = await provider.revokeUserAccess(
+                props.issuerId,
+                props.adminAuthBadge,
+                userBadgeResource,
+                props.userId,
+                vaultToRevoke,
+            );
+            if (result.accept) {
+                setSuccess(`User permission revoked in transaction ${result.transactionId}`);
+            } else {
+                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+            }
+            props.onChange?.(result);
+        } catch (e) {
+            setError(e);
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const handleOnReinstate = async () => {
+        setIsBusy(true);
+        setSuccess(null);
+
+        try {
+            const result = await provider.reinstateUserAccess(
+                props.issuerId,
+                props.adminAuthBadge,
+                userBadgeResource,
+                props.userId,
+                userAccount
+            )
+            if (result.accept) {
+                setSuccess(`User permission reinstated in transaction ${result.transactionId}`);
+            } else {
+                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+            }
+            props.onChange?.(result);
+        } catch (e) {
+            setError(e);
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const handleOnSave = async (e) => {
+        e.preventDefault();
+        setIsBusy(true);
+        setSuccess(null);
+
+        try {
+            const result = await provider.setUserExchangeLimit(
+                props.issuerId,
+                props.adminAuthBadge,
+                userBadgeResource,
+                props.userId,
+                wrappedExchangeLimit
+            )
+            if (result.accept) {
+                setSuccess(`User limit set in transaction ${result.transactionId}`);
+            } else {
+                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+            }
+            props.onChange?.(result);
         } catch (e) {
             setError(e);
         } finally {
@@ -72,17 +145,53 @@ function ManageUser(props: Props) {
             <UserData userData={props.badgeData}/>
             <Grid item xs={12} md={12} lg={12}><h3>Mutable Data</h3></Grid>
             <UserData userData={props.badgeMutableData}/>
+            <Grid item xs={12} md={12} lg={12}>
+                <form
+                    onSubmit={handleOnSave}
+                >
+                    <Grid container>
+                        <Grid item xs={4} md={4} lg={4}>
+                            <TextField
+                                name="wrapped_exchange_limit"
+                                placeholder="Limit for wrapped token exchange"
+                                label="Wrapped Exchange Limit"
+                                fullWidth
+                                required
+                                type="number"
+                                value={wrappedExchangeLimit}
+                                onChange={(e) => setWrappedExchangeLimit(parseInt(e.target.value))}
+                            />
+                        </Grid>
+                        <Grid item xs={4} md={4} lg={4}>
+                            <Button variant="contained" type="submit"
+                                    disabled={isBusy || props.badgeMutableData?.wrapped_exchange_limit === wrappedExchangeLimit || props.badgeMutableData?.is_blacklisted}
+                                    color="secondary">Save</Button>
+                        </Grid>
+                    </Grid>
+                </form>
+            </Grid>
 
-            <Grid item xs={4} md={4} lg={4}><Button variant="contained" color="error" disabled={isBusy}
-                                                    onClick={handleOnRevoke}>Revoke
-                access</Button> </Grid>
-            <Grid item xs={4} md={4} lg={4}><Button variant="contained" color="error" onClick={handleOnRevoke}>Revoke
-                access</Button> </Grid>
-            <Grid item xs={4} md={4} lg={4}><Button variant="contained" color="error" onClick={handleOnRevoke}>Revoke
-                access</Button> </Grid>
+            <Grid item xs={12} md={12} lg={12}>
+                <BoxHeading2>Permissions</BoxHeading2>
+            </Grid>
+            <Grid item xs={4} md={4} lg={4}>
+                {props.badgeMutableData && (
+                    props.badgeMutableData.is_blacklisted ? (
+                        <Button variant="contained" color="success" onClick={handleOnReinstate} disabled={isBusy}>
+                            Reinstate Access
+                        </Button>
+                    ) : (
+                        <Button variant="contained" color="error" disabled={isBusy} onClick={handleOnRevoke}>Revoke
+                            access</Button>
+
+                    ))}
+            </Grid>
+
 
             {error &&
                 <Grid item xs={12} md={12} lg={12}><Alert severity="error">{error.message}</Alert></Grid>}
+            {success &&
+                <Grid item xs={12} md={12} lg={12}><Alert severity="success">{success}</Alert></Grid>}
         </Grid>
     )
 }
@@ -91,10 +200,10 @@ function UserData({userData}: { userData: object }) {
     return (
         <>
             {Object.entries(userData).map(([key, value], i) => (
-                <>
-                    <Grid key={i} item xs={4} md={4} lg={4}>{key}</Grid>
-                    <Grid key={`k-${i}`} item xs={8} md={8} lg={8}>{displayValue(value)}</Grid>
-                </>
+                <React.Fragment key={i}>
+                    <Grid item xs={4} md={4} lg={4}>{key}</Grid>
+                    <Grid item xs={8} md={8} lg={8}>{displayValue(value)}</Grid>
+                </React.Fragment>
             ))}
         </>
     )

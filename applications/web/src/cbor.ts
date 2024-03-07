@@ -23,14 +23,21 @@ export function getValueByPath(cborRepr: object, path: string): any {
 
         return null;
     }
-    return maybeProcessTag(value);
+    return convertCborValue(value);
 }
 
-function maybeProcessTag(maybeTag: any): any {
-    if (maybeTag.Tag) {
-        return processTag(maybeTag);
+function convertCborValue(value: any): any {
+    if (value.Map) {
+        const result = {};
+        for (const [key, val] of value.Map) {
+            result[convertCborValue(key)] = convertCborValue(val);
+        }
+        return result;
     }
-    return maybeTag;
+    if (value.Tag) {
+        return processTag(value);
+    }
+    return value;
 }
 
 function processTag(item: any): any {

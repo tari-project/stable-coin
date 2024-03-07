@@ -34,7 +34,7 @@ import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-binding
 
 interface Props {
     issuerId: ComponentAddress,
-    adminAuthBadge?: ResourceAddress,
+    adminAuthBadge: ResourceAddress,
 
 }
 
@@ -78,7 +78,6 @@ function GetUser(props: Props) {
 
         setIsBusy(true);
         setError(null);
-        setUserData(null);
         try {
             const substate = await provider.getSubstate(`${userAuthBadge} nft_u64:${userId}`);
             setUserData(substate as object);
@@ -126,10 +125,12 @@ function GetUser(props: Props) {
                 {userData && (
                     <ManageUser
                         issuerId={props.issuerId}
-                        adminBadge={props.adminAuthBadge}
+                        adminAuthBadge={props.adminAuthBadge}
                         userBadge={userData.record.substate_id.NonFungible}
+                        userId={formValues.userId}
                         badgeData={userData.value.substate.NonFungible.data}
                         badgeMutableData={userData.value.substate.NonFungible.mutable_data}
+                        onChange={() => getUser(formValues.userId)}
                     />
                 )}
             </StyledPaper>

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import * as tarijs from "@tariproject/tarijs";
+import {RejectReason} from "../../../../dan/bindings";
 
 
 export interface NewIssuerParams {
@@ -34,13 +35,13 @@ export class SimpleTransactionResult {
         return this.inner.result
     }
 
-    public get rejectReason(): object | null {
+    public get rejectReason(): RejectReason | null {
         if (this.rejected) {
             return this.rejected;
         }
 
         if (this.onlyFeeAccepted) {
-            return this.onlyFeeAccepted[0];
+            return this.onlyFeeAccepted[1];
         }
 
         return null;
@@ -86,14 +87,21 @@ export class SimpleTransactionResult {
         };
     }
 
-    public get onlyFeeAccepted(): [object, string] | null {
+    public get onlyFeeAccepted(): [SubstateDiff, RejectReason] | null {
         return this.inner.result.result.AcceptFeeRejectRest;
     }
 
-    public get rejected(): object | null {
+    public get rejected(): RejectReason | null {
         return this.inner.result.result.Reject;
     }
+}
 
+export function splitOnce(str: string, separator: string): [string, string] | null {
+    const index = str.indexOf(separator);
+    if (index === -1) {
+        return null;
+    }
+    return [str.slice(0, index), str.slice(index + separator.length)];
 }
 
 

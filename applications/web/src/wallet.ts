@@ -2,14 +2,19 @@ import {providers} from '@tariproject/tarijs';
 import {TariProvider} from "@tariproject/tarijs/dist/providers";
 import {Account} from "@tariproject/tarijs/dist/providers/types";
 import {NewIssuerParams, SimpleTransactionResult} from "./types.ts";
-import {ComponentAddress, Instruction, ResourceAddress} from "@tariproject/typescript-bindings";
+import {
+    ComponentAddress,
+    Instruction,
+    ResourceAddress,
+    VaultId,
+    SubstateRequirement
+} from "@tariproject/typescript-bindings";
 
 const {
     TariProvider,
     metamask: {MetamaskTariProvider},
     walletDaemon: {WalletDaemonTariProvider},
     types: {
-        SubstateRequirement,
         TransactionSubmitRequest,
         TransactionStatus
     }
@@ -161,11 +166,11 @@ export default class TariWallet<TProvider extends TariProvider> {
     }
 
     public increaseSupply(component_address: ComponentAddress, badge_resource: ResourceAddress, amount: number, fee: number = 2000) {
-        return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, fee)
+        return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, [], fee)
     }
 
     public decreaseSupply(component_address: ComponentAddress, badge_resource: ResourceAddress, amount: number, fee: number = 2000) {
-        return this.callRestrictedMethod(component_address, badge_resource, "decrease_supply", [amount], empty, fee)
+        return this.callRestrictedMethod(component_address, badge_resource, "decrease_supply", [amount], empty, [], fee)
     }
 
     public transfer(issuerComponent: ComponentAddress, badgeResource: ResourceAddress, destAccount: string, amount: number, fee: number = 2000) {
@@ -181,11 +186,96 @@ export default class TariWallet<TProvider extends TariProvider> {
                     }
                 }
             ] as Instruction[],
+            [],
             fee
         )
     }
 
-    async callRestrictedMethod(component_address: ComponentAddress, badge_resource: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, fee: number = 2000) {
+    async createUser(issuerComponent: string, adminBadgeResource: string, userId: number, userAccount: string) {
+        const addBadgeToUserAccount = (_account: Account) => [
+            {
+                PutLastInstructionOutputOnWorkspace: {key: [1]}
+            },
+            {
+                CallMethod: {
+                    component_address: userAccount,
+                    method: "deposit",
+                    args: [{Workspace: [1]}]
+                }
+            }
+        ];
+
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "create_new_user", [userId, userAccount], addBadgeToUserAccount, []);
+    }
+
+    public async revokeUserAccess(
+        issuerComponent: ComponentAddress,
+        adminBadgeResource: ResourceAddress,
+        userBadgeResource: ResourceAddress,
+        userId: number,
+        vaultId: VaultId,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        const extraInputs = [{
+            substate_id: `${userBadgeResource} nft_u64:${userId}`,
+            version: null
+        }] as SubstateRequirement[];
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "blacklist_user", [vaultId, userId], empty, extraInputs, fee);
+    }
+
+
+    public async reinstateUserAccess(
+        issuerComponent: ComponentAddress,
+        adminBadgeResource: ResourceAddress,
+        userBadgeResource: ResourceAddress,
+        userId: number,
+        userAccount: ComponentAddress,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        const extra = () => [
+            {PutLastInstructionOutputOnWorkspace: {key: [1]}},
+            {
+                CallMethod: {
+                    component_address: userAccount,
+                    method: "deposit",
+                    args: [{Workspace: [1]}]
+                }
+            }
+        ] as Instruction[];
+
+        const extraInputs = [{
+            substate_id: `${userBadgeResource} nft_u64:${userId}`,
+            version: null
+        }] as SubstateRequirement[];
+
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "remove_from_blacklist", [userId], extra, extraInputs, fee);
+    }
+
+
+    public async setUserExchangeLimit(
+        issuerComponent: ComponentAddress,
+        adminBadgeResource: ResourceAddress,
+        userBadgeResource: ResourceAddress,
+        userId: number,
+        newLimit: number,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        const extraInputs = [{
+            substate_id: `${userBadgeResource} nft_u64:${userId}`,
+            version: null
+        }] as SubstateRequirement[];
+
+        // TODO: we shouldnt expose set_user_data in the template, we should change to set_user_exchange_limit
+        //       This overwrites is_blacklisted, but we'll disable to button if is_blacklisted is true
+        const userData = {
+            wrapped_exchange_limit: newLimit,
+            is_blacklisted: false
+        };
+
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "set_user_data", [userId, userData], empty, extraInputs, fee);
+    }
+
+    async callRestrictedMethod(component_address: ComponentAddress, badge_resource: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, extraInputs: Array<SubstateRequirement>, fee: number = 2000) {
         const account = await this.provider.getAccount();
 
         const fee_instructions = [
@@ -225,7 +315,8 @@ export default class TariWallet<TProvider extends TariProvider> {
         const required_substates = [
             {substate_id: account.address, version: null},
             {substate_id: component_address, version: null},
-            {substate_id: badge_resource, version: null}
+            {substate_id: badge_resource, version: null},
+            ...extraInputs
         ];
 
         const request = {
@@ -244,34 +335,6 @@ export default class TariWallet<TProvider extends TariProvider> {
         const result = await this.submitTransactionAndWait(request);
         return SimpleTransactionResult.from(result);
     }
-
-    async createUser(issuerComponent: string, adminBadgeResource: string, userId: number, userAccount: string) {
-        const addBadgeToUserAccount = (_account: Account) => [
-            {
-                PutLastInstructionOutputOnWorkspace: {key: [1]}
-            },
-            {
-                CallMethod: {
-                    component_address: userAccount,
-                    method: "deposit",
-                    args: [{Workspace: [1]}]
-                }
-            }
-        ];
-
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "create_new_user", [userId, userAccount], addBadgeToUserAccount, 2000);
-    }
-
-    public async revokeUserAccess(
-        issuerComponent: ComponentAddress,
-        adminBadgeResource: ResourceAddress,
-        userId: number,
-        vaultId: string,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "blacklist_user", [vaultId, userId], [], fee);
-    }
-
 
 }
 
