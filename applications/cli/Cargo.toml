@@ -1,0 +1,20 @@
+[package]
+name = "stable_coin_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tari_template_lib = { workspace = true }
+tari_template_abi = { workspace = true }
+tari_wallet_daemon_client = { workspace = true }
+tari_transaction = { workspace = true }
+tari_engine_types = { workspace = true }
+tari_dan_wallet_sdk = { workspace = true }
+tari_crypto = { workspace = true }
+
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+url = { workspace = true, features = [] }
+tokio = { workspace = true, features = ["rt", "macros"] }
+serde_json = { workspace = true }
+hex = { workspace = true }

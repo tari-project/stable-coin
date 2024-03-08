@@ -107,6 +107,7 @@ mod stable_coin {
                 .burnable(require_admin.clone())
                 .depositable(require_user.clone())
                 .withdrawable(require_user.clone())
+                .recallable(require_admin.clone())
                 .build_bucket();
 
             // Create component access rules
@@ -115,7 +116,7 @@ mod stable_coin {
                 .default(require_admin);
 
             // Create component
-            let component = Component::new(Self {
+            let _component = Component::new(Self {
                 token_vault: Vault::from_bucket(initial_tokens),
                 user_auth_resource,
                 admin_auth_resource: admin_badge.resource_address(),
@@ -226,6 +227,12 @@ mod stable_coin {
             ResourceManager::get(self.user_auth_resource)
                 .update_non_fungible_data(user_id.into(), &data);
             emit_event("set_user_data", [("user_id", user_id.to_string())]);
+        }
+
+        pub fn recall_funds(&mut self, vault_id: VaultId, amount: Amount) {
+            let bucket = ResourceManager::get(self.fungible.resource_address()).recall_fungible_amount(vault_id, amount);
+            self.token_vault.deposit(bucket);
+            emit_event("recall_funds", [("amount", amount.to_string()), ("vault_id", vault_id.to_string())]);
         }
     }
 }
