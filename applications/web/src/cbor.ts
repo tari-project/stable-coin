@@ -9,7 +9,7 @@ export function getValueByPath(cborRepr: object, path: string): any {
             continue;
         }
         if (value.Map) {
-            value = value.Map.find((v) => v[0].Text === part)?.[1];
+            value = value.Map.find((v) => convertCborValue(v[0]) === part)?.[1];
             if (!value) {
                 return null;
             }
@@ -26,42 +26,36 @@ export function getValueByPath(cborRepr: object, path: string): any {
     return convertCborValue(value);
 }
 
-function convertCborValue(value: any): any {
-    if (value.Map) {
+export function convertCborValue(value: any): any {
+    if ('Map' in value) {
         const result = {};
         for (const [key, val] of value.Map) {
             result[convertCborValue(key)] = convertCborValue(val);
         }
         return result;
     }
-    if (value.Tag) {
-        return processTag(value);
+    if ('Tag' in value) {
+        return convertTaggedValueToString(value.Tag[0], value.Tag[1].Bytes);
+    }
+    if ('Text' in value) {
+        return value.Text;
+    }
+    if ('Bytes' in value) {
+        return value.Bytes;
+    }
+
+    if ('Array' in value) {
+        return value.Array.map(convertCborValue);
+    }
+    if ('Integer' in value) {
+        return value.Integer;
+    }
+    if ('Bool' in value) {
+        return value.Bool;
     }
     return value;
 }
 
-function processTag(item: any): any {
-    return convertTaggedValueToString(item.Tag[0], item.Tag[1].Bytes);
-    // switch (item.Tag?.[0]) {
-    //     case BinaryTag.VaultId:
-    //         if (!item.Tag[1]?.Bytes) {
-    //             return item;
-    //         }
-    //         return bytesToAddressString("vault", item.Tag[1].Bytes);
-    //     case BinaryTag.ComponentAddress:
-    //         if (!item.Tag[1]?.Bytes) {
-    //             return item;
-    //         }
-    //         return bytesToAddressString("component", item.Tag[1].Bytes);
-    //     case BinaryTag.ResourceAddress:
-    //         if (!item.Tag[1]?.Bytes) {
-    //             return item;
-    //         }
-    //         return bytesToAddressString("resource", item.Tag[1].Bytes);
-    //     default:
-    //         return item;
-    // }
-}
 
 function bytesToAddressString(type: String, tag: ArrayLike<unknown>): string {
     const hex = Array.from(tag, function (byte) {

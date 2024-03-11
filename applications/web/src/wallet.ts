@@ -7,7 +7,7 @@ import {
     Instruction,
     ResourceAddress,
     VaultId,
-    SubstateRequirement
+    SubstateRequirement, Amount
 } from "@tariproject/typescript-bindings";
 
 const {
@@ -265,28 +265,93 @@ export default class TariWallet<TProvider extends TariProvider> {
             version: null
         }] as SubstateRequirement[];
 
-        // TODO: we shouldnt expose set_user_data in the template, we should change to set_user_exchange_limit
-        //       This overwrites is_blacklisted, but we'll disable to button if is_blacklisted is true
-        const userData = {
-            wrapped_exchange_limit: newLimit,
-            is_blacklisted: false
-        };
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "set_user_wrapped_exchange_limit", [userId, newLimit], empty, extraInputs, fee);
+    }
 
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "set_user_data", [userId, userData], empty, extraInputs, fee);
+    public async recallTokens(
+        issuerComponent: ComponentAddress,
+        adminBadgeResource: ResourceAddress,
+        userAccount: ComponentAddress,
+        userBadgeResource: ResourceAddress,
+        userId: number,
+        amount: Amount,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        const extraInputs = [{
+            substate_id: `${userBadgeResource} nft_u64:${userId}`,
+            version: null
+        }, {
+            substate_id: userAccount,
+            version: null
+        }] as SubstateRequirement[];
+
+        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "recall_tokens", [userId, [], amount], empty, extraInputs, fee);
+    }
+
+    public async exchangeStableForWrappedToken(
+        issuerComponent: ComponentAddress,
+        userAccount: ComponentAddress,
+        stableCoinResource: ResourceAddress,
+        userBadgeResource: ResourceAddress,
+        userId: number,
+        amount: Amount,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        const account = await this.provider.getAccount();
+
+        const instructions = [
+            {
+                CallMethod: {
+                    component_address: account.address,
+                    method: "create_proof_for_resource",
+                    args: [userBadgeResource]
+                }
+            },
+            {PutLastInstructionOutputOnWorkspace: {key: [0]}},
+            {
+                CallMethod: {
+                    component_address: issuerComponent,
+                    method: "withdraw",
+                    args: [
+                        stableCoinResource,
+                        amount,
+                    ],
+                }
+            },
+            {PutLastInstructionOutputOnWorkspace: {key: [1]}},
+            {
+
+                CallMethod: {
+                    component_address: issuerComponent,
+                    method: "exchange_stable_for_wrapped_token",
+                    args: [
+                        {Workspace: [0]},
+                        {Workspace: [1]},
+                    ],
+                }
+            },
+            "DropAllProofsInWorkspace"
+        ] as Instruction[];
+
+        const required_substates = [
+            {substate_id: account.address, version: null},
+            {substate_id: issuerComponent, version: null},
+            {substate_id: userBadgeResource, version: null},
+            {
+                substate_id: `${userBadgeResource} nft_u64:${userId}`,
+                version: null
+            },
+            {
+                substate_id: stableCoinResource,
+                version: null
+            }
+        ] as SubstateRequirement[];
+
+        return await this.submitTransaction(account, instructions, required_substates, fee);
     }
 
     async callRestrictedMethod(component_address: ComponentAddress, badge_resource: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, extraInputs: Array<SubstateRequirement>, fee: number = 2000) {
         const account = await this.provider.getAccount();
-
-        const fee_instructions = [
-            {
-                CallMethod: {
-                    component_address: account.address,
-                    method: "pay_fee",
-                    args: [`Amount(${fee})`]
-                }
-            }
-        ];
 
         const extra = extraInstructions(account);
 
@@ -310,13 +375,28 @@ export default class TariWallet<TProvider extends TariProvider> {
             },
             ...extra,
             "DropAllProofsInWorkspace"
-        ];
+        ] as Instruction[];
 
         const required_substates = [
             {substate_id: account.address, version: null},
             {substate_id: component_address, version: null},
             {substate_id: badge_resource, version: null},
             ...extraInputs
+        ] as SubstateRequirement[];
+
+        return await this.submitTransaction(account, instructions, required_substates, fee);
+    }
+
+    async submitTransaction(account: Account, instructions: Instruction[], required_substates: SubstateRequirement[], fee: Amount) {
+
+        const fee_instructions = [
+            {
+                CallMethod: {
+                    component_address: account.address,
+                    method: "pay_fee",
+                    args: [`Amount(${fee})`]
+                }
+            }
         ];
 
         const request = {

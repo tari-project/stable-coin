@@ -20,48 +20,29 @@
 //   WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //   USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::fmt::Display;
+mod user_data;
+mod wrapped_exchange_token;
+
+use user_data::{UserData, UserId, UserMutableData};
+
 use tari_template_lib::prelude::*;
-
-#[derive(Clone, Debug, Copy, serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct UserId(u64);
-
-impl From<UserId> for NonFungibleId {
-    fn from(value: UserId) -> Self {
-        Self::from_u64(value.0)
-    }
-}
-
-impl Display for UserId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:0>19}", self.0)
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct UserData {
-    pub user_id: UserId,
-    pub user_account: ComponentAddress,
-    pub created_at: u64,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct UserMutableData {
-    pub is_blacklisted: bool,
-    pub wrapped_exchange_limit: Amount,
-}
 
 #[template]
 mod template {
     use super::*;
+    use crate::user_data::Account;
+    use crate::wrapped_exchange_token::{ExchangeFee, WrappedExchangeToken};
+    use std::collections::BTreeSet;
+    use tari_template_lib::engine;
+
+    const DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE: ExchangeFee = ExchangeFee::Fixed(Amount::new(5));
 
     pub struct TariStableCoin {
         token_vault: Vault,
         user_auth_resource: ResourceAddress,
         admin_auth_resource: ResourceAddress,
         blacklisted_users: Vault,
-        wrapped_vault: Option<Vault>,
+        wrapped_token: Option<WrappedExchangeToken>,
     }
 
     impl TariStableCoin {
@@ -74,6 +55,7 @@ mod template {
         ) -> Bucket {
             let provider_name = token_metadata
                 .get("provider_name")
+                .filter(|v| !v.trim().is_empty())
                 .expect("provider_name metadata entry is required");
 
             // Create admin badge resource
@@ -88,7 +70,7 @@ mod template {
 
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
-                .add_metadata("provider_name", provider_name)
+                .add_metadata("provider_name", provider_name.trim())
                 .depositable(require_admin.clone())
                 .recallable(require_admin.clone())
                 .update_non_fungible_data(require_admin.clone())
@@ -115,17 +97,20 @@ mod template {
                 .build_bucket();
 
             // Create tokens resource with initial supply
-            let initial_wrapped_tokens = if enable_wrapped_token {
-                Some(
-                    ResourceBuilder::fungible()
-                        .initial_supply(initial_token_supply)
-                        .with_token_symbol(token_symbol)
-                        .with_metadata(token_metadata)
-                        // Access rules
-                        .mintable(require_admin.clone())
-                        .burnable(require_admin.clone())
-                        .build_bucket(),
-                )
+            let wrapped_token = if enable_wrapped_token {
+                let wrapped_resource = ResourceBuilder::fungible()
+                    .initial_supply(initial_token_supply)
+                    .with_token_symbol(token_symbol)
+                    .with_metadata(token_metadata)
+                    // Access rules
+                    .mintable(require_admin.clone())
+                    .burnable(require_admin.clone())
+                    .build_bucket();
+
+                Some(WrappedExchangeToken {
+                    wrapped_vault: Vault::from_bucket(wrapped_resource),
+                    wrapped_token_exchange_fee: DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE,
+                })
             } else {
                 None
             };
@@ -133,6 +118,8 @@ mod template {
             // Create component access rules
             let component_access_rules = AccessRules::new()
                 .add_method_rule("total_supply", AccessRule::AllowAll)
+                .add_method_rule("exchange_stable_for_wrapped_tokens", require_user.clone())
+                .add_method_rule("exchange_wrapped_for_stable_tokens", require_user.clone())
                 .default(require_admin);
 
             // Create component
@@ -141,7 +128,7 @@ mod template {
                 user_auth_resource,
                 admin_auth_resource: admin_badge.resource_address(),
                 blacklisted_users: Vault::new_empty(user_auth_resource),
-                wrapped_vault: initial_wrapped_tokens.map(Vault::from_bucket),
+                wrapped_token,
             })
             .with_access_rules(component_access_rules)
             // Access is entirely controlled by anyone with an admin badge
@@ -154,14 +141,13 @@ mod template {
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
             let proof = ConfidentialOutputProof::mint_revealed(amount);
-            let new_tokens =
-                ResourceManager::get(self.token_vault.resource_address()).mint_confidential(proof);
+            let new_tokens = self.token_vault_manager().mint_confidential(proof);
             self.token_vault.deposit(new_tokens);
 
-            if let Some(ref mut wrapped_vault) = self.wrapped_vault {
+            if let Some(ref mut wrapped_token) = self.wrapped_token {
                 let new_tokens =
-                    ResourceManager::get(wrapped_vault.resource_address()).mint_fungible(amount);
-                wrapped_vault.deposit(new_tokens);
+                    ResourceManager::get(wrapped_token.resource_address()).mint_fungible(amount);
+                wrapped_token.vault_mut().deposit(new_tokens);
             }
 
             emit_event("increase_supply", [("amount", amount.to_string())]);
@@ -174,8 +160,8 @@ mod template {
             let tokens = self.token_vault.withdraw_confidential(proof);
             tokens.burn();
 
-            if let Some(ref mut wrapped_vault) = self.wrapped_vault {
-                let wrapped_tokens = wrapped_vault.withdraw(amount);
+            if let Some(ref mut wrapped_token) = self.wrapped_token {
+                let wrapped_tokens = wrapped_token.vault_mut().withdraw(amount);
                 wrapped_tokens.burn();
             }
 
@@ -186,7 +172,7 @@ mod template {
         }
 
         pub fn total_supply(&self) -> Amount {
-            ResourceManager::get(self.token_vault.resource_address()).total_supply()
+            self.token_vault_manager().total_supply()
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
@@ -206,15 +192,11 @@ mod template {
         }
 
         /// Allow the user to exchange their tokens for wrapped tokens
-        pub fn exchange_for_wrapped_tokens(
+        pub fn exchange_stable_for_wrapped_tokens(
             &mut self,
             proof: Proof,
             confidential_bucket: Bucket,
         ) -> Bucket {
-            if self.wrapped_vault.is_none() {
-                panic!("Wrapped token is not enabled");
-            }
-
             assert_eq!(
                 confidential_bucket.resource_address(),
                 self.token_vault.resource_address(),
@@ -238,6 +220,7 @@ mod template {
             assert_eq!(badges.len(), 1, "The proof must contain exactly one badge");
             let badge = badges.into_iter().next().unwrap();
             let badge = self.user_badge_manager().get_non_fungible(&badge);
+            let user = badge.get_data::<UserData>();
             let user_data = badge.get_mutable_data::<UserMutableData>();
 
             let amount = confidential_bucket.amount();
@@ -246,12 +229,120 @@ mod template {
                 "Exchange limit exceeded"
             );
 
-            let wrapped_vault_mut = self.wrapped_vault.as_mut().unwrap();
-            let wrapped_tokens = wrapped_vault_mut.withdraw(amount);
+            self.set_user_wrapped_exchange_limit(
+                user.user_id,
+                user_data.wrapped_exchange_limit - amount,
+            );
 
-            confidential_bucket.burn();
+            let fee = self
+                .wrapped_token_mut()
+                .exchange_fee()
+                .calculate_fee(amount);
+            let new_amount = amount
+                .checked_sub(fee)
+                .expect("Insufficient funds to pay exchange fee");
+
+            self.token_vault.deposit(confidential_bucket);
+
+            let wrapped_tokens = self.wrapped_token_mut().vault_mut().withdraw(new_amount);
+
+            emit_event(
+                "exchange_stable_for_wrapped_tokens",
+                [
+                    ("user_id", user.user_id.to_string()),
+                    ("amount", amount.to_string()),
+                    ("fee", fee.to_string()),
+                ],
+            );
 
             wrapped_tokens
+        }
+
+        /// Allow the user to exchange their wrapped tokens for stable coin tokens
+        pub fn exchange_wrapped_for_stable_tokens(
+            &mut self,
+            proof: Proof,
+            wrapped_bucket: Bucket,
+        ) -> Bucket {
+            proof.assert_resource(self.user_auth_resource);
+
+            assert_eq!(
+                wrapped_bucket.resource_address(),
+                self.wrapped_token_mut().vault().resource_address(),
+                "The bucket must contain the same resource as the wrapped token vault"
+            );
+
+            assert!(
+                !wrapped_bucket.amount().is_zero(),
+                "The bucket must contain some tokens"
+            );
+
+            let badges = proof.get_non_fungibles();
+            assert_eq!(badges.len(), 1, "The proof must contain exactly one badge");
+            let badge = badges.into_iter().next().unwrap();
+            let badge = self.user_badge_manager().get_non_fungible(&badge);
+            let user = badge.get_data::<UserData>();
+
+            let amount = wrapped_bucket.amount();
+
+            self.wrapped_token_mut().vault_mut().deposit(wrapped_bucket);
+
+            // TODO: we should be able to call withdraw on the confidential resource without creating a revealed proof
+            let withdraw = ConfidentialWithdrawProof::revealed_withdraw(amount);
+            let tokens = self.token_vault.withdraw_confidential(withdraw);
+
+            emit_event(
+                "exchange_wrapped_for_stable_tokens",
+                [
+                    ("user_id", user.user_id.to_string()),
+                    ("amount", amount.to_string()),
+                    ("fee", 0.to_string()),
+                ],
+            );
+
+            tokens
+        }
+
+        pub fn recall_tokens(
+            &mut self,
+            user_id: UserId,
+            commitments: BTreeSet<PedersonCommitmentBytes>,
+            amount: Amount,
+        ) {
+            // Fetch the user badge
+            let badge = self.user_badge_manager().get_non_fungible(&user_id.into());
+            let user = badge.get_data::<UserData>();
+
+            let component_manager = engine().component_manager(user.user_account);
+            let account = component_manager.get_state::<Account>();
+
+            let vault = account
+                .vaults
+                .get(&self.token_vault.resource_address())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Vault not found for resource {} in account {}",
+                        self.token_vault.resource_address(),
+                        user.user_account
+                    )
+                });
+
+            let vault_id = vault.vault_id();
+            let num_commitments = commitments.len();
+
+            let bucket =
+                self.token_vault_manager()
+                    .recall_confidential(vault_id, commitments, amount);
+            self.token_vault.deposit(bucket);
+
+            emit_event(
+                "recall_tokens",
+                [
+                    ("user_id", user_id.to_string()),
+                    ("revealed_amount", amount.to_string()),
+                    ("num_commitments", num_commitments.to_string()),
+                ],
+            );
         }
 
         pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
@@ -361,14 +452,32 @@ mod template {
             badge.get_data()
         }
 
-        pub fn set_user_data(&mut self, user_id: UserId, data: UserMutableData) {
-            self.user_badge_manager()
-                .update_non_fungible_data(user_id.into(), &data);
-            emit_event("set_user_data", [("user_id", user_id.to_string())]);
+        pub fn set_user_wrapped_exchange_limit(&mut self, user_id: UserId, new_limit: Amount) {
+            let mut badge = self.user_badge_manager().get_non_fungible(&user_id.into());
+            let mut user_data = badge.get_mutable_data::<UserMutableData>();
+            user_data.set_wrapped_exchange_limit(new_limit);
+            badge.set_mutable_data(&user_data);
+            emit_event(
+                "set_user_wrapped_exchange_limit",
+                [
+                    ("user_id", user_id.to_string()),
+                    ("limit", new_limit.to_string()),
+                ],
+            );
         }
 
         fn user_badge_manager(&self) -> ResourceManager {
             ResourceManager::get(self.user_auth_resource)
+        }
+
+        fn token_vault_manager(&self) -> ResourceManager {
+            ResourceManager::get(self.token_vault.resource_address())
+        }
+
+        fn wrapped_token_mut(&mut self) -> &mut WrappedExchangeToken {
+            self.wrapped_token
+                .as_mut()
+                .expect("Wrapped token is not enabled")
         }
     }
 }

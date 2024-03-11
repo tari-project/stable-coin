@@ -1,7 +1,6 @@
 use tari_template_lib::args;
 use tari_template_lib::models::{
-    Amount, ComponentAddress, ConfidentialWithdrawProof, Metadata, NonFungibleAddress,
-    ResourceAddress,
+    Amount, ComponentAddress, Metadata, NonFungibleAddress, ResourceAddress,
 };
 use tari_template_test_tooling::crypto::RistrettoSecretKey;
 use tari_template_test_tooling::TemplateTest;
@@ -37,17 +36,11 @@ fn it_increases_and_decreases_supply() {
 
     assert_eq!(total_supply, Amount(1_000_000_123));
 
-    let decrease_supply_withdraw = ConfidentialWithdrawProof::revealed_withdraw(Amount(456));
-
     let result = test.execute_expect_success(
         Transaction::builder()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
-            .call_method(
-                stable_coin_component,
-                "decrease_supply",
-                args![decrease_supply_withdraw],
-            )
+            .call_method(stable_coin_component, "decrease_supply", args![Amount(456)])
             .call_method(stable_coin_component, "total_supply", args![])
             .drop_all_proofs_in_workspace()
             .sign(&admin_key)
@@ -79,7 +72,6 @@ fn it_allows_users_to_transact() {
     let (alice_account, alice_proof, alice_key) = test.create_empty_account();
     let (bob_account, _, _) = test.create_empty_account();
 
-    let withdraw = ConfidentialWithdrawProof::revealed_withdraw(Amount(1234));
     // Allow Alice to transact and provision funds in her account
     test.execute_expect_success(
         Transaction::builder()
@@ -87,9 +79,13 @@ fn it_allows_users_to_transact() {
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
             // Withdraw for new stable coin customer
-            .call_method(stable_coin_component, "create_new_user", args![123])
+            .call_method(
+                stable_coin_component,
+                "create_new_user",
+                args![123, alice_account],
+            )
             .put_last_instruction_output_on_workspace("badge")
-            .call_method(stable_coin_component, "withdraw", args![withdraw])
+            .call_method(stable_coin_component, "withdraw", args![Amount(1234)])
             .put_last_instruction_output_on_workspace("funds")
             // Deposit badge and funds into Alice's account
             .call_method(alice_account, "deposit", args![Workspace("badge")])
