@@ -27,10 +27,9 @@ import useTariProvider from "../../store/provider.ts";
 import {Alert, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
 import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
-import {convertTaggedValueToString} from "../../cbor.ts";
+import {convertCborValue,} from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
 import {SimpleTransactionResult, splitOnce} from "../../types.ts";
-import {BoxHeading2} from "../../components/StyledComponents.ts";
 
 interface Props {
     issuerId: ComponentAddress
@@ -50,15 +49,26 @@ function ManageUser(props: Props) {
     const [success, setSuccess] = React.useState<string | null>(null);
     const [wrappedExchangeLimit, setWrappedExchangeLimit] = React.useState<number>(props.badgeMutableData.wrapped_exchange_limit);
 
-    const [tag, v] = props.badgeData.user_account!['@@TAGGED@@'];
-    const userAccount = convertTaggedValueToString(tag, v);
+    const userAccount = props.badgeData.user_account;
     const [userBadgeResource, _nft] = splitOnce(props.userBadge, ' ')!;
 
-    const handleOnRevoke = async () => {
+    const runQuery = async (query: () => Promise<string | null>) => {
         setIsBusy(true);
         setSuccess(null);
+        setError(null);
 
         try {
+            const success = await query();
+            setSuccess(success);
+        } catch (e) {
+            setError(e);
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const handleOnRevoke = async () => {
+        await runQuery(async () => {
             const substate = await provider.getSubstate(userAccount);
             const vaults = cbor.getValueByPath(substate.value.substate.Component.body.state, "$.vaults");
             const vaultToRevoke = vaults[userBadgeResource];
@@ -74,23 +84,16 @@ function ManageUser(props: Props) {
                 vaultToRevoke,
             );
             if (result.accept) {
-                setSuccess(`User permission revoked in transaction ${result.transactionId}`);
-            } else {
-                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+                props.onChange?.(result);
+                return `User permission revoked in transaction ${result.transactionId}`;
             }
-            props.onChange?.(result);
-        } catch (e) {
-            setError(e);
-        } finally {
-            setIsBusy(false);
-        }
+
+            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+        });
     };
 
     const handleOnReinstate = async () => {
-        setIsBusy(true);
-        setSuccess(null);
-
-        try {
+        await runQuery(async () => {
             const result = await provider.reinstateUserAccess(
                 props.issuerId,
                 props.adminAuthBadge,
@@ -99,24 +102,17 @@ function ManageUser(props: Props) {
                 userAccount
             )
             if (result.accept) {
-                setSuccess(`User permission reinstated in transaction ${result.transactionId}`);
-            } else {
-                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+                props.onChange?.(result);
+                return `User permission reinstated in transaction ${result.transactionId}`;
             }
-            props.onChange?.(result);
-        } catch (e) {
-            setError(e);
-        } finally {
-            setIsBusy(false);
-        }
+
+            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+        });
     };
 
     const handleOnSave = async (e) => {
         e.preventDefault();
-        setIsBusy(true);
-        setSuccess(null);
-
-        try {
+        await runQuery(async () => {
             const result = await provider.setUserExchangeLimit(
                 props.issuerId,
                 props.adminAuthBadge,
@@ -125,16 +121,12 @@ function ManageUser(props: Props) {
                 wrappedExchangeLimit
             )
             if (result.accept) {
-                setSuccess(`User limit set in transaction ${result.transactionId}`);
-            } else {
-                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+                props.onChange?.(result);
+                return `User limit set in transaction ${result.transactionId}`;
             }
-            props.onChange?.(result);
-        } catch (e) {
-            setError(e);
-        } finally {
-            setIsBusy(false);
-        }
+
+            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+        });
     };
 
     return (
@@ -142,9 +134,9 @@ function ManageUser(props: Props) {
             <Grid item xs={4} md={4} lg={4}>User badge</Grid>
             <Grid item xs={8} md={8} lg={8}>{props.userBadge}</Grid>
             <Grid item xs={12} md={12} lg={12}><h3>Data</h3></Grid>
-            <UserData userData={props.badgeData}/>
+            <UserData userData={convertCborValue(props.badgeData)}/>
             <Grid item xs={12} md={12} lg={12}><h3>Mutable Data</h3></Grid>
-            <UserData userData={props.badgeMutableData}/>
+            <UserData userData={convertCborValue(props.badgeMutableData)}/>
             <Grid item xs={12} md={12} lg={12}>
                 <form
                     onSubmit={handleOnSave}
@@ -172,7 +164,7 @@ function ManageUser(props: Props) {
             </Grid>
 
             <Grid item xs={12} md={12} lg={12}>
-                <BoxHeading2>Permissions</BoxHeading2>
+                <h2>Permissions</h2>
             </Grid>
             <Grid item xs={4} md={4} lg={4}>
                 {props.badgeMutableData && (
@@ -202,22 +194,13 @@ function UserData({userData}: { userData: object }) {
             {Object.entries(userData).map(([key, value], i) => (
                 <React.Fragment key={i}>
                     <Grid item xs={4} md={4} lg={4}>{key}</Grid>
-                    <Grid item xs={8} md={8} lg={8}>{displayValue(value)}</Grid>
+                    <Grid item xs={8} md={8}
+                          lg={8}>{typeof value === 'object' ? JSON.stringify(value) : value.toString()}</Grid>
                 </React.Fragment>
             ))}
         </>
     )
 }
 
-function displayValue(value: any) {
-    if (typeof value === "object") {
-        if (value['@@TAGGED@@']) {
-            const [tag, v] = value['@@TAGGED@@'];
-            return convertTaggedValueToString(tag, v);
-        }
-        return JSON.stringify(value);
-    }
-    return value.toString();
-}
 
 export default ManageUser;

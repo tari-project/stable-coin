@@ -31,6 +31,10 @@ import {useEffect} from "react";
 import * as cbor from '../../cbor';
 import ManageUser from "./ManageUser.tsx";
 import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
+import RecallTokens from "./RecallTokens.tsx";
+import Transfers from "./Transfers.tsx";
+import useActiveIssuer from "../../store/activeIssuer.ts";
+import {convertCborValue} from "../../cbor";
 
 interface Props {
     issuerId: ComponentAddress,
@@ -40,6 +44,7 @@ interface Props {
 
 function GetUser(props: Props) {
     const {provider} = useTariProvider();
+    const {activeIssuer} = useActiveIssuer();
 
     const [isBusy, setIsBusy] = React.useState(false);
     const [error, setError] = React.useState<Error | null>(null);
@@ -47,6 +52,7 @@ function GetUser(props: Props) {
     const [validity, setValidity] = React.useState({});
     const [userAuthBadge, setUserAuthBadge] = React.useState<string | null>(null);
     const [userData, setUserData] = React.useState<object | null>(null);
+    const [userVault, setUserVault] = React.useState<object | null>(null);
 
     useEffect(() => {
         provider.getSubstate(props.issuerId)
@@ -80,7 +86,19 @@ function GetUser(props: Props) {
         setError(null);
         try {
             const substate = await provider.getSubstate(`${userAuthBadge} nft_u64:${userId}`);
+            const userAccountId = cbor
+                .getValueByPath(substate.value.substate.NonFungible.data, "$.user_account");
             setUserData(substate as object);
+
+            const stableCoinResource = activeIssuer?.vault?.resourceAddress;
+            if (!stableCoinResource) {
+                throw new Error(`Issuer does not have a stable coin resource`);
+            }
+            const userAccount = await provider.getSubstate(userAccountId);
+            const vaultId = cbor.getValueByPath(userAccount.value.substate.Component.body.state, `$.vaults.${stableCoinResource}`);
+
+            const userVault = await provider.getSubstate(vaultId);
+            setUserVault(userVault.value.substate.Vault.resource_container);
         } catch (e) {
             console.error(e);
             setError(e);
@@ -122,33 +140,38 @@ function GetUser(props: Props) {
                         </form>
                     </Grid>
                 </Grid>
+                <Grid item xs={12} md={12} lg={12} sx={{textAlign: 'left'}}>
+                    {userVault && <pre>{JSON.stringify(userVault, null, 2)}</pre>}
+                </Grid>
                 {userData && (
-                    <ManageUser
-                        issuerId={props.issuerId}
-                        adminAuthBadge={props.adminAuthBadge}
-                        userBadge={userData.record.substate_id.NonFungible}
-                        userId={formValues.userId}
-                        badgeData={userData.value.substate.NonFungible.data}
-                        badgeMutableData={userData.value.substate.NonFungible.mutable_data}
-                        onChange={() => getUser(formValues.userId)}
-                    />
+                    <>
+                        <ManageUser
+                            issuerId={props.issuerId}
+                            adminAuthBadge={props.adminAuthBadge}
+                            userBadge={userData.record.substate_id.NonFungible}
+                            userId={formValues.userId}
+                            badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
+                            badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
+                            onChange={() => getUser(formValues.userId)}
+                        />
+                        <RecallTokens
+                            issuerId={props.issuerId}
+                            adminAuthBadge={props.adminAuthBadge}
+                            userBadge={userData.record.substate_id.NonFungible}
+                            userId={formValues.userId}
+                            badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
+                            badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
+                            onChange={() => getUser(formValues.userId)}
+                        />
+                        <Transfers issuer={activeIssuer!} userAccount={cbor
+                            .getValueByPath(userData.value.substate.NonFungible.data, "$.user_account")!}
+                                   onTransactionResult={() => getUser(formValues.userId)}/>
+                    </>
                 )}
             </StyledPaper>
         </>
     )
 }
 
-function UserData({userData}: { userData: object }) {
-    return (
-        <>
-            {Object.entries(userData).map(([key, value], i) => (
-                <>
-                    <Grid key={i} item xs={4} md={4} lg={4}>{key}</Grid>
-                    <Grid key={`k-${i}`} item xs={8} md={8} lg={8}>{value.toString()}</Grid>
-                </>
-            ))}
-        </>
-    )
-}
 
 export default GetUser;
