@@ -5,10 +5,10 @@ use crate::context::CliContext;
 use crate::print_result::print_result;
 use crate::transactions::StableCoinTransaction;
 use crate::{transactions, value_parsers};
+use clap::ArgAction;
 use clap::Parser;
 use tari_template_lib::models::{Amount, ComponentAddress, Metadata, TemplateAddress};
 use url::Url;
-use clap::ArgAction;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct Cli {

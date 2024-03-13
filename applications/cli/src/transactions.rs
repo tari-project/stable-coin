@@ -28,7 +28,13 @@ pub fn build(params: BuildParams, st_transaction: StableCoinTransaction) -> Unsi
             token_symbol,
             token_metadata,
             enable_wrapped_token,
-        } => create_issuer(params, initial_token_supply, token_symbol, token_metadata, enable_wrapped_token),
+        } => create_issuer(
+            params,
+            initial_token_supply,
+            token_symbol,
+            token_metadata,
+            enable_wrapped_token,
+        ),
     }
 }
 
@@ -45,7 +51,12 @@ fn create_issuer(
             params.issuer_template,
             "instantiate",
             // TODO: allow to specify wrapped token
-            args!(initial_token_supply, token_symbol, token_metadata, enable_wrapped_token),
+            args!(
+                initial_token_supply,
+                token_symbol,
+                token_metadata,
+                enable_wrapped_token
+            ),
         )
         .put_last_instruction_output_on_workspace("issuer_badge")
         .call_method(
