@@ -50,7 +50,6 @@ fn create_issuer(
         .call_function(
             params.issuer_template,
             "instantiate",
-            // TODO: allow to specify wrapped token
             args!(
                 initial_token_supply,
                 token_symbol,
