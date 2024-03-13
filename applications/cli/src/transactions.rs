@@ -11,6 +11,7 @@ pub enum StableCoinTransaction {
         initial_token_supply: Amount,
         token_symbol: String,
         token_metadata: Metadata,
+        enable_wrapped_token: bool,
     },
 }
 
@@ -26,7 +27,8 @@ pub fn build(params: BuildParams, st_transaction: StableCoinTransaction) -> Unsi
             initial_token_supply,
             token_symbol,
             token_metadata,
-        } => create_issuer(params, initial_token_supply, token_symbol, token_metadata),
+            enable_wrapped_token,
+        } => create_issuer(params, initial_token_supply, token_symbol, token_metadata, enable_wrapped_token),
     }
 }
 
@@ -35,13 +37,15 @@ fn create_issuer(
     initial_token_supply: Amount,
     token_symbol: String,
     token_metadata: Metadata,
+    enable_wrapped_token: bool,
 ) -> UnsignedTransaction {
     Transaction::builder()
         .fee_transaction_pay_from_component(params.fee_account, params.max_fee)
         .call_function(
             params.issuer_template,
             "instantiate",
-            args!(initial_token_supply, token_symbol, token_metadata),
+            // TODO: allow to specify wrapped token
+            args!(initial_token_supply, token_symbol, token_metadata, enable_wrapped_token),
         )
         .put_last_instruction_output_on_workspace("issuer_badge")
         .call_method(

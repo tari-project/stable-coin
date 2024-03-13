@@ -8,6 +8,7 @@ use crate::{transactions, value_parsers};
 use clap::Parser;
 use tari_template_lib::models::{Amount, ComponentAddress, Metadata, TemplateAddress};
 use url::Url;
+use clap::ArgAction;
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct Cli {
@@ -73,6 +74,8 @@ pub struct IssuerCreateSubcommand {
     pub token_symbol: String,
     #[clap(value_parser = value_parsers::metadata)]
     pub token_metadata: Metadata,
+    #[clap(long, short, action=ArgAction::SetFalse)]
+    pub enable_wrapped_token: bool,
 }
 
 impl From<IssuerCreateSubcommand> for StableCoinTransaction {
@@ -81,6 +84,7 @@ impl From<IssuerCreateSubcommand> for StableCoinTransaction {
             initial_token_supply: cmd.initial_token_supply,
             token_symbol: cmd.token_symbol,
             token_metadata: cmd.token_metadata,
+            enable_wrapped_token: cmd.enable_wrapped_token,
         }
     }
 }
