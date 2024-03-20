@@ -63,6 +63,9 @@ function Transfers({issuer, onTransactionResult, onTransactionSubmit, userAccoun
                 userAccount,
                 formValues.transferAmount.trim(),
             );
+            if (result.accept) {
+                setFormValues({});
+            }
             onTransactionResult(result);
         } catch (e) {
             console.error(e);

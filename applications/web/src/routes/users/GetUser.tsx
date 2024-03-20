@@ -30,11 +30,12 @@ import Button from "@mui/material/Button";
 import {useEffect} from "react";
 import * as cbor from '../../cbor';
 import ManageUser from "./ManageUser.tsx";
-import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
+import {ComponentAddress, ResourceAddress, Vault, VaultId} from "@tariproject/typescript-bindings";
 import RecallTokens from "./RecallTokens.tsx";
 import Transfers from "./Transfers.tsx";
 import useActiveIssuer from "../../store/activeIssuer.ts";
 import {convertCborValue} from "../../cbor";
+import UserVault from "./UserVault.tsx";
 
 interface Props {
     issuerId: ComponentAddress,
@@ -52,7 +53,7 @@ function GetUser(props: Props) {
     const [validity, setValidity] = React.useState({});
     const [userAuthBadge, setUserAuthBadge] = React.useState<string | null>(null);
     const [userData, setUserData] = React.useState<object | null>(null);
-    const [userVault, setUserVault] = React.useState<object | null>(null);
+    const [userVault, setUserVault] = React.useState<{ vaultId: VaultId, vault: Vault } | null>(null);
 
     useEffect(() => {
         provider.getSubstate(props.issuerId)
@@ -96,9 +97,13 @@ function GetUser(props: Props) {
             }
             const userAccount = await provider.getSubstate(userAccountId);
             const vaultId = cbor.getValueByPath(userAccount.value.substate.Component.body.state, `$.vaults.${stableCoinResource}`);
+            if (!vaultId) {
+                setUserVault(null);
+                return;
+            }
 
             const userVault = await provider.getSubstate(vaultId);
-            setUserVault(userVault.value.substate.Vault.resource_container);
+            setUserVault({vaultId, vault: userVault.value.substate.Vault});
         } catch (e) {
             console.error(e);
             setError(e);
@@ -141,33 +146,41 @@ function GetUser(props: Props) {
                     </Grid>
                 </Grid>
                 <Grid item xs={12} md={12} lg={12} sx={{textAlign: 'left'}}>
-                    {userVault && <pre>{JSON.stringify(userVault, null, 2)}</pre>}
+                    {userVault ? (
+                            <>
+                                <h2>{userVault.vaultId}</h2>
+                                <UserVault vaultId={userVault.vaultId} vault={userVault.vault}/>
+                            </>
+                        ) :
+                        <Alert severity="info">No vault</Alert>}
                 </Grid>
-                {userData && (
-                    <>
-                        <ManageUser
-                            issuerId={props.issuerId}
-                            adminAuthBadge={props.adminAuthBadge}
-                            userBadge={userData.record.substate_id.NonFungible}
-                            userId={formValues.userId}
-                            badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
-                            badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
-                            onChange={() => getUser(formValues.userId)}
-                        />
-                        <RecallTokens
-                            issuerId={props.issuerId}
-                            adminAuthBadge={props.adminAuthBadge}
-                            userBadge={userData.record.substate_id.NonFungible}
-                            userId={formValues.userId}
-                            badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
-                            badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
-                            onChange={() => getUser(formValues.userId)}
-                        />
-                        <Transfers issuer={activeIssuer!} userAccount={cbor
-                            .getValueByPath(userData.value.substate.NonFungible.data, "$.user_account")!}
-                                   onTransactionResult={() => getUser(formValues.userId)}/>
-                    </>
-                )}
+                <Grid item xs={12} md={12} lg={12} sx={{marginY: 5}}>
+                    {userData && (
+                        <>
+                            <ManageUser
+                                issuerId={props.issuerId}
+                                adminAuthBadge={props.adminAuthBadge}
+                                userBadge={userData.record.substate_id.NonFungible}
+                                userId={formValues.userId}
+                                badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
+                                badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
+                                onChange={() => getUser(formValues.userId)}
+                            />
+                            <RecallTokens
+                                issuerId={props.issuerId}
+                                adminAuthBadge={props.adminAuthBadge}
+                                userBadge={userData.record.substate_id.NonFungible}
+                                userId={formValues.userId}
+                                badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
+                                badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
+                                onChange={() => getUser(formValues.userId)}
+                            />
+                            <Transfers issuer={activeIssuer!} userAccount={cbor
+                                .getValueByPath(userData.value.substate.NonFungible.data, "$.user_account")!}
+                                       onTransactionResult={() => getUser(formValues.userId)}/>
+                        </>
+                    )}
+                </Grid>
             </StyledPaper>
         </>
     )

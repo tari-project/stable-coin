@@ -75,6 +75,7 @@ function AddUser(props: Props) {
             console.log(result.accept?.up_substates);
             const [_t, id, _val] = result.accept?.up_substates?.filter(([type, _id, _v]) => type === "NonFungible").find(([_type, id, _v]) => id.endsWith(`nft_u64:${values.userId}`));
             setSuccess(`User created in transaction ${result.transactionId}. User badge: ${JSON.stringify(id)}`);
+            setFormValues({});
         } catch (e) {
             setError(e);
         } finally {

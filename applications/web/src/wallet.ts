@@ -1,4 +1,4 @@
-import {providers} from '@tariproject/tarijs';
+import {providers, utils} from '@tariproject/tarijs';
 import {TariProvider} from "@tariproject/tarijs/dist/providers";
 import {Account} from "@tariproject/tarijs/dist/providers/types";
 import {NewIssuerParams, SimpleTransactionResult} from "./types.ts";
@@ -9,6 +9,7 @@ import {
     VaultId,
     SubstateRequirement, Amount
 } from "@tariproject/typescript-bindings";
+import {KeyBranch} from "@tariproject/typescript-bindings/wallet-daemon-client.ts";
 
 const {
     TariProvider,
@@ -17,8 +18,9 @@ const {
     types: {
         TransactionSubmitRequest,
         TransactionStatus
-    }
+    },
 } = providers;
+const {fromHexString} = utils;
 
 export default class TariWallet<TProvider extends TariProvider> {
     private provider: TProvider;
@@ -129,7 +131,8 @@ export default class TariWallet<TProvider extends TariProvider> {
                         params.initialSupply,
                         params.tokenSymbol,
                         Object.keys(params.tokenMetadata).map((k) => `${k}=${params.tokenMetadata[k]}`).join(','),
-                        params.enableWrappedToken ? "true" : "false"
+                        params.viewKey,
+                        params.enableWrappedToken ? "true" : "false",
                     ]
                 }
             },
@@ -286,6 +289,18 @@ export default class TariWallet<TProvider extends TariProvider> {
         }] as SubstateRequirement[];
 
         return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "recall_tokens", [userId, [], amount], empty, extraInputs, fee);
+    }
+
+
+    public async getPublicKey(
+        branch: KeyBranch,
+        index: number,
+    ): Promise<string> {
+        return await this.provider.getPublicKey(branch, index);
+    }
+
+    public async getConfidentialVaultBalance(vaultId: VaultId, min: number | null = null, max: number | null = null) {
+        return await this.provider.getConfidentialVaultBalances(0, vaultId, min, max);
     }
 
     public async exchangeStableForWrappedToken(
