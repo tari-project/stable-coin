@@ -24,12 +24,14 @@ import "./Style.css";
 import Grid from "@mui/material/Grid";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import {Alert, TextField} from "@mui/material";
+import {Alert, Table, TableBody, TableHead, TableRow, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
 import {ComponentAddress, ResourceAddress} from "@tariproject/typescript-bindings";
 import {convertCborValue,} from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
 import {SimpleTransactionResult, splitOnce} from "../../types.ts";
+import {DataTableCell} from "../../components/StyledComponents.ts";
+import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 
 interface Props {
     issuerId: ComponentAddress
@@ -131,12 +133,11 @@ function ManageUser(props: Props) {
 
     return (
         <Grid container spacing={2} sx={{textAlign: "left"}}>
-            <Grid item xs={4} md={4} lg={4}>User badge</Grid>
-            <Grid item xs={8} md={8} lg={8}>{props.userBadge}</Grid>
             <Grid item xs={12} md={12} lg={12}><h3>Data</h3></Grid>
             <UserData userData={convertCborValue(props.badgeData)}/>
             <Grid item xs={12} md={12} lg={12}><h3>Mutable Data</h3></Grid>
             <UserData userData={convertCborValue(props.badgeMutableData)}/>
+            <h3>Wrapped Token</h3>
             <Grid item xs={12} md={12} lg={12}>
                 <form
                     onSubmit={handleOnSave}
@@ -164,7 +165,7 @@ function ManageUser(props: Props) {
             </Grid>
 
             <Grid item xs={12} md={12} lg={12}>
-                <h2>Permissions</h2>
+                <h3>Permissions</h3>
             </Grid>
             <Grid item xs={4} md={4} lg={4}>
                 {props.badgeMutableData && (
@@ -190,15 +191,22 @@ function ManageUser(props: Props) {
 
 function UserData({userData}: { userData: object }) {
     return (
-        <>
-            {Object.entries(userData).map(([key, value], i) => (
-                <React.Fragment key={i}>
-                    <Grid item xs={4} md={4} lg={4}>{key}</Grid>
-                    <Grid item xs={8} md={8}
-                          lg={8}>{typeof value === 'object' ? JSON.stringify(value) : value.toString()}</Grid>
-                </React.Fragment>
-            ))}
-        </>
+        <Table>
+            <TableHead>
+                <TableRow>
+                    <DataTableCell><strong>Name</strong></DataTableCell>
+                    <DataTableCell><strong>Value</strong></DataTableCell>
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {Object.entries(userData).map(([key, value], i) => (
+                    <TableRow key={i}>
+                        <DataTableCell>{key}</DataTableCell>
+                        <DataTableCell>{typeof value === 'object' ? JSON.stringify(value) : value.toString()}</DataTableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
     )
 }
 

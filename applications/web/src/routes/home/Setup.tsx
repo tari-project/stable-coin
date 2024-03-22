@@ -34,8 +34,7 @@ import useTariProvider from "../../store/provider.ts";
 import {NewIssuerParams} from "../../types.ts";
 import {Link, useNavigate} from "react-router-dom";
 import {TableContainer, Table, TableRow, TableBody, Collapse} from "@mui/material";
-import {DataTableCell, AccordionIconButton} from "../../components/StyledComponents";
-import type {Instruction} from "@tariproject/typescript-bindings";
+import {DataTableCell} from "../../components/StyledComponents";
 
 function SetTemplateForm() {
     const {settings, setTemplate} = useSettings();
@@ -99,10 +98,13 @@ function IssuerComponents() {
 
     function handleOnCreate(data: NewIssuerParams) {
         setIsBusy(true);
-        provider.createNewIssuer(
-            settings.template,
-            data,
-        )
+        provider.getPublicKey("view_key", 0)
+            .then((viewKey) =>
+                provider.createNewIssuer(
+                    settings.template,
+                    {...data, viewKey},
+                )
+            )
             .then((result) => {
                 // TODO: improve error formatting
                 if (result.rejected) {

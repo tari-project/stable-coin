@@ -57,7 +57,8 @@ function NewIssuerDialog(props: NewIssuerDialogProps) {
         initialSupply: "",
         tokenSymbol: "",
         tokenMetadata: {provider_name: ""},
-        enableWrappedToken: true
+        enableWrappedToken: true,
+        viewKey: "",
     });
 
     return (

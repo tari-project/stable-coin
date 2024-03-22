@@ -8,7 +8,7 @@ export function getValueByPath(cborRepr: object, path: string): any {
         if (part == "$") {
             continue;
         }
-        if (value.Map) {
+        if ('Map' in value) {
             value = value.Map.find((v) => convertCborValue(v[0]) === part)?.[1];
             if (!value) {
                 return null;
@@ -16,7 +16,7 @@ export function getValueByPath(cborRepr: object, path: string): any {
             continue;
         }
 
-        if (value.Array) {
+        if ('Array' in value) {
             value = value.Array[parseInt(part)];
             continue;
         }

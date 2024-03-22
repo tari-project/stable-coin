@@ -9,6 +9,7 @@ export interface NewIssuerParams {
     initialSupply: string;
     tokenSymbol: string;
     tokenMetadata: object;
+    viewKey: string;
     enableWrappedToken: boolean;
 }
 

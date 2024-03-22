@@ -51,6 +51,7 @@ mod template {
             initial_token_supply: Amount,
             token_symbol: String,
             token_metadata: Metadata,
+            view_key: RistrettoPublicKeyBytes,
             enable_wrapped_token: bool,
         ) -> Bucket {
             let provider_name = token_metadata
@@ -86,22 +87,23 @@ mod template {
             let initial_supply_proof = ConfidentialOutputProof::mint_revealed(initial_token_supply);
             let initial_tokens = ResourceBuilder::confidential()
                 .initial_supply(initial_supply_proof)
-                .with_token_symbol(&token_symbol)
                 .with_metadata(token_metadata.clone())
+                .with_token_symbol(&token_symbol)
                 // Access rules
                 .mintable(require_admin.clone())
                 .burnable(require_admin.clone())
                 .depositable(require_user.clone())
                 .withdrawable(require_user.clone())
                 .recallable(require_admin.clone())
+                .with_view_key(view_key)
                 .build_bucket();
 
             // Create tokens resource with initial supply
             let wrapped_token = if enable_wrapped_token {
                 let wrapped_resource = ResourceBuilder::fungible()
                     .initial_supply(initial_token_supply)
-                    .with_token_symbol(token_symbol)
                     .with_metadata(token_metadata)
+                    .with_token_symbol(token_symbol)
                     // Access rules
                     .mintable(require_admin.clone())
                     .burnable(require_admin.clone())
