@@ -25,25 +25,25 @@ impl ExchangeFee {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct WrappedExchangeToken {
-    pub wrapped_vault: Vault,
-    pub wrapped_token_exchange_fee: ExchangeFee,
+    pub vault: Vault,
+    pub exchange_fee: ExchangeFee,
 }
 
 impl WrappedExchangeToken {
     pub(crate) fn resource_address(&self) -> ResourceAddress {
-        self.wrapped_vault.resource_address()
+        self.vault.resource_address()
     }
 
     pub fn vault(&self) -> &Vault {
-        &self.wrapped_vault
+        &self.vault
     }
 
     pub fn vault_mut(&mut self) -> &mut Vault {
-        &mut self.wrapped_vault
+        &mut self.vault
     }
 
     pub fn exchange_fee(&self) -> &ExchangeFee {
-        &self.wrapped_token_exchange_fee
+        &self.exchange_fee
     }
 }
 
