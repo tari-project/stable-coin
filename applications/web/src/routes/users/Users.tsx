@@ -32,11 +32,9 @@ import * as cbor from '../../cbor';
 import AddUser from "./AddUser.tsx";
 import GetUser from "./GetUser.tsx";
 import {ResourceAddress} from "@tariproject/typescript-bindings";
+import Button from "@mui/material/Button";
 
-interface Props {
-}
-
-function Users(props: Props) {
+function Users() {
     const {provider} = useTariProvider();
     const navigate = useNavigate();
     const params = useParams();
@@ -70,6 +68,8 @@ function Users(props: Props) {
         <>
             <Grid item sm={12} md={12} xs={12}>
                 <SecondaryHeading>Users</SecondaryHeading>
+                <Button onClick={() => navigate(`/issuers/${params.issuerId}`)}>Back</Button>
+                {error && <Alert severity="error">{error.message}</Alert>}
             </Grid>
             <Grid item xs={12} md={12} lg={12}>
                 {isBusy ? <CircularProgress/> : <AddUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!}/>}

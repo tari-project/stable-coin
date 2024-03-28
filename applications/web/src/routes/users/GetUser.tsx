@@ -85,6 +85,8 @@ function GetUser(props: Props) {
 
         setIsBusy(true);
         setError(null);
+        setUserVault(null);
+        setUserData(null);
         try {
             const substate = await provider.getSubstate(`${userAuthBadge} nft_u64:${userId}`);
             const userAccountId = cbor

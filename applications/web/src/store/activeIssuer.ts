@@ -23,6 +23,7 @@
 import {create} from "zustand";
 import {providers} from "@tariproject/tarijs";
 import TariWallet from "../wallet.ts";
+import {ResourceAddress, VaultId} from "../../../../../dan/bindings";
 
 export interface ActiveIssuer {
     id: string;
@@ -32,9 +33,19 @@ export interface ActiveIssuer {
         resourceAddress: string;
         revealedAmount: number;
     };
+    wrappedToken: WrappedExchangeToken | null,
     adminAuthResource: string;
     userAuthResource: string;
 }
+
+export interface WrappedExchangeToken {
+    vault: VaultId,
+    resource: ResourceAddress,
+    balance: number,
+    exchange_fee: ExchangeFee
+}
+
+export type ExchangeFee = { Fixed: number } | { Percentage: number };
 
 
 export interface Store {
