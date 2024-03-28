@@ -35,6 +35,7 @@ import * as cbor from '../../cbor';
 import SupplyControl from "./SupplyControl.tsx";
 import {SimpleTransactionResult} from "../../types.ts";
 import Transfers from "./Transfers.tsx";
+import WrappedToken from "./WrappedToken.tsx";
 
 interface IssuerDetailsProps {
     issuer: ActiveIssuer;
@@ -64,6 +65,8 @@ function IssuerDetails({issuer}: IssuerDetailsProps) {
                 <Detail label="Revealed Vault Supply" value={issuer.vault.revealedAmount.toString()}/>
                 <Detail label="Admin Badge Resource" value={issuer.adminAuthResource}/>
                 <Detail label="User Badge Resource" value={issuer.userAuthResource}/>
+                <Detail label="Wrapped Token" value={issuer.wrappedToken?.resource || "Disabled"}/>
+                <Detail label="Wrapped Balance" value={issuer.wrappedToken?.balance.toString() || "N/A"}/>
             </Grid>
             <Grid container spacing={2} sx={{textAlign: 'left'}}>
                 <Button variant="contained" color="secondary"
@@ -79,7 +82,7 @@ interface Props {
 function Issuer(props: Props) {
     const {provider} = useTariProvider();
     const [isLoading, setIsLoading] = React.useState(false);
-    const {activeIssuer, setActiveIssuer, clearActiveIssuer} = useActiveIssuer();
+    const {activeIssuer, setActiveIssuer} = useActiveIssuer();
     const [error, setError] = React.useState<Error | null>(null);
     const [success, setSuccess] = React.useState<string | null>(null);
     const params = useParams();
@@ -106,6 +109,9 @@ function Issuer(props: Props) {
                     const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
                     const vault = await provider.getSubstate(vaultId)
                     const container = vault.value.substate.Vault.resource_container.Confidential;
+                    const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
+                    const wrappedVault = wrappedToken ? await provider.getSubstate(wrappedToken.vault) : null;
+                    const wrappedContainer = wrappedVault?.value.substate.Vault.resource_container.Fungible;
 
                     setActiveIssuer({
                         id: substate_id.Component,
@@ -117,6 +123,11 @@ function Issuer(props: Props) {
                         },
                         adminAuthResource,
                         userAuthResource,
+                        wrappedToken: {
+                            resource: wrappedContainer.address,
+                            balance: wrappedContainer.amount,
+                            ...wrappedToken,
+                        }
                     } as ActiveIssuer);
                 });
 
@@ -180,6 +191,12 @@ function Issuer(props: Props) {
                         <h2>Transfers</h2>
                         <Transfers issuer={activeIssuer} onTransactionResult={handleTransactionResult}/>
                     </Grid>
+                    {activeIssuer.wrappedToken && (
+                        <Grid item xs={12} md={12} lg={12}>
+                            <h2>Wrapped Token</h2>
+                            <WrappedToken issuer={activeIssuer} onTransactionResult={handleTransactionResult}/>
+                        </Grid>
+                    )}
                 </>)}
         </>
     );

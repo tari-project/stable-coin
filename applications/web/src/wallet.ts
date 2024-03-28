@@ -299,6 +299,10 @@ export default class TariWallet<TProvider extends TariProvider> {
         return await this.provider.getPublicKey(branch, index);
     }
 
+    public async getAccount() {
+        return await this.provider.getAccount();
+    }
+
     public async getConfidentialVaultBalance(vaultId: VaultId, min: number | null = null, max: number | null = null) {
         return await this.provider.getConfidentialVaultBalances(0, vaultId, min, max);
     }
@@ -312,12 +316,12 @@ export default class TariWallet<TProvider extends TariProvider> {
         amount: Amount,
         fee: number = 2000
     ): Promise<SimpleTransactionResult> {
-        const account = await this.provider.getAccount();
+        const feeAccount = await this.provider.getAccount();
 
         const instructions = [
             {
                 CallMethod: {
-                    component_address: account.address,
+                    component_address: userAccount,
                     method: "create_proof_for_resource",
                     args: [userBadgeResource]
                 }
@@ -325,7 +329,7 @@ export default class TariWallet<TProvider extends TariProvider> {
             {PutLastInstructionOutputOnWorkspace: {key: [0]}},
             {
                 CallMethod: {
-                    component_address: issuerComponent,
+                    component_address: userAccount,
                     method: "withdraw",
                     args: [
                         stableCoinResource,
@@ -338,10 +342,20 @@ export default class TariWallet<TProvider extends TariProvider> {
 
                 CallMethod: {
                     component_address: issuerComponent,
-                    method: "exchange_stable_for_wrapped_token",
+                    method: "exchange_stable_for_wrapped_tokens",
                     args: [
                         {Workspace: [0]},
                         {Workspace: [1]},
+                    ],
+                }
+            },
+            {PutLastInstructionOutputOnWorkspace: {key: [2]}},
+            {
+                CallMethod: {
+                    component_address: userAccount,
+                    method: "deposit",
+                    args: [
+                        {Workspace: [2]},
                     ],
                 }
             },
@@ -349,7 +363,7 @@ export default class TariWallet<TProvider extends TariProvider> {
         ] as Instruction[];
 
         const required_substates = [
-            {substate_id: account.address, version: null},
+            {substate_id: userAccount, version: null},
             {substate_id: issuerComponent, version: null},
             {substate_id: userBadgeResource, version: null},
             {
@@ -362,7 +376,79 @@ export default class TariWallet<TProvider extends TariProvider> {
             }
         ] as SubstateRequirement[];
 
-        return await this.submitTransaction(account, instructions, required_substates, fee);
+        return await this.submitTransaction(feeAccount, instructions, required_substates, fee);
+    }
+
+    public async exchangeWrappedForStable(
+        issuerComponent: ComponentAddress,
+        userAccount: ComponentAddress,
+        wrappedCoinResource: ResourceAddress,
+        userBadgeResource: ResourceAddress,
+        userId: number,
+        amount: Amount,
+        fee: number = 2000
+    ): Promise<SimpleTransactionResult> {
+        const feeAccount = await this.provider.getAccount();
+
+        const instructions = [
+            {
+                CallMethod: {
+                    component_address: userAccount,
+                    method: "create_proof_for_resource",
+                    args: [userBadgeResource]
+                }
+            },
+            {PutLastInstructionOutputOnWorkspace: {key: [0]}},
+            {
+                CallMethod: {
+                    component_address: userAccount,
+                    method: "withdraw",
+                    args: [
+                        wrappedCoinResource,
+                        amount,
+                    ],
+                }
+            },
+            {PutLastInstructionOutputOnWorkspace: {key: [1]}},
+            {
+
+                CallMethod: {
+                    component_address: issuerComponent,
+                    method: "exchange_wrapped_for_stable_tokens",
+                    args: [
+                        {Workspace: [0]},
+                        {Workspace: [1]},
+                    ],
+                }
+            },
+            {PutLastInstructionOutputOnWorkspace: {key: [2]}},
+            {
+                CallMethod: {
+                    component_address: userAccount,
+                    method: "deposit",
+                    args: [
+                        {Workspace: [2]},
+                    ],
+                }
+            },
+            "DropAllProofsInWorkspace"
+        ] as Instruction[];
+
+        const required_substates = [
+            {substate_id: userAccount, version: null},
+            {substate_id: issuerComponent, version: null},
+            {substate_id: userBadgeResource, version: null},
+            {
+                substate_id: `${userBadgeResource} nft_u64:${userId}`,
+                version: null
+            },
+            {
+                substate_id: wrappedCoinResource,
+                version: null
+            }
+        ] as SubstateRequirement[];
+
+        return await this.submitTransaction(feeAccount, instructions, required_substates, fee);
     }
 
     async callRestrictedMethod(component_address: ComponentAddress, admin_badge_resx: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, extraInputs: Array<SubstateRequirement>, fee: number = 2000) {
