@@ -33,6 +33,7 @@ mod template {
     use crate::user_data::Account;
     use crate::wrapped_exchange_token::{ExchangeFee, WrappedExchangeToken};
     use std::collections::BTreeSet;
+    use tari_template_lib::args::LogLevel;
     use tari_template_lib::engine;
 
     const DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE: ExchangeFee = ExchangeFee::Fixed(Amount::new(5));
@@ -83,8 +84,10 @@ mod template {
                 user_auth_resource.into(),
             ])));
 
+            let component_alloc = CallerContext::allocate_component_address();
             // Create tokens resource with initial supply
-            let initial_supply_proof = ConfidentialOutputProof::mint_revealed(initial_token_supply);
+            let initial_supply_proof =
+                ConfidentialOutputStatement::mint_revealed(initial_token_supply);
             let initial_tokens = ResourceBuilder::confidential()
                 .initial_supply(initial_supply_proof)
                 .with_metadata(token_metadata.clone())
@@ -95,6 +98,7 @@ mod template {
                 .depositable(require_user.clone())
                 .withdrawable(require_user.clone())
                 .recallable(require_admin.clone())
+                .with_authorization_hook(*component_alloc.address(), "authorize_user_deposit")
                 .with_view_key(view_key)
                 .build_bucket();
 
@@ -122,6 +126,7 @@ mod template {
                 .add_method_rule("total_supply", AccessRule::AllowAll)
                 .add_method_rule("exchange_stable_for_wrapped_tokens", require_user.clone())
                 .add_method_rule("exchange_wrapped_for_stable_tokens", require_user.clone())
+                .add_method_rule("authorize_user_deposit", AccessRule::AllowAll)
                 .default(require_admin);
 
             // Create component
@@ -132,17 +137,45 @@ mod template {
                 blacklisted_users: Vault::new_empty(user_auth_resource),
                 wrapped_token,
             })
+            .with_address_allocation(component_alloc)
             .with_access_rules(component_access_rules)
-            // Access is entirely controlled by anyone with an admin badge
+            // Access is controlled by anyone with an admin badge, there is no single owner
             .with_owner_rule(OwnerRule::None)
             .create();
 
             admin_badge
         }
 
+        pub fn authorize_user_deposit(&self, action: ResourceAuthAction, caller: AuthHookCaller) {
+            match action {
+                ResourceAuthAction::Deposit => {
+                    let Some(component_state) = caller.component_state() else {
+                        panic!("deposit not permitted from static template function")
+                    };
+                    engine().emit_log(
+                        LogLevel::Info,
+                        format!(
+                            "Authorizing deposit for user with component {}",
+                            caller.component().unwrap()
+                        ),
+                    );
+                    let user_account = tari_bor::from_value::<Account>(component_state).unwrap();
+                    let vault = user_account.get_vault(&self.user_auth_resource);
+
+                    // User must own a badge of this user auth resource. The badge may be locked when sending to self.
+                    if vault.balance().is_zero() && vault.locked_balance().is_zero() {
+                        panic!("This account does not have permission to deposit");
+                    }
+                }
+                _ => {
+                    // Withdraws etc are permitted as per normal resource access rules
+                }
+            }
+        }
+
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
-            let proof = ConfidentialOutputProof::mint_revealed(amount);
+            let proof = ConfidentialOutputStatement::mint_revealed(amount);
             let new_tokens = self.token_vault_manager().mint_confidential(proof);
             self.token_vault.deposit(new_tokens);
 
@@ -318,17 +351,7 @@ mod template {
             let component_manager = engine().component_manager(user.user_account);
             let account = component_manager.get_state::<Account>();
 
-            let vault = account
-                .vaults
-                .get(&self.token_vault.resource_address())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Vault not found for resource {} in account {}",
-                        self.token_vault.resource_address(),
-                        user.user_account
-                    )
-                });
-
+            let vault = account.get_vault(&self.token_vault.resource_address());
             let vault_id = vault.vault_id();
             let num_commitments = commitments.len();
 

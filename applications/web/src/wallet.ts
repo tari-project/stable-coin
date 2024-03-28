@@ -365,7 +365,7 @@ export default class TariWallet<TProvider extends TariProvider> {
         return await this.submitTransaction(account, instructions, required_substates, fee);
     }
 
-    async callRestrictedMethod(component_address: ComponentAddress, badge_resource: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, extraInputs: Array<SubstateRequirement>, fee: number = 2000) {
+    async callRestrictedMethod(component_address: ComponentAddress, admin_badge_resx: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, extraInputs: Array<SubstateRequirement>, fee: number = 2000) {
         const account = await this.provider.getAccount();
 
         const extra = extraInstructions(account);
@@ -375,7 +375,7 @@ export default class TariWallet<TProvider extends TariProvider> {
                 CallMethod: {
                     component_address: account.address,
                     method: "create_proof_for_resource",
-                    args: [badge_resource]
+                    args: [admin_badge_resx]
                 }
             },
             {
@@ -395,7 +395,7 @@ export default class TariWallet<TProvider extends TariProvider> {
         const required_substates = [
             {substate_id: account.address, version: null},
             {substate_id: component_address, version: null},
-            {substate_id: badge_resource, version: null},
+            {substate_id: admin_badge_resx, version: null},
             ...extraInputs
         ] as SubstateRequirement[];
 
