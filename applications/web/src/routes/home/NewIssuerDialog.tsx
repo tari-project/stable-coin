@@ -27,16 +27,11 @@ import {
   Checkbox,
   CircularProgress,
   FormControlLabel,
-  FormLabel,
-  MenuItem,
-  Select,
   TextField,
 } from "@mui/material";
 import { useState } from "react";
 import Grid from "@mui/material/Grid";
-import useSettings from "../../store/settings.ts";
 import { Dialog, DialogTitle } from "@mui/material";
-import { Close } from "@mui/icons-material";
 import IconButton from "@mui/material/IconButton";
 import DialogContent from "@mui/material/DialogContent";
 import CloseIcon from "@mui/icons-material/Close";

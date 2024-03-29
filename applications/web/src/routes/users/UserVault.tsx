@@ -26,12 +26,12 @@ import * as React from "react";
 
 import { Vault, VaultId } from "@tariproject/typescript-bindings";
 import useTariProvider from "../../store/provider.ts";
-import { providers } from "@tariproject/tarijs";
+import { VaultBalances } from "@tariproject/tarijs/dist/providers/types";
 import { useEffect } from "react";
 import { Alert, CircularProgress, Table, TableBody, TableContainer, TableHead, TableRow } from "@mui/material";
 import { DataTableCell } from "../../components/StyledComponents.ts";
+import { useNavigate } from "react-router-dom";
 
-const { VaultBalances } = providers;
 
 interface Props {
   vaultId: VaultId;
@@ -45,6 +45,14 @@ function UserVault(props: Props) {
   const [loading, setLoading] = React.useState<boolean>(false);
   const [total, setTotal] = React.useState<number>(0);
   const [revealedAmount, setRevealedAmount] = React.useState<number>(0);
+  const navigate = useNavigate();
+
+  if (!provider) {
+    useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -52,6 +60,11 @@ function UserVault(props: Props) {
       .getConfidentialVaultBalance(props.vaultId)
       .then((balances) => {
         setBalances(balances);
+
+        if (!("Confidential" in props.vault.resource_container)) {
+          throw new Error("Vault does not contain a confidential resource");
+        }
+
         let revealedAmount = props.vault.resource_container.Confidential?.revealed_amount || 0;
         const total = Object.values(balances.balances).reduce((acc, key) => acc + (key || 0), 0) + revealedAmount;
         setRevealedAmount(revealedAmount);
@@ -96,7 +109,7 @@ function UserVault(props: Props) {
               <DataTableCell>
                 <span title={commitment}>UTXO {i}</span>
               </DataTableCell>
-              <DataTableCell>{balances.balances[commitment]}</DataTableCell>
+              <DataTableCell>{balances.balances.get(commitment) || "--"}</DataTableCell>
             </TableRow>
           ))}
           <TableRow>

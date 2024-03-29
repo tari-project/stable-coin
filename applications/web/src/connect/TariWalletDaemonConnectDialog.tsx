@@ -8,10 +8,8 @@ import Typography from "@mui/material/Typography";
 import { QRCodeSVG } from "qrcode.react";
 import { useState, useEffect } from "react";
 import styles from "./TariWalletDaemonConnectDialog.module.css";
-import { providers } from "@tariproject/tarijs";
+import { WalletDaemonTariProvider, WalletDaemonParameters, TariPermissions } from "@tariproject/tarijs";
 import { Alert, CircularProgress } from "@mui/material";
-
-const { WalletDaemonParameters, WalletDaemonTariProvider, TariPermissions } = providers.walletDaemon;
 
 export interface TariWalletDaemonConnectDialog {
   open: boolean;
@@ -29,7 +27,6 @@ export function TariWalletDaemonConnectDialog(props: TariWalletDaemonConnectDial
   const { onClose, open, onConnected } = props;
 
   const [isCopied, setIsCopied] = useState(false);
-  const [fadeClass, setFadeClass] = useState("tariFadeIn");
   const [tokenUrl, setTokenUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -42,7 +39,6 @@ export function TariWalletDaemonConnectDialog(props: TariWalletDaemonConnectDial
 
   useEffect(() => {
     if (open) {
-      setFadeClass("tariFadeIn");
       const params: WalletDaemonParameters = {
         signalingServerUrl: props.signalingServerUrl,
         permissions: props.permissions,
@@ -69,7 +65,6 @@ export function TariWalletDaemonConnectDialog(props: TariWalletDaemonConnectDial
   const handleCopy = () => {
     navigator.clipboard.writeText(tokenUrl);
     setIsCopied(true);
-    setFadeClass("");
     setTimeout(() => {
       setIsCopied(false);
     }, 2000);
@@ -77,6 +72,7 @@ export function TariWalletDaemonConnectDialog(props: TariWalletDaemonConnectDial
 
   return (
     <Dialog fullWidth={true} onClose={handleClose} open={open}>
+      {error && <Alert severity="error">{error.message}</Alert>}
       <Box sx={{ padding: 4, borderRadius: 4 }}>
         <Stack direction="row" justifyContent="space-between" spacing={2}>
           <Typography style={{ fontSize: 24 }}>Connect to your Tari Wallet Daemon</Typography>

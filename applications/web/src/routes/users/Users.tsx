@@ -31,8 +31,9 @@ import { useEffect } from "react";
 import * as cbor from "../../cbor";
 import AddUser from "./AddUser.tsx";
 import GetUser from "./GetUser.tsx";
-import { ResourceAddress } from "@tariproject/typescript-bindings";
+import { ResourceAddress, Substate } from "@tariproject/typescript-bindings";
 import Button from "@mui/material/Button";
+import type { CborValue } from "../../cbor";
 
 function Users() {
   const { provider } = useTariProvider();
@@ -54,8 +55,11 @@ function Users() {
     provider
       .getSubstate(params.issuerId!)
       .then((issuer) => {
-        const { value } = issuer;
-        const structMap = value.substate.Component.body.state as [object, object][];
+        const { value } = issuer as { value: Substate };
+        if (!("Component" in value.substate)) {
+          throw new Error(`Issuer ID ${params.issuerId} is not a component substate.`);
+        }
+        const structMap = value.substate.Component.body.state as CborValue;
         const adminAuthBadge = cbor.getValueByPath(structMap, "$.admin_auth_resource");
         setAdminAuthBadge(adminAuthBadge);
       })

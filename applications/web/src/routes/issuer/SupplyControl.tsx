@@ -23,7 +23,7 @@ function SupplyControl({ issuer, onTransactionResult, onTransactionSubmit }: Pro
   const { provider } = useTariProvider();
   const navigate = useNavigate();
   const [error, setError] = React.useState<Error | null>(null);
-  const [invalid, setInvalid] = React.useState<object>({});
+  const [invalid, setInvalid] = React.useState<any>({});
   const [busy, setBusy] = React.useState<{ [key: string]: boolean }>({});
 
   if (!provider) {
@@ -31,13 +31,10 @@ function SupplyControl({ issuer, onTransactionResult, onTransactionSubmit }: Pro
     return <></>;
   }
 
-  const set = (key: string) => (evt) => {
-    if (!evt.target.validity.valid) {
-      return;
-    }
+  const set = (key: string) => (evt: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues({ ...formValues, [key]: evt.target.value });
   };
-  const onValidate = (key: string) => (evt) => {
+  const onValidate = (key: string) => (evt: React.FocusEvent<HTMLInputElement>) => {
     if (evt.target.validity.valid) {
       delete invalid[key];
       setInvalid({ ...invalid });
@@ -58,7 +55,7 @@ function SupplyControl({ issuer, onTransactionResult, onTransactionSubmit }: Pro
       onTransactionResult(result);
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setBusy({});
     }
@@ -75,7 +72,7 @@ function SupplyControl({ issuer, onTransactionResult, onTransactionSubmit }: Pro
       onTransactionResult(result);
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setBusy({});
     }
@@ -87,7 +84,7 @@ function SupplyControl({ issuer, onTransactionResult, onTransactionSubmit }: Pro
     <StyledPaper sx={{ padding: 6 }}>
       {error && (
         <Box sx={{ paddingBottom: 4 }}>
-          <Alert severity="error">{error.message || error}</Alert>
+          <Alert severity="error">{error.message}</Alert>
         </Box>
       )}
       <Grid container spacing={2}>

@@ -28,6 +28,8 @@ import { Alert, TextField } from "@mui/material";
 import Button from "@mui/material/Button";
 import { ComponentAddress, ResourceAddress } from "@tariproject/typescript-bindings";
 import { SimpleTransactionResult, splitOnce } from "../../types.ts";
+import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
 interface Props {
   issuerId: ComponentAddress;
@@ -47,10 +49,19 @@ function RecallTokens(props: Props) {
   const [success, setSuccess] = React.useState<string | null>(null);
   const [recallAmount, setRecallAmount] = React.useState<number>(0);
 
-  const userAccount = props.badgeData.user_account!;
   const [userBadgeResource, _nft] = splitOnce(props.userBadge, " ")!;
+  const navigate = useNavigate();
 
-  const handleOnRecall = async (e) => {
+  const userAccount = (props.badgeData as any)!.user_account!;
+
+  if (!provider) {
+    useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
+
+  const handleOnRecall = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsBusy(true);
     setSuccess(null);
@@ -72,7 +83,7 @@ function RecallTokens(props: Props) {
 
       throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
     } catch (e) {
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }

@@ -26,10 +26,8 @@ import Typography from "@mui/material/Typography";
 import Grid from "@mui/material/Grid";
 import Container from "@mui/material/Container";
 
-type ErrorType = { message: string } | { statusText: string } | string | null;
-
 export default function ErrorPage() {
-  const error = useRouteError() as ErrorType;
+  const error = useRouteError() as any;
   console.error(error);
 
   return (

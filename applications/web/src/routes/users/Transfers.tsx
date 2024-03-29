@@ -3,14 +3,12 @@
 
 import Grid from "@mui/material/Grid";
 import * as React from "react";
-import { StyledPaper } from "../../components/StyledComponents.ts";
 import { Alert, CircularProgress, TextField } from "@mui/material";
 import Button from "@mui/material/Button";
 import useTariProvider from "../../store/provider.ts";
 import { useNavigate } from "react-router-dom";
 import { ActiveIssuer } from "../../store/activeIssuer.ts";
 import { SimpleTransactionResult } from "../../types.ts";
-import Box from "@mui/material/Box";
 import { ComponentAddress } from "@tariproject/typescript-bindings";
 
 interface Props {
@@ -25,7 +23,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit, userAccou
   const { provider } = useTariProvider();
   const navigate = useNavigate();
   const [error, setError] = React.useState<Error | null>(null);
-  const [invalid, setInvalid] = React.useState<object>({});
+  const [invalid, setInvalid] = React.useState<Partial<any>>({});
   const [isBusy, setIsBusy] = React.useState(false);
 
   if (!provider) {
@@ -33,13 +31,13 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit, userAccou
     return <></>;
   }
 
-  const set = (key: string) => (evt) => {
+  const set = (key: string) => (evt: React.ChangeEvent<HTMLInputElement>) => {
     if (!evt.target.validity.valid) {
       return;
     }
     setFormValues({ ...formValues, [key]: evt.target.value });
   };
-  const onValidate = (key: string) => (evt) => {
+  const onValidate = (key: string) => (evt: React.FocusEvent<HTMLInputElement>) => {
     console.log(evt.target.validity);
     if (evt.target.validity.valid) {
       delete invalid[key];
@@ -66,7 +64,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit, userAccou
       onTransactionResult(result);
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }

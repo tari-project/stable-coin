@@ -95,7 +95,6 @@ const Drawer = styled(MuiDrawer, {
 
 interface Props {
   breadcrumbRoutes: BreadcrumbsItem[];
-  children: React.ReactNode;
 }
 
 export default function Layout({ breadcrumbRoutes }: Props) {

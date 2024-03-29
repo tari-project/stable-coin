@@ -21,8 +21,6 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { providers } from "@tariproject/tarijs";
-import TariWallet from "../wallet.ts";
 import { ResourceAddress, VaultId } from "../../../../../dan/bindings";
 
 export interface ActiveIssuer {
@@ -50,9 +48,9 @@ export type ExchangeFee = { Fixed: number } | { Percentage: number };
 export interface Store {
   activeIssuer: ActiveIssuer | null;
 
-  setActiveIssuer(issuer: ActiveIssuer | null);
+  setActiveIssuer(issuer: ActiveIssuer | null): void;
 
-  clearActiveIssuer();
+  clearActiveIssuer(): void;
 }
 
 const useActiveIssuer = create<Store>()((set) => ({

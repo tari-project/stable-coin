@@ -18,11 +18,9 @@ import { RefreshOutlined } from "@mui/icons-material";
 
 interface Props {
   issuer: ActiveIssuer;
-  onTransactionResult: (result: SimpleTransactionResult) => void;
-  onTransactionSubmit?: () => void;
 }
 
-function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Props) {
+function WrappedToken({ issuer }: Props) {
   const [formValues, setFormValues] = React.useState({} as any);
   const { provider } = useTariProvider();
   const navigate = useNavigate();
@@ -41,13 +39,13 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
     loadAccount();
   }, [issuer]);
 
-  const set = (key: string) => (evt) => {
+  const set = (key: string) => (evt: React.ChangeEvent<HTMLInputElement>) => {
     if (!evt.target.validity.valid) {
       return;
     }
     setFormValues({ ...formValues, [key]: evt.target.value });
   };
-  const onValidate = (key: string) => (evt) => {
+  const onValidate = (key: string) => (evt: React.FocusEvent<HTMLInputElement>) => {
     console.log(evt.target.validity);
     if (evt.target.validity.valid) {
       delete invalid[key];
@@ -64,7 +62,7 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
       setIsBusy(true);
       const result = await provider.exchangeStableForWrappedToken(
         issuer.id,
-        account.address,
+        account!.address,
         issuer.vault.resourceAddress,
         issuer.userAuthResource,
         Number(formValues.userId.trim()),
@@ -79,7 +77,7 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
       loadAccount();
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }
@@ -91,7 +89,7 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
       setIsBusy(true);
       const result = await provider.exchangeWrappedForStable(
         issuer.id,
-        account.address,
+        account!.address,
         issuer.wrappedToken!.resource,
         issuer.userAuthResource,
         Number(formValues.userId.trim()),
@@ -106,7 +104,7 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
       loadAccount();
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }
@@ -129,6 +127,13 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
       {error && (
         <Box sx={{ paddingBottom: 4 }}>
           <Alert severity="error">{error.message}</Alert>
+        </Box>
+      )}
+      {exchangeResult?.accept && (
+        <Box sx={{ paddingBottom: 4 }}>
+          <Alert severity="success">
+            {`Transaction ${exchangeResult.transactionId} was accepted`}
+          </Alert>
         </Box>
       )}
       <Box sx={{ paddingBottom: 4 }}>
@@ -198,7 +203,7 @@ function WrappedToken({ issuer, onTransactionResult, onTransactionSubmit }: Prop
   );
 }
 
-function AccountDetails({ account }: { account: Account }) {
+function AccountDetails({ account }: { account: types.Account }) {
   return (
     <Box sx={{ paddingBottom: 4 }}>
       <h3>Account Details</h3>
@@ -216,10 +221,10 @@ function AccountDetails({ account }: { account: Account }) {
       </p>
       <p>
         <span>Vaults: </span>
-        {account.resources.map((r, i) => (
+        {account.resources.map((r, i: number) => (
           <p key={i}>
             <span>
-              {r.type} Available: {r.balance} {r.token_symbol || r.resource_address}
+              {r.type} Available: {r.balance} {("token_symbol" in r) ? r.token_symbol as string : r.resource_address}
             </span>
           </p>
         ))}

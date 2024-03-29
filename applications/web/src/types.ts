@@ -1,29 +1,30 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import * as tarijs from "@tariproject/tarijs";
-import { RejectReason } from "../../../../dan/bindings";
+import { types } from "@tariproject/tarijs";
+import { RejectReason, Substate, SubstateId } from "@tariproject/typescript-bindings";
+
 
 export interface NewIssuerParams {
   initialSupply: string;
   tokenSymbol: string;
-  tokenMetadata: object;
+  tokenMetadata: any;
   viewKey: string;
   enableWrappedToken: boolean;
 }
 
 export class SimpleTransactionResult {
-  private inner: TransactionResult;
+  private inner: types.TransactionResult;
 
-  constructor(result: TransactionResult) {
+  constructor(result: types.TransactionResult) {
     this.inner = result;
   }
 
-  static from(result: TransactionResult): SimpleTransactionResult {
+  static from(result: types.TransactionResult): SimpleTransactionResult {
     return new SimpleTransactionResult(result);
   }
 
-  public get status(): tarijs.providers.types.TransactionStatus {
+  public get status(): types.TransactionStatus {
     return this.inner.status;
   }
 
@@ -48,55 +49,62 @@ export class SimpleTransactionResult {
   }
 
   public get accept(): SubstateDiff | null {
-    const accept = this.inner.result.result.Accept;
+    const result = this.inner.result as any;
+    const accept = result?.result.Accept;
     if (!accept) {
       return null;
     }
 
     return {
       up_substates: accept.up_substates
-        .map(([id, val]: [object, object]) => {
-          switch (Object.keys(id)[0]) {
-            case "Component":
-              return ["Component", id.Component, val.substate.Component];
-            case "Resource":
-              return ["Resource", id.Resource, val.substate.Resource];
-            case "Vault":
-              return ["Vault", id.Vault, val.substate.Vault];
-            case "NonFungible":
-              return ["NonFungible", id.NonFungible, val.substate.NonFungible];
-            default:
-              console.log("Unknown substate type", id);
-              return null;
+        .map(([id, val]: [SubstateId, Substate]) => {
+          if ("Component" in id && "Component" in val.substate) {
+            return ["Component", id.Component, val.substate.Component];
           }
+          if ("Resource" in id && "Resource" in val.substate) {
+            return ["Resource", id.Resource, val.substate.Resource];
+          }
+          if ("Vault" in id && "Vault" in val.substate) {
+            return ["Vault", id.Vault, val.substate.Vault];
+          }
+          if ("NonFungible" in id && "NonFungible" in val.substate) {
+            return ["NonFungible", id.NonFungible, val.substate.NonFungible];
+          }
+
+          console.log("Unknown substate type", id);
+          return null;
         })
-        .filter((x) => x),
+        .filter((x: [string, any] | null) => x !== null),
       down_substates: accept.down_substates
-        .map(([id, _version]: [object, number]) => {
-          switch (Object.keys(id)[0]) {
-            case "Component":
-              return ["Component", id.Component];
-            case "Resource":
-              return ["Resource", id.Resource];
-            case "Vault":
-              return ["Vault", id.Vault];
-            case "NonFungible":
-              return ["NonFungible", id.NonFungible];
-            default:
-              console.log("Unknown substate type", id);
-              return null;
+        .map(([id, _version]: [SubstateId, number]) => {
+          if ("Component" in id) {
+            return ["Component", id.Component];
           }
+          if ("Resource" in id) {
+            return ["Resource", id.Resource];
+          }
+          if ("Vault" in id) {
+            return ["Vault", id.Vault];
+          }
+          if ("NonFungible" in id) {
+            return ["NonFungible", id.NonFungible];
+          }
+
+          console.log("Unknown substate type", id);
+          return null;
         })
-        .filter((x) => x),
+        .filter((x: [string, any] | null) => x !== null),
     };
   }
 
   public get onlyFeeAccepted(): [SubstateDiff, RejectReason] | null {
-    return this.inner.result.result.AcceptFeeRejectRest;
+    const result = this.inner.result as any;
+    return result?.result.AcceptFeeRejectRest;
   }
 
   public get rejected(): RejectReason | null {
-    return this.inner.result.result.Reject;
+    const result = this.inner.result as any;
+    return result?.result.Reject;
   }
 }
 
@@ -113,7 +121,7 @@ export interface SubstateDiff {
   down_substates: SubstateTypeAndId[];
 }
 
-export type SubstateTuple = [SubstateType, string, object];
+export type SubstateTuple = [SubstateType, string, any];
 export type SubstateTypeAndId = [SubstateType, string];
 
 export type SubstateType = "Component" | "Resource" | "Vault" | "NonFungible";

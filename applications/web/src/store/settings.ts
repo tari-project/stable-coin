@@ -31,9 +31,9 @@ export interface Settings {
 export interface SettingsStore {
   settings: Settings;
 
-  setSettings(settings: object);
+  setSettings(settings: object): void;
 
-  setTemplate(template: string);
+  setTemplate(template: string): void;
 }
 
 const useSettings = create<SettingsStore>()(
@@ -44,12 +44,12 @@ const useSettings = create<SettingsStore>()(
         activeIssuerComponent: null,
       },
 
-      setSettings(settings) {
+      setSettings(settings: Settings) {
         set({ settings });
       },
 
       setTemplate(template: string) {
-        set({ settings: { template } });
+        set({ settings: { ...this.settings, template } });
       },
     }),
     {
