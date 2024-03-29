@@ -1,32 +1,40 @@
 @font-face {
-  src: url('./assets/fonts/AvenirLTStd-Book.otf');
-  font-family: 'AvenirRegular'
+  src: url("./assets/fonts/AvenirLTStd-Book.otf");
+  font-family: "AvenirRegular";
 }
 
 @font-face {
-  src: url('./assets/fonts/AvenirLTStd-Medium.otf');
-  font-family: 'AvenirMedium'
+  src: url("./assets/fonts/AvenirLTStd-Medium.otf");
+  font-family: "AvenirMedium";
 }
 
 @font-face {
-  src: url('./assets/fonts/AvenirLTStd-Heavy.otf');
-  font-family: 'AvenirHeavy'
+  src: url("./assets/fonts/AvenirLTStd-Heavy.otf");
+  font-family: "AvenirHeavy";
 }
 
 @keyframes fadeIn {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeOut {
-  0% { opacity: 1; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .tariText {
-  font-family: 'AvenirMedium', sans-serif;
+  font-family: "AvenirMedium", sans-serif;
   font-size: 14px;
-  color: #716A78;
+  color: #716a78;
   line-height: 1.5;
   text-align: center;
 }
@@ -53,21 +61,21 @@
   font-size: 14px;
   cursor: pointer;
   border-radius: 10px;
-  font-family: 'AvenirMedium', sans-serif;
+  font-family: "AvenirMedium", sans-serif;
   height: 50px;
 }
 
-.tariBtn:hover {  
+.tariBtn:hover {
   filter: brightness(90%);
 }
 
 .tariPrimaryBtn {
-  background: #9330FF;
+  background: #9330ff;
   color: white;
 }
 
 .tariSecondaryBtn {
-  background-color: #EDECEE;
+  background-color: #edecee;
   color: #000000;
 }
 
@@ -79,7 +87,7 @@
   top: 0;
   left: 0;
 }
- 
+
 .tariBox {
   position: relative;
   width: 80%;
@@ -89,7 +97,7 @@
   background: #fff;
   border-radius: 10px;
   padding: 10px;
-  border: 1px solid #EDECEE;
+  border: 1px solid #edecee;
   overflow: auto;
   box-shadow: 0px 0px 40px rgba(0, 0, 0, 0.04);
 }
@@ -140,7 +148,7 @@
   stroke-dashoffset: 166;
   stroke-width: 2;
   stroke-miterlimit: 10;
-  stroke: #FFFFFF;
+  stroke: #ffffff;
   fill: none;
   animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
 }
@@ -151,10 +159,12 @@
   border-radius: 50%;
   display: block;
   stroke-width: 4;
-  stroke: #9330FF;
+  stroke: #9330ff;
   stroke-miterlimit: 10;
-  box-shadow: inset 0px 0px 0px #FFFFFF;
-  animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+  box-shadow: inset 0px 0px 0px #ffffff;
+  animation:
+    fill 0.4s ease-in-out 0.4s forwards,
+    scale 0.3s ease-in-out 0.9s both;
   margin: 0 auto;
 }
 
@@ -175,22 +185,22 @@
 
 @keyframes stroke {
   100% {
-      stroke-dashoffset: 0
+    stroke-dashoffset: 0;
   }
 }
 
 @keyframes scale {
   0%,
   100% {
-      transform: none
+    transform: none;
   }
   50% {
-      transform: scale3d(1.1, 1.1, 1)
+    transform: scale3d(1.1, 1.1, 1);
   }
 }
 
 @keyframes fill {
   100% {
-      box-shadow: inset 0px 0px 0px 30px #FFFFFF
+    box-shadow: inset 0px 0px 0px 30px #ffffff;
   }
 }

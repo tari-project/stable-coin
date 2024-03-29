@@ -24,90 +24,97 @@ import "./Style.css";
 
 import * as React from "react";
 
-import {Vault, VaultId} from "@tariproject/typescript-bindings";
+import { Vault, VaultId } from "@tariproject/typescript-bindings";
 import useTariProvider from "../../store/provider.ts";
-import {providers} from "@tariproject/tarijs";
-import {useEffect} from "react";
-import {Alert, CircularProgress, Table, TableBody, TableContainer, TableHead, TableRow} from "@mui/material";
-import {DataTableCell} from "../../components/StyledComponents.ts";
+import { providers } from "@tariproject/tarijs";
+import { useEffect } from "react";
+import { Alert, CircularProgress, Table, TableBody, TableContainer, TableHead, TableRow } from "@mui/material";
+import { DataTableCell } from "../../components/StyledComponents.ts";
 
-const {
-    VaultBalances
-} = providers;
+const { VaultBalances } = providers;
 
 interface Props {
-    vaultId: VaultId,
-    vault: Vault
+  vaultId: VaultId;
+  vault: Vault;
 }
 
 function UserVault(props: Props) {
-    const {provider} = useTariProvider();
-    const [balances, setBalances] = React.useState<VaultBalances | null>(null);
-    const [error, setError] = React.useState<Error | null>(null);
-    const [loading, setLoading] = React.useState<boolean>(false);
-    const [total, setTotal] = React.useState<number>(0);
-    const [revealedAmount, setRevealedAmount] = React.useState<number>(0);
+  const { provider } = useTariProvider();
+  const [balances, setBalances] = React.useState<VaultBalances | null>(null);
+  const [error, setError] = React.useState<Error | null>(null);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [total, setTotal] = React.useState<number>(0);
+  const [revealedAmount, setRevealedAmount] = React.useState<number>(0);
 
-    useEffect(() => {
-        setLoading(true);
-        provider.getConfidentialVaultBalance(props.vaultId)
-            .then((balances) => {
-                setBalances(balances);
-                let revealedAmount = props.vault.resource_container.Confidential?.revealed_amount || 0;
-                const total = Object.values(balances.balances).reduce((acc, key) => acc + (key || 0), 0) + revealedAmount;
-                setRevealedAmount(revealedAmount);
-                setTotal(total);
-            })
-            .catch((err) => {
-                setError(err);
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    }, [props.vaultId]);
+  useEffect(() => {
+    setLoading(true);
+    provider
+      .getConfidentialVaultBalance(props.vaultId)
+      .then((balances) => {
+        setBalances(balances);
+        let revealedAmount = props.vault.resource_container.Confidential?.revealed_amount || 0;
+        const total = Object.values(balances.balances).reduce((acc, key) => acc + (key || 0), 0) + revealedAmount;
+        setRevealedAmount(revealedAmount);
+        setTotal(total);
+      })
+      .catch((err) => {
+        setError(err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [props.vaultId]);
 
-    if (loading) {
-        return <CircularProgress/>;
-    }
+  if (loading) {
+    return <CircularProgress />;
+  }
 
-    if (error) {
-        return <Alert severity="error">{error.message}</Alert>;
-    }
+  if (error) {
+    return <Alert severity="error">{error.message}</Alert>;
+  }
 
-    if (!balances) {
-        return <Alert severity="info">No balances found</Alert>;
-    }
+  if (!balances) {
+    return <Alert severity="info">No balances found</Alert>;
+  }
 
-
-    return (
-        <TableContainer>
-            <Table>
-                <TableHead>
-                    <TableRow>
-                        <DataTableCell><strong>UTXO</strong></DataTableCell>
-                        <DataTableCell><strong>Balance</strong></DataTableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {Object.keys(balances.balances).map((commitment, i) => (
-                        <TableRow key={i}>
-                            <DataTableCell><span title={commitment}>UTXO {i}</span></DataTableCell>
-                            <DataTableCell>{balances.balances[commitment]}</DataTableCell>
-                        </TableRow>
-                    ))}
-                    <TableRow>
-                        <DataTableCell><strong>Revealed Balance</strong></DataTableCell>
-                        <DataTableCell>{revealedAmount}</DataTableCell>
-                    </TableRow>
-                    <TableRow>
-                        <DataTableCell><strong>Total</strong></DataTableCell>
-                        <DataTableCell>{total}</DataTableCell>
-                    </TableRow>
-                </TableBody>
-            </Table>
-        </TableContainer>
-    );
+  return (
+    <TableContainer>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <DataTableCell>
+              <strong>UTXO</strong>
+            </DataTableCell>
+            <DataTableCell>
+              <strong>Balance</strong>
+            </DataTableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {Object.keys(balances.balances).map((commitment, i) => (
+            <TableRow key={i}>
+              <DataTableCell>
+                <span title={commitment}>UTXO {i}</span>
+              </DataTableCell>
+              <DataTableCell>{balances.balances[commitment]}</DataTableCell>
+            </TableRow>
+          ))}
+          <TableRow>
+            <DataTableCell>
+              <strong>Revealed Balance</strong>
+            </DataTableCell>
+            <DataTableCell>{revealedAmount}</DataTableCell>
+          </TableRow>
+          <TableRow>
+            <DataTableCell>
+              <strong>Total</strong>
+            </DataTableCell>
+            <DataTableCell>{total}</DataTableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 }
-
 
 export default UserVault;

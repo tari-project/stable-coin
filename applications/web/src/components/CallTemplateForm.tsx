@@ -41,16 +41,8 @@ interface Props {
 }
 
 function CallTemplateForm(props: Props) {
-  const {
-    func,
-    onCall,
-    badges,
-    selectedBadge,
-    onBadgeChange,
-    components,
-    selectedComponent,
-    onComponentChange
-  } = props;
+  const { func, onCall, badges, selectedBadge, onBadgeChange, components, selectedComponent, onComponentChange } =
+    props;
   const [data, setData] = useState({});
 
   const isMethod = func.arguments[0]?.name == "self";
@@ -61,10 +53,12 @@ function CallTemplateForm(props: Props) {
   return (
     <>
       <SecondaryHeading>
-        <pre>{func.name} {isMethod ? "method" : "function"}</pre>
+        <pre>
+          {func.name} {isMethod ? "method" : "function"}
+        </pre>
       </SecondaryHeading>
       <form
-        onSubmit={evt => {
+        onSubmit={(evt) => {
           evt.preventDefault();
           onCall(data);
         }}
@@ -96,7 +90,7 @@ function CallTemplateForm(props: Props) {
               key={i}
               disabled={isMethod && !hasComponents}
               argName={arg.name}
-              onChange={value => setData({ ...data, [arg.name]: value })}
+              onChange={(value) => setData({ ...data, [arg.name]: value })}
             />
           ))}
         </Grid>
@@ -111,7 +105,7 @@ function CallTemplateForm(props: Props) {
 const TemplateTextField = ({
   argName,
   onChange,
-  disabled
+  disabled,
 }: {
   argName: string;
   onChange: (value: string) => void;
@@ -128,7 +122,7 @@ const TemplateTextField = ({
           name={argName}
           disabled={disabled}
           placeholder={argName}
-          onChange={evt => onChange(evt.target.value)}
+          onChange={(evt) => onChange(evt.target.value)}
         />
       </Grid>
     </>
@@ -140,7 +134,7 @@ const SelectField = ({
   enableSelectNone,
   value,
   items,
-  onChange
+  onChange,
 }: {
   name: string;
   enableSelectNone?: boolean;
@@ -158,11 +152,15 @@ const SelectField = ({
           name={name}
           value={value || ""}
           disabled={items.length === 0}
-          onChange={evt => onChange(evt.target.value)}
+          onChange={(evt) => onChange(evt.target.value)}
         >
-          {enableSelectNone && <MenuItem key={0} value = "">None</MenuItem>}
+          {enableSelectNone && (
+            <MenuItem key={0} value="">
+              None
+            </MenuItem>
+          )}
           {items.map((item, i) => (
-            <MenuItem key={i+1} value={item}>
+            <MenuItem key={i + 1} value={item}>
               {item}
             </MenuItem>
           ))}

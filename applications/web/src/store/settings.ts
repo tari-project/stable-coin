@@ -20,43 +20,43 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import {create} from "zustand";
-import {createJSONStorage, persist} from "zustand/middleware";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 export interface Settings {
-    template: string | null;
-    activeIssuerComponent: string | null;
+  template: string | null;
+  activeIssuerComponent: string | null;
 }
 
 export interface SettingsStore {
-    settings: Settings,
+  settings: Settings;
 
-    setSettings(settings: object);
+  setSettings(settings: object);
 
-    setTemplate(template: string);
+  setTemplate(template: string);
 }
 
 const useSettings = create<SettingsStore>()(
-    persist<SettingsStore>(
-        (set) => ({
-            settings: {
-                template: null,
-                activeIssuerComponent: null,
-            },
+  persist<SettingsStore>(
+    (set) => ({
+      settings: {
+        template: null,
+        activeIssuerComponent: null,
+      },
 
-            setSettings(settings) {
-                set({settings})
-            },
+      setSettings(settings) {
+        set({ settings });
+      },
 
-            setTemplate(template: string) {
-                set({settings: {template}})
-            }
-        }),
-        {
-            name: "settings",
-            storage: createJSONStorage(() => localStorage),
-        },
-    ),
+      setTemplate(template: string) {
+        set({ settings: { template } });
+      },
+    }),
+    {
+      name: "settings",
+      storage: createJSONStorage(() => localStorage),
+    },
+  ),
 );
 
 export default useSettings;

@@ -26,8 +26,6 @@ interface LogoProps {
   fill?: string;
 }
 
-const Logo: React.FC<LogoProps> = () => (
-  <h1>YOUR LOGO</h1>
-);
+const Logo: React.FC<LogoProps> = () => <h1>YOUR LOGO</h1>;
 
 export default Logo;

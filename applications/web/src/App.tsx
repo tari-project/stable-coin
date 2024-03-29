@@ -22,7 +22,7 @@
 
 import "./App.css";
 
-import {Routes, Route} from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import ErrorPage from "./routes/ErrorPage";
 import Layout from "./theme/LayoutMain";
 import Home from "./routes/home";
@@ -30,39 +30,40 @@ import Issuer from "./routes/issuer";
 import Users from "./routes/users";
 
 const breadcrumbRoutes = [
-    {
-        label: "Home",
-        path: "/",
-        dynamic: false
-    },
-    {
-        label: "Issuers",
-        path: "/issuers/:issuerId",
-        dynamic: false,
-    }, {
-        label: "users",
-        path: "/users",
-        dynamic: false,
-    },
-    {
-        label: "Error",
-        path: "*",
-        dynamic: false
-    }
+  {
+    label: "Home",
+    path: "/",
+    dynamic: false,
+  },
+  {
+    label: "Issuers",
+    path: "/issuers/:issuerId",
+    dynamic: false,
+  },
+  {
+    label: "users",
+    path: "/users",
+    dynamic: false,
+  },
+  {
+    label: "Error",
+    path: "*",
+    dynamic: false,
+  },
 ];
 export default function App() {
-    return (
-        <>
-            <Routes>
-                <Route path="/" element={<Layout breadcrumbRoutes={breadcrumbRoutes}/>}>
-                    <Route index element={<Home/>}/>
-                    <Route path="issuers">
-                        <Route path=":issuerId/users" element={<Users/>}/>
-                        <Route path=":issuerId" element={<Issuer/>}/>
-                    </Route>
-                    <Route path="*" element={<ErrorPage/>}/>
-                </Route>
-            </Routes>
-        </>
-    );
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<Layout breadcrumbRoutes={breadcrumbRoutes} />}>
+          <Route index element={<Home />} />
+          <Route path="issuers">
+            <Route path=":issuerId/users" element={<Users />} />
+            <Route path=":issuerId" element={<Issuer />} />
+          </Route>
+          <Route path="*" element={<ErrorPage />} />
+        </Route>
+      </Routes>
+    </>
+  );
 }

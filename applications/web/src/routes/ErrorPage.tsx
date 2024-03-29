@@ -38,7 +38,7 @@ export default function ErrorPage() {
         display: "flex",
         height: "100vh",
         justifyContent: "center",
-        alignItems: "center"
+        alignItems: "center",
       }}
     >
       <Container>

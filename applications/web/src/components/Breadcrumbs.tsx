@@ -21,47 +21,47 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import React from "react";
-import {Link as RouterLink} from "react-router-dom";
-import {Breadcrumbs, Link} from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
+import { Breadcrumbs, Link } from "@mui/material";
 import useBreadcrumbs from "use-react-router-breadcrumbs";
 
 export interface BreadcrumbsItem {
-    label: string;
-    path: string;
-    dynamic: boolean;
+  label: string;
+  path: string;
+  dynamic: boolean;
 }
 
 interface BreadcrumbsProps {
-    items: BreadcrumbsItem[];
+  items: BreadcrumbsItem[];
 }
 
-const BreadcrumbsComponent: React.FC<BreadcrumbsProps> = ({items}) => {
-    const breadcrumbs = useBreadcrumbs(items);
+const BreadcrumbsComponent: React.FC<BreadcrumbsProps> = ({ items }) => {
+  const breadcrumbs = useBreadcrumbs(items);
 
-    const links = breadcrumbs.map(({match, breadcrumb}: any, i) => {
-        const breadcrumbLabel = breadcrumb.props.children;
-        const {label, path, dynamic} = match.route;
-        return (
-            <Link key={i} component={RouterLink} to={path} underline="none" color="inherit">
-                {dynamic ? breadcrumbLabel : label}
-            </Link>
-        );
-    });
-
+  const links = breadcrumbs.map(({ match, breadcrumb }: any, i) => {
+    const breadcrumbLabel = breadcrumb.props.children;
+    const { label, path, dynamic } = match.route;
     return (
-        <>
-            <Breadcrumbs
-                aria-label="breadcrumb"
-                separator="›"
-                style={{
-                    fontSize: "0.8rem",
-                    paddingBottom: "1rem",
-                }}
-            >
-                {links}
-            </Breadcrumbs>
-        </>
+      <Link key={i} component={RouterLink} to={path} underline="none" color="inherit">
+        {dynamic ? breadcrumbLabel : label}
+      </Link>
     );
+  });
+
+  return (
+    <>
+      <Breadcrumbs
+        aria-label="breadcrumb"
+        separator="›"
+        style={{
+          fontSize: "0.8rem",
+          paddingBottom: "1rem",
+        }}
+      >
+        {links}
+      </Breadcrumbs>
+    </>
+  );
 };
 
 export default BreadcrumbsComponent;

@@ -1,6 +1,6 @@
 # Tari Template Website
 
-UNDER DEVELOPMENT 
+UNDER DEVELOPMENT
 
 Provides a basic Vite + React interface to construct and submit transactions from a given WASM template address.
 
@@ -17,5 +17,3 @@ Currently, only the wallet JSON-RPC interface is supported.
 - [ ] Previous transactions list
 - [ ] Customization of transactions before submitting
 - [ ] UX
-
-
