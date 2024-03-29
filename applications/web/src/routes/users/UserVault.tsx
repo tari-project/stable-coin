@@ -45,12 +45,18 @@ function UserVault(props: Props) {
     const [balances, setBalances] = React.useState<VaultBalances | null>(null);
     const [error, setError] = React.useState<Error | null>(null);
     const [loading, setLoading] = React.useState<boolean>(false);
+    const [total, setTotal] = React.useState<number>(0);
+    const [revealedAmount, setRevealedAmount] = React.useState<number>(0);
 
     useEffect(() => {
         setLoading(true);
         provider.getConfidentialVaultBalance(props.vaultId)
             .then((balances) => {
                 setBalances(balances);
+                let revealedAmount = props.vault.resource_container.Confidential?.revealed_amount || 0;
+                const total = Object.values(balances.balances).reduce((acc, key) => acc + (key || 0), 0) + revealedAmount;
+                setRevealedAmount(revealedAmount);
+                setTotal(total);
             })
             .catch((err) => {
                 setError(err);
@@ -71,11 +77,7 @@ function UserVault(props: Props) {
     if (!balances) {
         return <Alert severity="info">No balances found</Alert>;
     }
-    let revealedAmount = props.vault.resource_container.Confidential?.revealed_amount || 0;
 
-    const total = Object.values(balances.balances).reduce((acc, key) =>
-        acc + (key || 0)
-    ) + revealedAmount;
 
     return (
         <TableContainer>

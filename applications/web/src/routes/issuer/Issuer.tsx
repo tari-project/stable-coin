@@ -27,7 +27,7 @@ import {StyledPaper} from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
 import useActiveIssuer, {ActiveIssuer} from "../../store/activeIssuer.ts";
-import {Alert, CircularProgress} from "@mui/material";
+import {Alert, CircularProgress, Link} from "@mui/material";
 import Button from "@mui/material/Button";
 import {useNavigate, useParams} from "react-router-dom";
 import {useEffect} from "react";
@@ -65,7 +65,7 @@ function IssuerDetails({issuer}: IssuerDetailsProps) {
                 <Detail label="Admin Badge Resource" value={issuer.adminAuthResource}/>
                 <Detail label="User Badge Resource" value={issuer.userAuthResource}/>
             </Grid>
-            <Grid container spacing={2}>
+            <Grid container spacing={2} sx={{textAlign: 'left'}}>
                 <Button variant="contained" color="secondary"
                         onClick={() => navigate(`/issuers/${params.issuerId}/users`)}>Manage Users</Button>
             </Grid>
