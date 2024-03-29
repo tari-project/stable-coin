@@ -39,15 +39,15 @@ function AddUser(props: Props) {
 
   const [isBusy, setIsBusy] = React.useState(false);
   const [error, setError] = React.useState<Error | null>(null);
-  const [formValues, setFormValues] = React.useState({});
-  const [validity, setValidity] = React.useState({});
+  const [formValues, setFormValues] = React.useState<Partial<any>>({});
+  const [validity, setValidity] = React.useState<Partial<any>>({});
   const [success, setSuccess] = React.useState<string | null>(null);
 
-  const set = (e) => {
+  const set = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues({ ...formValues, [e.target.name]: e.target.value });
   };
 
-  const validate = (e) => {
+  const validate = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value) {
       setValidity({ ...validity, [e.target.name]: e.target.validity.valid });
     } else {
@@ -58,7 +58,7 @@ function AddUser(props: Props) {
 
   const isValid = Object.values(validity).every((v) => v);
 
-  const createUser = async (values) => {
+  const createUser = async (values: any) => {
     if (!props.adminAuthBadge) {
       return;
     }
@@ -67,7 +67,7 @@ function AddUser(props: Props) {
     setError(null);
     setSuccess(null);
     try {
-      const result = await provider.createUser(props.issuerId, props.adminAuthBadge, values.userId, values.userAccount);
+      const result = await provider!.createUser(props.issuerId, props.adminAuthBadge, values.userId, values.userAccount);
       if (result.rejectReason) {
         setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
         return;
@@ -75,11 +75,11 @@ function AddUser(props: Props) {
       console.log(result.accept?.up_substates);
       const [_t, id, _val] = result.accept?.up_substates
         ?.filter(([type, _id, _v]) => type === "NonFungible")
-        .find(([_type, id, _v]) => id.endsWith(`nft_u64:${values.userId}`));
+        .find(([_type, id, _v]) => id.endsWith(`nft_u64:${values.userId}`))!;
       setSuccess(`User created in transaction ${result.transactionId}. User badge: ${JSON.stringify(id)}`);
       setFormValues({});
     } catch (e) {
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }

@@ -21,20 +21,18 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { providers } from "@tariproject/tarijs";
+import { TariProvider } from "@tariproject/tarijs";
 import TariWallet from "../wallet.ts";
 
-const { TariProvider } = providers;
-
 export interface ProviderStore<TProvider extends TariProvider> {
-  provider: TariWallet<TProvider>;
+  provider: TariWallet<TProvider> | null;
 
-  setProvider(provider: TariWallet<TProvider>);
+  setProvider(provider: TariWallet<TProvider>): void;
 }
 
 const useTariProvider = create<ProviderStore<TariProvider>>()((set) => ({
   provider: null,
-  setProvider(provider) {
+  setProvider(provider: TariWallet<TariProvider>) {
     set({ provider });
   },
 }));

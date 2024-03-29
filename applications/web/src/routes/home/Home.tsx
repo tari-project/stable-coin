@@ -21,17 +21,13 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import "./Home.css";
-import * as React from "react";
 import InitialSetup from "./Setup.tsx";
-import { providers } from "@tariproject/tarijs";
-import useSettings from "../../store/settings.ts";
 import useTariProvider from "../../store/provider.ts";
 import Grid from "@mui/material/Grid";
 import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import { StyledPaper } from "../../components/StyledComponents.ts";
 import { BsUsbPlug } from "react-icons/bs";
 
-const { TariProvider } = providers;
 
 function Home() {
   const { provider } = useTariProvider();

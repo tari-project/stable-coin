@@ -11,22 +11,18 @@ import MetamaskLogo from "./content/metamask-logo.svg";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import { providers } from "@tariproject/tarijs";
+import { TariProvider, MetamaskTariProvider, permissions } from "@tariproject/tarijs";
 import { TariWalletDaemonConnectDialog } from "./TariWalletDaemonConnectDialog";
 
 const {
-  walletDaemon: {
-    TariPermissionAccountInfo,
-    TariPermissionKeyList,
-    TariPermissionTransactionSend,
-    TariPermissions,
-    TariPermissionTransactionsGet,
-    TariPermissionSubstatesRead,
-    TariPermissionTemplatesRead,
-  },
-  metamask: { MetamaskTariProvider },
-  TariProvider,
-} = providers;
+  TariPermissionAccountInfo,
+  TariPermissionKeyList,
+  TariPermissionTransactionSend,
+  TariPermissions,
+  TariPermissionTransactionsGet,
+  TariPermissionSubstatesRead,
+  TariPermissionTemplatesRead,
+} = permissions;
 
 const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_ADDRESS || "http://localhost:9100";
 const SNAP_ID = import.meta.env.VITE_SNAP_ORIGIN || "local:http://localhost:8080";
@@ -65,7 +61,7 @@ export function TariWalletSelectionDialog(props: WalletSelectionProps) {
   };
 
   const onMetamaskClick = async () => {
-    const metamaskProvider = new MetamaskTariProvider(SNAP_ID, window.ethereum);
+    const metamaskProvider = new MetamaskTariProvider(SNAP_ID, window.metamask);
     await metamaskProvider.connect();
     onConnected(metamaskProvider);
     handleClose();

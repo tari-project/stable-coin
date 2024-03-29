@@ -1,7 +1,20 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-export function getValueByPath(cborRepr: object, path: string): any {
+export type CborValue = { Map: Array<[any, any]> } |
+  { Array: Array<any> } |
+  { Tag: number } |
+  { Bool: boolean } |
+  { Bytes: Array<number> } |
+  { Text: string } |
+  { Float: number } |
+  { Int: number } |
+  { Null: null };
+
+export function getValueByPath(cborRepr: CborValue | null, path: string): any {
+  if (!cborRepr) {
+    return null;
+  }
   let value = cborRepr;
   for (const part of path.split(".")) {
     if (part == "$") {
@@ -27,9 +40,9 @@ export function getValueByPath(cborRepr: object, path: string): any {
 
 export function convertCborValue(value: any): any {
   if ("Map" in value) {
-    const result = {};
+    const result = {} as { [key: string]: any };
     for (const [key, val] of value.Map) {
-      result[convertCborValue(key)] = convertCborValue(val);
+      result[convertCborValue(key) as string] = convertCborValue(val);
     }
     return result;
   }
@@ -55,8 +68,8 @@ export function convertCborValue(value: any): any {
   return value;
 }
 
-function bytesToAddressString(type: String, tag: ArrayLike<unknown>): string {
-  const hex = Array.from(tag, function (byte) {
+function bytesToAddressString(type: String, tag: ArrayLike<number>): string {
+  const hex = Array.from(tag, function(byte) {
     return ("0" + (byte & 0xff).toString(16)).slice(-2);
   }).join("");
 

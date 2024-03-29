@@ -3,12 +3,9 @@ import * as React from "react";
 import Button from "@mui/material/Button";
 import TariLogoWhite from "./content/tari-logo-white.svg";
 import { TariWalletSelectionDialog } from "./TariWalletSelectionDialog";
-import { useEffect } from "react";
-import { providers } from "@tariproject/tarijs";
+import { TariProvider } from "@tariproject/tarijs";
 import useTariProvider from "../store/provider.ts";
 import TariWallet from "../wallet.ts";
-
-const { TariProvider } = providers;
 
 interface Props {
   onConnected?: (provider: TariProvider) => void;

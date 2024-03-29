@@ -22,18 +22,17 @@
 
 import "./Home.css";
 import Button from "@mui/material/Button";
-import { CircularProgress, MenuItem, Select, TableHead, TextField } from "@mui/material";
+import { CircularProgress, TableHead, TextField } from "@mui/material";
 import { useEffect, useState } from "react";
 import Grid from "@mui/material/Grid";
 import useSettings from "../../store/settings.ts";
 import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import { StyledPaper } from "../../components/StyledComponents.ts";
-import * as React from "react";
 import NewIssuerDialog from "./NewIssuerDialog.tsx";
 import useTariProvider from "../../store/provider.ts";
 import { NewIssuerParams } from "../../types.ts";
 import { Link, useNavigate } from "react-router-dom";
-import { TableContainer, Table, TableRow, TableBody, Collapse } from "@mui/material";
+import { TableContainer, Table, TableRow, TableBody } from "@mui/material";
 import { DataTableCell } from "../../components/StyledComponents";
 
 function SetTemplateForm() {
@@ -46,7 +45,9 @@ function SetTemplateForm() {
       <form
         onSubmit={(evt) => {
           evt.preventDefault();
-          setTemplate(currentSettings.template);
+          if (currentSettings.template) {
+            setTemplate(currentSettings.template);
+          }
         }}
       >
         <Grid item xs={12} md={12} lg={12}>
@@ -81,27 +82,34 @@ function IssuerComponents() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
   const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<Error | null>(null);
   const [issuerComponents, setIssuerComponents] = useState<object[] | null>(null);
+
+  if (provider === null) {
+    useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
 
   useEffect(() => {
     if (!isBusy && settings.template && !error && issuerComponents === null) {
       setIsBusy(true);
       provider
         .listSubstates(settings.template, "Component")
-        .then((substates) => {
-          setIssuerComponents(substates.filter((s) => s.template_address === settings.template));
+        .then((substates: any) => {
+          setIssuerComponents(substates.filter((s: any) => s.template_address === settings.template));
         })
-        .catch((e) => setError(e))
+        .catch((e: Error) => setError(e))
         .finally(() => setIsBusy(false));
     }
   }, [isBusy, error, issuerComponents]);
 
   function handleOnCreate(data: NewIssuerParams) {
     setIsBusy(true);
-    provider
+    provider!
       .getPublicKey("view_key", 0)
-      .then((viewKey) => provider.createNewIssuer(settings.template, { ...data, viewKey }))
+      .then((viewKey) => provider!.createNewIssuer(settings.template!, { ...data, viewKey }))
       .then((result) => {
         // TODO: improve error formatting
         if (result.rejected) {
@@ -119,7 +127,7 @@ function IssuerComponents() {
         const diff = result.accept;
         const [_type, id, _val] = diff.up_substates
           .filter(([type, _id, _val]) => type === "Component")
-          .find(([_type, _id, val]) => val?.template_address === settings.template);
+          .find(([_type, _id, val]) => val?.template_address === settings.template)!;
         navigate(`/issuers/${id}`);
       })
       .catch((e) => setError(e))
@@ -145,7 +153,7 @@ function IssuerComponents() {
   );
 }
 
-function IssuerRow({ data }: object) {
+function IssuerRow({ data }: { data: any }) {
   return (
     <>
       <TableRow>

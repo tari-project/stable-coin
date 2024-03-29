@@ -23,7 +23,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit }: Props) 
   const { provider } = useTariProvider();
   const navigate = useNavigate();
   const [error, setError] = React.useState<Error | null>(null);
-  const [invalid, setInvalid] = React.useState<object>({});
+  const [invalid, setInvalid] = React.useState<any>({});
   const [isBusy, setIsBusy] = React.useState(false);
 
   if (!provider) {
@@ -31,13 +31,10 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit }: Props) 
     return <></>;
   }
 
-  const set = (key: string) => (evt) => {
-    if (!evt.target.validity.valid) {
-      return;
-    }
+  const set = (key: string) => (evt: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues({ ...formValues, [key]: evt.target.value });
   };
-  const onValidate = (key: string) => (evt) => {
+  const onValidate = (key: string) => (evt: React.FocusEvent<HTMLInputElement>) => {
     console.log(evt.target.validity);
     if (evt.target.validity.valid) {
       delete invalid[key];
@@ -61,7 +58,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit }: Props) 
       onTransactionResult(result);
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }
@@ -71,7 +68,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit }: Props) 
     <StyledPaper sx={{ padding: 6 }}>
       {error && (
         <Box sx={{ paddingBottom: 4 }}>
-          <Alert severity="error">{error.message || error}</Alert>
+          <Alert severity="error">{error.message}</Alert>
         </Box>
       )}
       <Grid container spacing={2}>

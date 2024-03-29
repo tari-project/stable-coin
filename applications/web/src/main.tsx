@@ -27,13 +27,12 @@ root.render(
   </React.StrictMode>,
 );
 
-import { providers } from "@tariproject/tarijs";
+import { TariProvider, MetaMaskInpageProvider } from "@tariproject/tarijs";
 
 declare global {
-  const { TariProvider, MetaMaskInpageProvider } = providers;
 
   interface Window {
     tari: TariProvider;
-    ethereum: MetaMaskInpageProvider;
+    metamask: MetaMaskInpageProvider;
   }
 }

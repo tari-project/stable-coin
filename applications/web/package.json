@@ -15,6 +15,7 @@
     "@mui/x-data-grid": "^5.17.17",
     "@tariproject/tarijs": "file:../../../../code/tari.js",
     "@tariproject/typescript-bindings": "file:../../../dan/bindings",
+    "@tariproject/wallet_jrpc_client": "file:../../../dan/clients/javascript/wallet_jrpc_client",
     "qrcode.react": "3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

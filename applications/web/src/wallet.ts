@@ -1,18 +1,21 @@
-import { TariProvider, MetamaskTariProvider, WalletDaemonTariProvider, types } from "@tariproject/tarijs";
-import { Account } from "@tariproject/tarijs/dist/providers/types";
+import { TariProvider, MetamaskTariProvider, WalletDaemonTariProvider } from "@tariproject/tarijs";
+import {
+  Account,
+  SubmitTransactionRequest,
+  TransactionStatus,
+  SubstateRequirement,
+} from "@tariproject/tarijs/dist/providers/types";
 import { NewIssuerParams, SimpleTransactionResult } from "./types.ts";
 import {
   ComponentAddress,
   Instruction,
   ResourceAddress,
   VaultId,
-  SubstateRequirement,
   Amount,
-  SubstateType,
+  SubstateType, Substate,
 } from "@tariproject/typescript-bindings";
 import { KeyBranch } from "@tariproject/typescript-bindings/wallet-daemon-client.ts";
 
-const { TransactionStatus } = types;
 
 export default class TariWallet<TProvider extends TariProvider> {
   private provider: TProvider;
@@ -25,20 +28,19 @@ export default class TariWallet<TProvider extends TariProvider> {
     return this.provider.isConnected();
   }
 
-  public static new<TProvider>(provider: TProvider): TariWallet<TProvider> {
+  public static new<TProvider extends TariProvider>(provider: TProvider): TariWallet<TProvider> {
     return new TariWallet(provider);
   }
 
   public async getTemplateDefinition(template_address: string) {
-    const resp = await this.provider.getTemplateDefinition(template_address);
-    return resp.template_definition;
+    return await this.provider.getTemplateDefinition(template_address);
   }
 
   public async listSubstates(template: string | null, substateType: SubstateType | null) {
     if (this.provider.providerName !== "WalletDaemon") {
       throw new Error(`Unsupported provider ${this.provider.providerName}`);
     }
-    const substates = await (this.provider as WalletDaemonTariProvider).listSubstates(template, substateType);
+    const substates = await (this.provider as unknown as WalletDaemonTariProvider).listSubstates(template, substateType);
     return substates;
   }
 
@@ -46,11 +48,11 @@ export default class TariWallet<TProvider extends TariProvider> {
     console.log("createFreeTestCoins", this.provider.providerName);
     switch (this.provider.providerName) {
       case "WalletDaemon":
-        const walletProvider = this.provider as WalletDaemonTariProvider;
+        const walletProvider = this.provider as unknown as WalletDaemonTariProvider;
         await walletProvider.createFreeTestCoins();
         break;
       case "Metamask":
-        const metamaskProvider = this.provider as MetamaskTariProvider;
+        const metamaskProvider = this.provider as unknown as MetamaskTariProvider;
         await metamaskProvider.createFreeTestCoins(0);
         break;
       default:
@@ -58,15 +60,14 @@ export default class TariWallet<TProvider extends TariProvider> {
     }
   }
 
-  public async getSubstate(substateId: string) {
+  public async getSubstate(substateId: string): Promise<{ value: Substate }> {
     const resp = await this.provider.getSubstate(substateId);
-    return resp;
+    return resp as { value: Substate };
   }
 
   public async submitTransactionAndWait(request: SubmitTransactionRequest) {
     const resp = await this.provider.submitTransaction(request);
-    let result = await this.waitForTransactionResult(resp.transaction_id);
-    return result;
+    return await this.waitForTransactionResult(resp.transaction_id);
   }
 
   public async waitForTransactionResult(transactionId: string) {
@@ -117,7 +118,7 @@ export default class TariWallet<TProvider extends TariProvider> {
             params.initialSupply,
             params.tokenSymbol,
             Object.keys(params.tokenMetadata)
-              .map((k) => `${k}=${params.tokenMetadata[k]}`)
+              .map((k) => `${k}=${params.tokenMetadata[k as keyof object]}`)
               .join(","),
             params.viewKey,
             params.enableWrappedToken ? "true" : "false",
@@ -133,9 +134,9 @@ export default class TariWallet<TProvider extends TariProvider> {
         },
       },
       "DropAllProofsInWorkspace",
-    ];
+    ] as Instruction[];
 
-    const required_substates = [{ substate_id: account.address, version: null }];
+    const required_substates = [{ substate_id: account.address, version: null }] as SubstateRequirement[];
 
     const request = {
       account_id: account.account_id,
@@ -148,7 +149,7 @@ export default class TariWallet<TProvider extends TariProvider> {
       is_dry_run: false,
       min_epoch: null,
       max_epoch: null,
-    };
+    } as SubmitTransactionRequest;
 
     const result = await this.submitTransactionAndWait(request);
     return SimpleTransactionResult.from(result);
@@ -214,7 +215,7 @@ export default class TariWallet<TProvider extends TariProvider> {
           args: [{ Workspace: [1] }],
         },
       },
-    ];
+    ] as Instruction[];
 
     return await this.callRestrictedMethod(
       issuerComponent,
@@ -543,7 +544,7 @@ export default class TariWallet<TProvider extends TariProvider> {
           args: [`Amount(${fee})`],
         },
       },
-    ];
+    ] as Instruction[];
 
     const request = {
       account_id: account.account_id,
@@ -556,7 +557,7 @@ export default class TariWallet<TProvider extends TariProvider> {
       is_dry_run: false,
       min_epoch: null,
       max_epoch: null,
-    };
+    } as SubmitTransactionRequest;
 
     const result = await this.submitTransactionAndWait(request);
     return SimpleTransactionResult.from(result);

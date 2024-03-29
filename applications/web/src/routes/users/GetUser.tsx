@@ -34,8 +34,9 @@ import { ComponentAddress, ResourceAddress, Vault, VaultId } from "@tariproject/
 import RecallTokens from "./RecallTokens.tsx";
 import Transfers from "./Transfers.tsx";
 import useActiveIssuer from "../../store/activeIssuer.ts";
-import { convertCborValue } from "../../cbor";
+import { CborValue, convertCborValue } from "../../cbor";
 import UserVault from "./UserVault.tsx";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   issuerId: ComponentAddress;
@@ -48,18 +49,30 @@ function GetUser(props: Props) {
 
   const [isBusy, setIsBusy] = React.useState(false);
   const [error, setError] = React.useState<Error | null>(null);
-  const [formValues, setFormValues] = React.useState({});
-  const [validity, setValidity] = React.useState({});
+  const [formValues, setFormValues] = React.useState<any>({});
+  const [validity, setValidity] = React.useState<Partial<any>>({});
   const [userAuthBadge, setUserAuthBadge] = React.useState<string | null>(null);
-  const [userData, setUserData] = React.useState<object | null>(null);
+  const [userData, setUserData] = React.useState<any>(null);
   const [userVault, setUserVault] = React.useState<{ vaultId: VaultId; vault: Vault } | null>(null);
+
+  const navigate = useNavigate();
+
+  if (!provider) {
+    useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
 
   useEffect(() => {
     provider
       .getSubstate(props.issuerId)
       .then((issuer) => {
         const { value } = issuer;
-        const structMap = value.substate.Component.body.state as [object, object][];
+        if (!("Component" in value.substate)) {
+          throw new Error(`Issuer is not a component`);
+        }
+        const structMap = value.substate.Component.body.state as CborValue;
         const userAuthBadge = cbor.getValueByPath(structMap, "$.user_auth_resource");
         setUserAuthBadge(userAuthBadge);
       })
@@ -67,17 +80,17 @@ function GetUser(props: Props) {
       .finally(() => setIsBusy(false));
   }, [formValues]);
 
-  const set = (e) => {
+  const set = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues({ ...formValues, [e.target.name]: e.target.value });
   };
 
-  const validate = (e) => {
+  const validate = (e: React.FocusEvent<HTMLInputElement>) => {
     setValidity({ ...validity, [e.target.name]: e.target.validity.valid });
   };
 
   const isValid = Object.values(validity).every((v) => v);
 
-  const getUser = async (userId) => {
+  const getUser = async (userId: number) => {
     if (!userAuthBadge) {
       return;
     }
@@ -88,7 +101,10 @@ function GetUser(props: Props) {
     setUserData(null);
     try {
       const substate = await provider.getSubstate(`${userAuthBadge} nft_u64:${userId}`);
-      const userAccountId = cbor.getValueByPath(substate.value.substate.NonFungible.data, "$.user_account");
+      if (!("NonFungible" in substate.value.substate)) {
+        throw new Error(`User badge is not a non-fungible token`);
+      }
+      const userAccountId = cbor.getValueByPath(substate.value.substate.NonFungible?.data, "$.user_account");
       setUserData(substate as object);
 
       const stableCoinResource = activeIssuer?.vault?.resourceAddress;
@@ -96,6 +112,9 @@ function GetUser(props: Props) {
         throw new Error(`Issuer does not have a stable coin resource`);
       }
       const userAccount = await provider.getSubstate(userAccountId);
+      if (!("Component" in userAccount.value.substate)) {
+        throw new Error(`User account is not a component`);
+      }
       const vaultId = cbor.getValueByPath(
         userAccount.value.substate.Component.body.state,
         `$.vaults.${stableCoinResource}`,
@@ -105,11 +124,11 @@ function GetUser(props: Props) {
         return;
       }
 
-      const userVault = await provider.getSubstate(vaultId);
+      const userVault = await provider.getSubstate(vaultId) as any;
       setUserVault({ vaultId, vault: userVault.value.substate.Vault });
     } catch (e) {
       console.error(e);
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }

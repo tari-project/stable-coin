@@ -33,12 +33,13 @@ interface IAccordionIconButton {
 }
 
 export const AccordionIconButton = styled(IconButton)<IAccordionIconButton>`
-  background-color: ${({ open }) => (open ? theme.palette.primary.main : "#fff")};
-  color: ${({ open }) => (open ? "#fff" : theme.palette.primary.main)};
-  &:hover {
-    background-color: ${theme.palette.primary.main};
-    color: #fff;
-  }
+    background-color: ${({ open }) => (open ? theme.palette.primary.main : "#fff")};
+    color: ${({ open }) => (open ? "#fff" : theme.palette.primary.main)};
+
+    &:hover {
+        background-color: ${theme.palette.primary.main};
+        color: #fff;
+    }
 `;
 
 export const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -46,7 +47,7 @@ export const StyledPaper = styled(Paper)(({ theme }) => ({
   boxShadow: "10px 14px 28px rgba(35, 11, 73, 0.05)",
 }));
 
-export const DataTableCell = styled(TableCell)(({ theme }) => ({
+export const DataTableCell = styled(TableCell)((_props) => ({
   fontFamily: "'Courier New', Courier, monospace",
 }));
 

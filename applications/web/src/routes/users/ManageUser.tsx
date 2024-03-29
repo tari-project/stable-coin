@@ -31,15 +31,15 @@ import { convertCborValue } from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
 import { SimpleTransactionResult, splitOnce } from "../../types.ts";
 import { DataTableCell } from "../../components/StyledComponents.ts";
-import SecondaryHeading from "../../components/SecondaryHeading.tsx";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   issuerId: ComponentAddress;
   userId: number;
   userBadge: ResourceAddress;
   adminAuthBadge: ResourceAddress;
-  badgeData: object;
-  badgeMutableData: object;
+  badgeData: any;
+  badgeMutableData: any;
   onChange?: (result: SimpleTransactionResult) => void;
 }
 
@@ -53,8 +53,17 @@ function ManageUser(props: Props) {
     props.badgeMutableData.wrapped_exchange_limit,
   );
 
+  const navigate = useNavigate();
+
   const userAccount = props.badgeData.user_account;
   const [userBadgeResource, _nft] = splitOnce(props.userBadge, " ")!;
+
+  if (!provider) {
+    React.useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
 
   const runQuery = async (query: () => Promise<string | null>) => {
     setIsBusy(true);
@@ -65,7 +74,7 @@ function ManageUser(props: Props) {
       const success = await query();
       setSuccess(success);
     } catch (e) {
-      setError(e);
+      setError(e as Error);
     } finally {
       setIsBusy(false);
     }
@@ -73,7 +82,7 @@ function ManageUser(props: Props) {
 
   const handleOnRevoke = async () => {
     await runQuery(async () => {
-      const substate = await provider.getSubstate(userAccount);
+      const substate = await provider.getSubstate(userAccount) as any;
       const vaults = cbor.getValueByPath(substate.value.substate.Component.body.state, "$.vaults");
       const vaultToRevoke = vaults[userBadgeResource];
       if (!vaultToRevoke) {
@@ -114,7 +123,7 @@ function ManageUser(props: Props) {
     });
   };
 
-  const handleOnSave = async (e) => {
+  const handleOnSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     await runQuery(async () => {
       const result = await provider.setUserExchangeLimit(

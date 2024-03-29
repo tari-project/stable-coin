@@ -27,7 +27,7 @@ import { StyledPaper } from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
 import useActiveIssuer, { ActiveIssuer } from "../../store/activeIssuer.ts";
-import { Alert, CircularProgress, Link } from "@mui/material";
+import { Alert, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect } from "react";
@@ -36,6 +36,7 @@ import SupplyControl from "./SupplyControl.tsx";
 import { SimpleTransactionResult } from "../../types.ts";
 import Transfers from "./Transfers.tsx";
 import WrappedToken from "./WrappedToken.tsx";
+import { CborValue } from "../../cbor";
 
 interface IssuerDetailsProps {
   issuer: ActiveIssuer;
@@ -77,9 +78,8 @@ function IssuerDetails({ issuer }: IssuerDetailsProps) {
   );
 }
 
-interface Props {}
 
-function Issuer(props: Props) {
+function Issuer() {
   const { provider } = useTariProvider();
   const [isLoading, setIsLoading] = React.useState(false);
   const { activeIssuer, setActiveIssuer } = useActiveIssuer();
@@ -88,7 +88,7 @@ function Issuer(props: Props) {
   const params = useParams();
   const navigate = useNavigate();
 
-  if (!params.issuerId || !provider) {
+  if (!provider) {
     useEffect(() => {
       navigate("/");
     }, []);
@@ -98,27 +98,36 @@ function Issuer(props: Props) {
   function load() {
     if (!isLoading && !activeIssuer && !error) {
       setIsLoading(true);
-      const getComponent = provider.getSubstate(params.issuerId!).then(async (issuer) => {
+      const getComponent = provider!.getSubstate(params.issuerId!).then(async (issuer) => {
         const { substate } = issuer.value;
-        const { substate_id, version } = issuer.record;
-        console.log(issuer.value.substate);
-        const structMap = substate.Component.body.state as [object, object][];
+        const { substate_id, version } = (issuer as any).record;
+        if (!("Component" in substate)) {
+          throw new Error("Issuer not component");
+        }
+        const structMap = substate.Component.body.state as CborValue;
         const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
         const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
         const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
-        const vault = await provider.getSubstate(vaultId);
-        const container = vault.value.substate.Vault.resource_container.Confidential;
+        const vault = await provider!.getSubstate(vaultId);
+        if (!("Vault" in vault.value.substate)) {
+          throw new Error("Substate is not a vault");
+        }
+        const container = vault.value.substate.Vault.resource_container;
+        if (!("Confidential" in container)) {
+          throw new Error("Vault is not confidential");
+        }
+
         const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
-        const wrappedVault = wrappedToken ? await provider.getSubstate(wrappedToken.vault) : null;
-        const wrappedContainer = wrappedVault?.value.substate.Vault.resource_container.Fungible;
+        const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
+        const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
 
         setActiveIssuer({
           id: substate_id.Component,
           version,
           vault: {
             id: vaultId,
-            resourceAddress: container.address,
-            revealedAmount: container.revealed_amount,
+            resourceAddress: container.Confidential.address,
+            revealedAmount: container.Confidential.revealed_amount,
           },
           adminAuthResource,
           userAuthResource,
@@ -199,7 +208,7 @@ function Issuer(props: Props) {
           {activeIssuer.wrappedToken && (
             <Grid item xs={12} md={12} lg={12}>
               <h2>Wrapped Token</h2>
-              <WrappedToken issuer={activeIssuer} onTransactionResult={handleTransactionResult} />
+              <WrappedToken issuer={activeIssuer} />
             </Grid>
           )}
         </>
