@@ -23,33 +23,36 @@
 import "./Home.css";
 import * as React from "react";
 import InitialSetup from "./Setup.tsx";
-import {providers} from "@tariproject/tarijs";
+import { providers } from "@tariproject/tarijs";
 import useSettings from "../../store/settings.ts";
 import useTariProvider from "../../store/provider.ts";
 import Grid from "@mui/material/Grid";
 import SecondaryHeading from "../../components/SecondaryHeading.tsx";
-import {StyledPaper} from "../../components/StyledComponents.ts";
-import {BsUsbPlug} from "react-icons/bs";
+import { StyledPaper } from "../../components/StyledComponents.ts";
+import { BsUsbPlug } from "react-icons/bs";
 
-const {TariProvider} = providers;
+const { TariProvider } = providers;
 
 function Home() {
-    const {provider} = useTariProvider();
+  const { provider } = useTariProvider();
 
+  if (!provider) {
+    return (
+      <>
+        <Grid item xs={12} md={12} lg={12}>
+          <StyledPaper>
+            <SecondaryHeading>
+              {" "}
+              <BsUsbPlug />
+              Please connect your wallet
+            </SecondaryHeading>
+          </StyledPaper>
+        </Grid>
+      </>
+    );
+  }
 
-    if (!provider) {
-        return (
-            <>
-                <Grid item xs={12} md={12} lg={12}>
-                    <StyledPaper>
-                        <SecondaryHeading> <BsUsbPlug/>Please connect your wallet</SecondaryHeading>
-                    </StyledPaper>
-                </Grid>
-            </>
-        );
-    }
-
-    return <InitialSetup/>;
+  return <InitialSetup />;
 }
 
 export default Home;

@@ -20,41 +20,49 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import {create} from "zustand";
-import {providers} from "@tariproject/tarijs";
+import { create } from "zustand";
+import { providers } from "@tariproject/tarijs";
 import TariWallet from "../wallet.ts";
+import { ResourceAddress, VaultId } from "../../../../../dan/bindings";
 
 export interface ActiveIssuer {
+  id: string;
+  version: number;
+  vault: {
     id: string;
-    version: number;
-    vault: {
-        id: string;
-        resourceAddress: string;
-        revealedAmount: number;
-    };
-    adminAuthResource: string;
-    userAuthResource: string;
+    resourceAddress: string;
+    revealedAmount: number;
+  };
+  wrappedToken: WrappedExchangeToken | null;
+  adminAuthResource: string;
+  userAuthResource: string;
 }
 
+export interface WrappedExchangeToken {
+  vault: VaultId;
+  resource: ResourceAddress;
+  balance: number;
+  exchange_fee: ExchangeFee;
+}
+
+export type ExchangeFee = { Fixed: number } | { Percentage: number };
 
 export interface Store {
-    activeIssuer: ActiveIssuer | null;
+  activeIssuer: ActiveIssuer | null;
 
-    setActiveIssuer(issuer: ActiveIssuer | null);
+  setActiveIssuer(issuer: ActiveIssuer | null);
 
-    clearActiveIssuer();
+  clearActiveIssuer();
 }
 
-const useActiveIssuer = create<Store>()(
-    (set) => ({
-        activeIssuer: null,
-        setActiveIssuer(activeIssuer) {
-            set({activeIssuer})
-        },
-        clearActiveIssuer() {
-            set({activeIssuer: null})
-        }
-    }),
-);
+const useActiveIssuer = create<Store>()((set) => ({
+  activeIssuer: null,
+  setActiveIssuer(activeIssuer) {
+    set({ activeIssuer });
+  },
+  clearActiveIssuer() {
+    set({ activeIssuer: null });
+  },
+}));
 
 export default useActiveIssuer;

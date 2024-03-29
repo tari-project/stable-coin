@@ -1,439 +1,568 @@
-import {providers, utils} from '@tariproject/tarijs';
-import {TariProvider} from "@tariproject/tarijs/dist/providers";
-import {Account} from "@tariproject/tarijs/dist/providers/types";
-import {NewIssuerParams, SimpleTransactionResult} from "./types.ts";
+import { TariProvider, MetamaskTariProvider, WalletDaemonTariProvider, types } from "@tariproject/tarijs";
+import { Account } from "@tariproject/tarijs/dist/providers/types";
+import { NewIssuerParams, SimpleTransactionResult } from "./types.ts";
 import {
-    ComponentAddress,
-    Instruction,
-    ResourceAddress,
-    VaultId,
-    SubstateRequirement, Amount
+  ComponentAddress,
+  Instruction,
+  ResourceAddress,
+  VaultId,
+  SubstateRequirement,
+  Amount,
+  SubstateType,
 } from "@tariproject/typescript-bindings";
-import {KeyBranch} from "@tariproject/typescript-bindings/wallet-daemon-client.ts";
+import { KeyBranch } from "@tariproject/typescript-bindings/wallet-daemon-client.ts";
 
-const {
-    TariProvider,
-    metamask: {MetamaskTariProvider},
-    walletDaemon: {WalletDaemonTariProvider},
-    types: {
-        TransactionSubmitRequest,
-        TransactionStatus
-    },
-} = providers;
-const {fromHexString} = utils;
+const { TransactionStatus } = types;
 
 export default class TariWallet<TProvider extends TariProvider> {
-    private provider: TProvider;
+  private provider: TProvider;
 
-    constructor(provider: TProvider) {
-        this.provider = provider;
+  constructor(provider: TProvider) {
+    this.provider = provider;
+  }
+
+  public isConnected(): boolean {
+    return this.provider.isConnected();
+  }
+
+  public static new<TProvider>(provider: TProvider): TariWallet<TProvider> {
+    return new TariWallet(provider);
+  }
+
+  public async getTemplateDefinition(template_address: string) {
+    const resp = await this.provider.getTemplateDefinition(template_address);
+    return resp.template_definition;
+  }
+
+  public async listSubstates(template: string | null, substateType: SubstateType | null) {
+    if (this.provider.providerName !== "WalletDaemon") {
+      throw new Error(`Unsupported provider ${this.provider.providerName}`);
     }
+    const substates = await (this.provider as WalletDaemonTariProvider).listSubstates(template, substateType);
+    return substates;
+  }
 
-
-    public isConnected(): boolean {
-        return this.provider.isConnected();
+  public async createFreeTestCoins() {
+    console.log("createFreeTestCoins", this.provider.providerName);
+    switch (this.provider.providerName) {
+      case "WalletDaemon":
+        const walletProvider = this.provider as WalletDaemonTariProvider;
+        await walletProvider.createFreeTestCoins();
+        break;
+      case "Metamask":
+        const metamaskProvider = this.provider as MetamaskTariProvider;
+        await metamaskProvider.createFreeTestCoins(0);
+        break;
+      default:
+        throw new Error(`Unsupported provider: ${this.provider.providerName}`);
     }
+  }
 
-    public static new<TProvider>(provider: TProvider): TariWallet<TProvider> {
-        return new TariWallet(provider);
-    }
+  public async getSubstate(substateId: string) {
+    const resp = await this.provider.getSubstate(substateId);
+    return resp;
+  }
 
-    public async getTemplateDefinition(template_address: string) {
-        const resp = await this.provider.getTemplateDefinition(template_address);
-        return resp.template_definition;
-    }
+  public async submitTransactionAndWait(request: SubmitTransactionRequest) {
+    const resp = await this.provider.submitTransaction(request);
+    let result = await this.waitForTransactionResult(resp.transaction_id);
+    return result;
+  }
 
-    public async listSubstates(template: string | null, substateType: SubstateType | null) {
-        if (this.provider.providerName !== "WalletDaemon") {
-            throw new Error(`Unsupported provider ${this.provider.providerName}`);
-        }
-        const substates = await (this.provider as WalletDaemonTariProvider).listSubstates(
-            template,
-            substateType
-        );
-        return substates;
-    }
+  public async waitForTransactionResult(transactionId: string) {
+    while (true) {
+      const resp = await this.provider.getTransactionResult(transactionId);
+      const FINALIZED_STATUSES = [
+        TransactionStatus.Accepted,
+        TransactionStatus.Rejected,
+        TransactionStatus.InvalidTransaction,
+        TransactionStatus.OnlyFeeAccepted,
+        TransactionStatus.DryRun,
+      ];
 
-    public async createFreeTestCoins() {
-        console.log("createFreeTestCoins", this.provider.providerName);
-        switch (this.provider.providerName) {
-            case "WalletDaemon":
-                const walletProvider = this.provider as WalletDaemonTariProvider;
-                await walletProvider.createFreeTestCoins();
-                break;
-            case "Metamask":
-                const metamaskProvider = this.provider as MetamaskTariProvider;
-                await metamaskProvider.createFreeTestCoins(0);
-                break;
-            default:
-                throw new Error(`Unsupported provider: ${this.provider.providerName}`);
-        }
-    }
+      if (resp.status == TransactionStatus.Rejected) {
+        throw new Error(`Transaction rejected: ${JSON.stringify(resp.result)}`);
+      }
 
-    public async getSubstate(substateId: string) {
-        const resp = await this.provider.getSubstate(substateId);
+      if (FINALIZED_STATUSES.includes(resp.status)) {
         return resp;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
+  }
 
-    public async submitTransactionAndWait(
-        request: SubmitTransactionRequest,
-    ) {
-        const resp = await this.provider.submitTransaction(request);
-        let result = await this.waitForTransactionResult(resp.transaction_id);
-        return result;
-    }
+  public async createNewIssuer(
+    templateAddress: string,
+    params: NewIssuerParams,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const account = await this.provider.getAccount();
 
-    public async waitForTransactionResult(transactionId: string) {
-        while (true) {
-            const resp = await this.provider.getTransactionResult(transactionId);
-            const FINALIZED_STATUSES = [
-                TransactionStatus.Accepted,
-                TransactionStatus.Rejected,
-                TransactionStatus.InvalidTransaction,
-                TransactionStatus.OnlyFeeAccepted,
-                TransactionStatus.DryRun
-            ];
+    const fee_instructions = [
+      {
+        CallMethod: {
+          component_address: account.address,
+          method: "pay_fee",
+          args: [`Amount(${fee})`],
+        },
+      },
+    ];
 
-            if (resp.status == TransactionStatus.Rejected) {
-                throw new Error(`Transaction rejected: ${JSON.stringify(resp.result)}`);
-            }
+    const instructions = [
+      {
+        CallFunction: {
+          template_address: templateAddress,
+          function: "instantiate",
+          args: [
+            params.initialSupply,
+            params.tokenSymbol,
+            Object.keys(params.tokenMetadata)
+              .map((k) => `${k}=${params.tokenMetadata[k]}`)
+              .join(","),
+            params.viewKey,
+            params.enableWrappedToken ? "true" : "false",
+          ],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [0] } },
+      {
+        CallMethod: {
+          component_address: account.address,
+          method: "deposit",
+          args: [{ Workspace: [0] }],
+        },
+      },
+      "DropAllProofsInWorkspace",
+    ];
 
-            if (FINALIZED_STATUSES.includes(resp.status)) {
-                return resp;
-            }
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }
+    const required_substates = [{ substate_id: account.address, version: null }];
 
-    public async createNewIssuer(
-        templateAddress: string,
-        params: NewIssuerParams,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        const account = await this.provider.getAccount();
+    const request = {
+      account_id: account.account_id,
+      fee_instructions,
+      instructions,
+      inputs: [],
+      input_refs: [],
+      override_inputs: false,
+      required_substates,
+      is_dry_run: false,
+      min_epoch: null,
+      max_epoch: null,
+    };
 
-        const fee_instructions = [
-            {
-                CallMethod: {
-                    component_address: account.address,
-                    method: "pay_fee",
-                    args: [`Amount(${fee})`]
-                }
-            }
-        ];
+    const result = await this.submitTransactionAndWait(request);
+    return SimpleTransactionResult.from(result);
+  }
 
-        const instructions = [
-            {
-                CallFunction: {
-                    template_address: templateAddress,
-                    function: "instantiate",
-                    args: [
-                        params.initialSupply,
-                        params.tokenSymbol,
-                        Object.keys(params.tokenMetadata).map((k) => `${k}=${params.tokenMetadata[k]}`).join(','),
-                        params.viewKey,
-                        params.enableWrappedToken ? "true" : "false",
-                    ]
-                }
+  public increaseSupply(
+    component_address: ComponentAddress,
+    badge_resource: ResourceAddress,
+    amount: number,
+    fee: number = 2000,
+  ) {
+    return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, [], fee);
+  }
+
+  public decreaseSupply(
+    component_address: ComponentAddress,
+    badge_resource: ResourceAddress,
+    amount: number,
+    fee: number = 2000,
+  ) {
+    return this.callRestrictedMethod(component_address, badge_resource, "decrease_supply", [amount], empty, [], fee);
+  }
+
+  public transfer(
+    issuerComponent: ComponentAddress,
+    badgeResource: ResourceAddress,
+    destAccount: string,
+    amount: number,
+    fee: number = 2000,
+  ) {
+    return this.callRestrictedMethod(
+      issuerComponent,
+      badgeResource,
+      "withdraw",
+      [amount],
+      () =>
+        [
+          {
+            PutLastInstructionOutputOnWorkspace: { key: [1] },
+          },
+          {
+            CallMethod: {
+              component_address: destAccount,
+              method: "deposit",
+              args: [{ Workspace: [1] }],
             },
-            {PutLastInstructionOutputOnWorkspace: {key: [0]}},
-            {
-                CallMethod: {
-                    component_address: account.address,
-                    method: "deposit",
-                    args: [{Workspace: [0]}]
-                }
-            },
-            "DropAllProofsInWorkspace"
-        ];
+          },
+        ] as Instruction[],
+      [],
+      fee,
+    );
+  }
 
-        const required_substates = [
-            {substate_id: account.address, version: null}
-        ];
+  async createUser(issuerComponent: string, adminBadgeResource: string, userId: number, userAccount: string) {
+    const addBadgeToUserAccount = (_account: Account) => [
+      {
+        PutLastInstructionOutputOnWorkspace: { key: [1] },
+      },
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "deposit",
+          args: [{ Workspace: [1] }],
+        },
+      },
+    ];
 
-        const request = {
-            account_id: account.account_id,
-            fee_instructions,
-            instructions,
-            inputs: [],
-            input_refs: [],
-            override_inputs: false,
-            required_substates,
-            is_dry_run: false,
-            min_epoch: null,
-            max_epoch: null
-        };
+    return await this.callRestrictedMethod(
+      issuerComponent,
+      adminBadgeResource,
+      "create_new_user",
+      [userId, userAccount],
+      addBadgeToUserAccount,
+      [],
+    );
+  }
 
-        const result = await this.submitTransactionAndWait(request);
-        return SimpleTransactionResult.from(result);
-    }
+  public async revokeUserAccess(
+    issuerComponent: ComponentAddress,
+    adminBadgeResource: ResourceAddress,
+    userBadgeResource: ResourceAddress,
+    userId: number,
+    vaultId: VaultId,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const extraInputs = [
+      {
+        substate_id: `${userBadgeResource} nft_u64:${userId}`,
+        version: null,
+      },
+    ] as SubstateRequirement[];
+    return await this.callRestrictedMethod(
+      issuerComponent,
+      adminBadgeResource,
+      "blacklist_user",
+      [vaultId, userId],
+      empty,
+      extraInputs,
+      fee,
+    );
+  }
 
-    public increaseSupply(component_address: ComponentAddress, badge_resource: ResourceAddress, amount: number, fee: number = 2000) {
-        return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, [], fee)
-    }
+  public async reinstateUserAccess(
+    issuerComponent: ComponentAddress,
+    adminBadgeResource: ResourceAddress,
+    userBadgeResource: ResourceAddress,
+    userId: number,
+    userAccount: ComponentAddress,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const extra = () =>
+      [
+        { PutLastInstructionOutputOnWorkspace: { key: [1] } },
+        {
+          CallMethod: {
+            component_address: userAccount,
+            method: "deposit",
+            args: [{ Workspace: [1] }],
+          },
+        },
+      ] as Instruction[];
 
-    public decreaseSupply(component_address: ComponentAddress, badge_resource: ResourceAddress, amount: number, fee: number = 2000) {
-        return this.callRestrictedMethod(component_address, badge_resource, "decrease_supply", [amount], empty, [], fee)
-    }
+    const extraInputs = [
+      {
+        substate_id: `${userBadgeResource} nft_u64:${userId}`,
+        version: null,
+      },
+    ] as SubstateRequirement[];
 
-    public transfer(issuerComponent: ComponentAddress, badgeResource: ResourceAddress, destAccount: string, amount: number, fee: number = 2000) {
-        return this.callRestrictedMethod(issuerComponent, badgeResource, "withdraw", [amount], () => [
-                {
-                    PutLastInstructionOutputOnWorkspace: {key: [1]}
-                },
-                {
-                    CallMethod: {
-                        component_address: destAccount,
-                        method: "deposit",
-                        args: [{Workspace: [1]}]
-                    }
-                }
-            ] as Instruction[],
-            [],
-            fee
-        )
-    }
+    return await this.callRestrictedMethod(
+      issuerComponent,
+      adminBadgeResource,
+      "remove_from_blacklist",
+      [userId],
+      extra,
+      extraInputs,
+      fee,
+    );
+  }
 
-    async createUser(issuerComponent: string, adminBadgeResource: string, userId: number, userAccount: string) {
-        const addBadgeToUserAccount = (_account: Account) => [
-            {
-                PutLastInstructionOutputOnWorkspace: {key: [1]}
-            },
-            {
-                CallMethod: {
-                    component_address: userAccount,
-                    method: "deposit",
-                    args: [{Workspace: [1]}]
-                }
-            }
-        ];
+  public async setUserExchangeLimit(
+    issuerComponent: ComponentAddress,
+    adminBadgeResource: ResourceAddress,
+    userBadgeResource: ResourceAddress,
+    userId: number,
+    newLimit: number,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const extraInputs = [
+      {
+        substate_id: `${userBadgeResource} nft_u64:${userId}`,
+        version: null,
+      },
+    ] as SubstateRequirement[];
 
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "create_new_user", [userId, userAccount], addBadgeToUserAccount, []);
-    }
+    return await this.callRestrictedMethod(
+      issuerComponent,
+      adminBadgeResource,
+      "set_user_wrapped_exchange_limit",
+      [userId, newLimit],
+      empty,
+      extraInputs,
+      fee,
+    );
+  }
 
-    public async revokeUserAccess(
-        issuerComponent: ComponentAddress,
-        adminBadgeResource: ResourceAddress,
-        userBadgeResource: ResourceAddress,
-        userId: number,
-        vaultId: VaultId,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        const extraInputs = [{
-            substate_id: `${userBadgeResource} nft_u64:${userId}`,
-            version: null
-        }] as SubstateRequirement[];
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "blacklist_user", [vaultId, userId], empty, extraInputs, fee);
-    }
+  public async recallTokens(
+    issuerComponent: ComponentAddress,
+    adminBadgeResource: ResourceAddress,
+    userAccount: ComponentAddress,
+    userBadgeResource: ResourceAddress,
+    userId: number,
+    amount: Amount,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const extraInputs = [
+      {
+        substate_id: `${userBadgeResource} nft_u64:${userId}`,
+        version: null,
+      },
+      {
+        substate_id: userAccount,
+        version: null,
+      },
+    ] as SubstateRequirement[];
 
+    return await this.callRestrictedMethod(
+      issuerComponent,
+      adminBadgeResource,
+      "recall_tokens",
+      [userId, [], amount],
+      empty,
+      extraInputs,
+      fee,
+    );
+  }
 
-    public async reinstateUserAccess(
-        issuerComponent: ComponentAddress,
-        adminBadgeResource: ResourceAddress,
-        userBadgeResource: ResourceAddress,
-        userId: number,
-        userAccount: ComponentAddress,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        const extra = () => [
-            {PutLastInstructionOutputOnWorkspace: {key: [1]}},
-            {
-                CallMethod: {
-                    component_address: userAccount,
-                    method: "deposit",
-                    args: [{Workspace: [1]}]
-                }
-            }
-        ] as Instruction[];
+  public async getPublicKey(branch: KeyBranch, index: number): Promise<string> {
+    return await this.provider.getPublicKey(branch, index);
+  }
 
-        const extraInputs = [{
-            substate_id: `${userBadgeResource} nft_u64:${userId}`,
-            version: null
-        }] as SubstateRequirement[];
+  public async getAccount() {
+    return await this.provider.getAccount();
+  }
 
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "remove_from_blacklist", [userId], extra, extraInputs, fee);
-    }
+  public async getConfidentialVaultBalance(vaultId: VaultId, min: number | null = null, max: number | null = null) {
+    return await this.provider.getConfidentialVaultBalances(0, vaultId, min, max);
+  }
 
+  public async exchangeStableForWrappedToken(
+    issuerComponent: ComponentAddress,
+    userAccount: ComponentAddress,
+    stableCoinResource: ResourceAddress,
+    userBadgeResource: ResourceAddress,
+    userId: number,
+    amount: Amount,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const feeAccount = await this.provider.getAccount();
 
-    public async setUserExchangeLimit(
-        issuerComponent: ComponentAddress,
-        adminBadgeResource: ResourceAddress,
-        userBadgeResource: ResourceAddress,
-        userId: number,
-        newLimit: number,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        const extraInputs = [{
-            substate_id: `${userBadgeResource} nft_u64:${userId}`,
-            version: null
-        }] as SubstateRequirement[];
+    const instructions = [
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "create_proof_for_resource",
+          args: [userBadgeResource],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [0] } },
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "withdraw",
+          args: [stableCoinResource, amount],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [1] } },
+      {
+        CallMethod: {
+          component_address: issuerComponent,
+          method: "exchange_stable_for_wrapped_tokens",
+          args: [{ Workspace: [0] }, { Workspace: [1] }],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [2] } },
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "deposit",
+          args: [{ Workspace: [2] }],
+        },
+      },
+      "DropAllProofsInWorkspace",
+    ] as Instruction[];
 
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "set_user_wrapped_exchange_limit", [userId, newLimit], empty, extraInputs, fee);
-    }
+    const required_substates = [
+      { substate_id: userAccount, version: null },
+      { substate_id: issuerComponent, version: null },
+      { substate_id: userBadgeResource, version: null },
+      {
+        substate_id: `${userBadgeResource} nft_u64:${userId}`,
+        version: null,
+      },
+      {
+        substate_id: stableCoinResource,
+        version: null,
+      },
+    ] as SubstateRequirement[];
 
-    public async recallTokens(
-        issuerComponent: ComponentAddress,
-        adminBadgeResource: ResourceAddress,
-        userAccount: ComponentAddress,
-        userBadgeResource: ResourceAddress,
-        userId: number,
-        amount: Amount,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        const extraInputs = [{
-            substate_id: `${userBadgeResource} nft_u64:${userId}`,
-            version: null
-        }, {
-            substate_id: userAccount,
-            version: null
-        }] as SubstateRequirement[];
+    return await this.submitTransaction(feeAccount, instructions, required_substates, fee);
+  }
 
-        return await this.callRestrictedMethod(issuerComponent, adminBadgeResource, "recall_tokens", [userId, [], amount], empty, extraInputs, fee);
-    }
+  public async exchangeWrappedForStable(
+    issuerComponent: ComponentAddress,
+    userAccount: ComponentAddress,
+    wrappedCoinResource: ResourceAddress,
+    userBadgeResource: ResourceAddress,
+    userId: number,
+    amount: Amount,
+    fee: number = 2000,
+  ): Promise<SimpleTransactionResult> {
+    const feeAccount = await this.provider.getAccount();
 
+    const instructions = [
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "create_proof_for_resource",
+          args: [userBadgeResource],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [0] } },
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "withdraw",
+          args: [wrappedCoinResource, amount],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [1] } },
+      {
+        CallMethod: {
+          component_address: issuerComponent,
+          method: "exchange_wrapped_for_stable_tokens",
+          args: [{ Workspace: [0] }, { Workspace: [1] }],
+        },
+      },
+      { PutLastInstructionOutputOnWorkspace: { key: [2] } },
+      {
+        CallMethod: {
+          component_address: userAccount,
+          method: "deposit",
+          args: [{ Workspace: [2] }],
+        },
+      },
+      "DropAllProofsInWorkspace",
+    ] as Instruction[];
 
-    public async getPublicKey(
-        branch: KeyBranch,
-        index: number,
-    ): Promise<string> {
-        return await this.provider.getPublicKey(branch, index);
-    }
+    const required_substates = [
+      { substate_id: userAccount, version: null },
+      { substate_id: issuerComponent, version: null },
+      { substate_id: userBadgeResource, version: null },
+      {
+        substate_id: `${userBadgeResource} nft_u64:${userId}`,
+        version: null,
+      },
+      {
+        substate_id: wrappedCoinResource,
+        version: null,
+      },
+    ] as SubstateRequirement[];
 
-    public async getConfidentialVaultBalance(vaultId: VaultId, min: number | null = null, max: number | null = null) {
-        return await this.provider.getConfidentialVaultBalances(0, vaultId, min, max);
-    }
+    return await this.submitTransaction(feeAccount, instructions, required_substates, fee);
+  }
 
-    public async exchangeStableForWrappedToken(
-        issuerComponent: ComponentAddress,
-        userAccount: ComponentAddress,
-        stableCoinResource: ResourceAddress,
-        userBadgeResource: ResourceAddress,
-        userId: number,
-        amount: Amount,
-        fee: number = 2000
-    ): Promise<SimpleTransactionResult> {
-        const account = await this.provider.getAccount();
+  async callRestrictedMethod(
+    component_address: ComponentAddress,
+    admin_badge_resx: ResourceAddress,
+    method: string,
+    args: Array<any>,
+    extraInstructions: (account: Account) => Array<Instruction>,
+    extraInputs: Array<SubstateRequirement>,
+    fee: number = 2000,
+  ) {
+    const account = await this.provider.getAccount();
 
-        const instructions = [
-            {
-                CallMethod: {
-                    component_address: account.address,
-                    method: "create_proof_for_resource",
-                    args: [userBadgeResource]
-                }
-            },
-            {PutLastInstructionOutputOnWorkspace: {key: [0]}},
-            {
-                CallMethod: {
-                    component_address: issuerComponent,
-                    method: "withdraw",
-                    args: [
-                        stableCoinResource,
-                        amount,
-                    ],
-                }
-            },
-            {PutLastInstructionOutputOnWorkspace: {key: [1]}},
-            {
+    const extra = extraInstructions(account);
 
-                CallMethod: {
-                    component_address: issuerComponent,
-                    method: "exchange_stable_for_wrapped_token",
-                    args: [
-                        {Workspace: [0]},
-                        {Workspace: [1]},
-                    ],
-                }
-            },
-            "DropAllProofsInWorkspace"
-        ] as Instruction[];
+    const instructions = [
+      {
+        CallMethod: {
+          component_address: account.address,
+          method: "create_proof_for_resource",
+          args: [admin_badge_resx],
+        },
+      },
+      {
+        PutLastInstructionOutputOnWorkspace: { key: [0] },
+      },
+      {
+        CallMethod: {
+          component_address,
+          method,
+          args,
+        },
+      },
+      ...extra,
+      "DropAllProofsInWorkspace",
+    ] as Instruction[];
 
-        const required_substates = [
-            {substate_id: account.address, version: null},
-            {substate_id: issuerComponent, version: null},
-            {substate_id: userBadgeResource, version: null},
-            {
-                substate_id: `${userBadgeResource} nft_u64:${userId}`,
-                version: null
-            },
-            {
-                substate_id: stableCoinResource,
-                version: null
-            }
-        ] as SubstateRequirement[];
+    const required_substates = [
+      { substate_id: account.address, version: null },
+      { substate_id: component_address, version: null },
+      { substate_id: admin_badge_resx, version: null },
+      ...extraInputs,
+    ] as SubstateRequirement[];
 
-        return await this.submitTransaction(account, instructions, required_substates, fee);
-    }
+    return await this.submitTransaction(account, instructions, required_substates, fee);
+  }
 
-    async callRestrictedMethod(component_address: ComponentAddress, admin_badge_resx: ResourceAddress, method: string, args: Array<any>, extraInstructions: (account: Account) => Array<Instruction>, extraInputs: Array<SubstateRequirement>, fee: number = 2000) {
-        const account = await this.provider.getAccount();
+  async submitTransaction(
+    account: Account,
+    instructions: Instruction[],
+    required_substates: SubstateRequirement[],
+    fee: Amount,
+  ) {
+    const fee_instructions = [
+      {
+        CallMethod: {
+          component_address: account.address,
+          method: "pay_fee",
+          args: [`Amount(${fee})`],
+        },
+      },
+    ];
 
-        const extra = extraInstructions(account);
+    const request = {
+      account_id: account.account_id,
+      fee_instructions,
+      instructions,
+      inputs: [],
+      input_refs: [],
+      override_inputs: false,
+      required_substates,
+      is_dry_run: false,
+      min_epoch: null,
+      max_epoch: null,
+    };
 
-        const instructions = [
-            {
-                CallMethod: {
-                    component_address: account.address,
-                    method: "create_proof_for_resource",
-                    args: [admin_badge_resx]
-                }
-            },
-            {
-                PutLastInstructionOutputOnWorkspace: {key: [0]}
-            },
-            {
-                CallMethod: {
-                    component_address,
-                    method,
-                    args,
-                }
-            },
-            ...extra,
-            "DropAllProofsInWorkspace"
-        ] as Instruction[];
-
-        const required_substates = [
-            {substate_id: account.address, version: null},
-            {substate_id: component_address, version: null},
-            {substate_id: admin_badge_resx, version: null},
-            ...extraInputs
-        ] as SubstateRequirement[];
-
-        return await this.submitTransaction(account, instructions, required_substates, fee);
-    }
-
-    async submitTransaction(account: Account, instructions: Instruction[], required_substates: SubstateRequirement[], fee: Amount) {
-
-        const fee_instructions = [
-            {
-                CallMethod: {
-                    component_address: account.address,
-                    method: "pay_fee",
-                    args: [`Amount(${fee})`]
-                }
-            }
-        ];
-
-        const request = {
-            account_id: account.account_id,
-            fee_instructions,
-            instructions,
-            inputs: [],
-            input_refs: [],
-            override_inputs: false,
-            required_substates,
-            is_dry_run: false,
-            min_epoch: null,
-            max_epoch: null
-        };
-
-        const result = await this.submitTransactionAndWait(request);
-        return SimpleTransactionResult.from(result);
-    }
-
+    const result = await this.submitTransactionAndWait(request);
+    return SimpleTransactionResult.from(result);
+  }
 }
 
-
 function empty<T>(): Array<T> {
-    return [];
+  return [];
 }

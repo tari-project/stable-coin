@@ -107,15 +107,15 @@ mod template {
                 let wrapped_resource = ResourceBuilder::fungible()
                     .initial_supply(initial_token_supply)
                     .with_metadata(token_metadata)
-                    .with_token_symbol(token_symbol)
+                    .with_token_symbol(format!("w{token_symbol}"))
                     // Access rules
                     .mintable(require_admin.clone())
                     .burnable(require_admin.clone())
                     .build_bucket();
 
                 Some(WrappedExchangeToken {
-                    wrapped_vault: Vault::from_bucket(wrapped_resource),
-                    wrapped_token_exchange_fee: DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE,
+                    vault: Vault::from_bucket(wrapped_resource),
+                    exchange_fee: DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE,
                 })
             } else {
                 None

@@ -1,3 +1,3 @@
-import Issuer from './Issuer';
+import Issuer from "./Issuer";
 
 export default Issuer;

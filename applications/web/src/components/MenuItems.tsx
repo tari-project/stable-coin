@@ -20,71 +20,75 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import {NavLink} from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import {
-    IoHomeOutline,
-    IoHome,
-    IoExtensionPuzzleOutline,
-    IoExtensionPuzzle, IoBag, IoBagOutline, IoPerson, IoPersonOutline
+  IoHomeOutline,
+  IoHome,
+  IoExtensionPuzzleOutline,
+  IoExtensionPuzzle,
+  IoBag,
+  IoBagOutline,
+  IoPerson,
+  IoPersonOutline,
 } from "react-icons/io5";
 import Tooltip from "@mui/material/Tooltip";
 import Fade from "@mui/material/Fade";
 import theme from "../theme/theme";
 
 const iconStyle = {
-    height: 22,
-    width: 22
+  height: 22,
+  width: 22,
 };
 
 const activeIconStyle = {
-    height: 22,
-    width: 22,
-    color: theme.palette.primary.main
+  height: 22,
+  width: 22,
+  color: theme.palette.primary.main,
 };
 
 const mainItems = [
-    {
-        title: "Home",
-        icon: <IoHomeOutline style={iconStyle}/>,
-        activeIcon: <IoHome style={activeIconStyle}/>,
-        link: "/"
-    },
-    {
-        title: "Users",
-        icon: <IoPersonOutline style={iconStyle}/>,
-        activeIcon: <IoPerson style={activeIconStyle}/>,
-        link: "/users"
-    }
+  {
+    title: "Home",
+    icon: <IoHomeOutline style={iconStyle} />,
+    activeIcon: <IoHome style={activeIconStyle} />,
+    link: "/",
+  },
+  {
+    title: "Users",
+    icon: <IoPersonOutline style={iconStyle} />,
+    activeIcon: <IoPerson style={activeIconStyle} />,
+    link: "/users",
+  },
 ];
 
-const MainMenu = mainItems.map(({title, icon, activeIcon, link}) => {
-    return (
-        <NavLink to={link} key={title} style={{textDecoration: "none"}}>
-            {({isActive}) => (
-                <ListItemButton
-                    sx={{
-                        paddingLeft: "22px",
-                        paddingRight: "22px"
-                    }}
-                    disableRipple
-                >
-                    <Tooltip
-                        TransitionComponent={Fade}
-                        TransitionProps={{timeout: 300}}
-                        title={title}
-                        followCursor={true}
-                        placement="right"
-                    >
-                        <ListItemIcon>{isActive ? activeIcon : icon}</ListItemIcon>
-                    </Tooltip>
-                    <ListItemText primary={title}/>
-                </ListItemButton>
-            )}
-        </NavLink>
-    );
+const MainMenu = mainItems.map(({ title, icon, activeIcon, link }) => {
+  return (
+    <NavLink to={link} key={title} style={{ textDecoration: "none" }}>
+      {({ isActive }) => (
+        <ListItemButton
+          sx={{
+            paddingLeft: "22px",
+            paddingRight: "22px",
+          }}
+          disableRipple
+        >
+          <Tooltip
+            TransitionComponent={Fade}
+            TransitionProps={{ timeout: 300 }}
+            title={title}
+            followCursor={true}
+            placement="right"
+          >
+            <ListItemIcon>{isActive ? activeIcon : icon}</ListItemIcon>
+          </Tooltip>
+          <ListItemText primary={title} />
+        </ListItemButton>
+      )}
+    </NavLink>
+  );
 });
 
 export const mainListItems = <>{MainMenu}</>;

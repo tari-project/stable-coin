@@ -33,7 +33,7 @@ function SecondaryHeading({ children }: Props) {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        width: "100%"
+        width: "100%",
       }}
     >
       <h1>{children}</h1>
@@ -41,7 +41,7 @@ function SecondaryHeading({ children }: Props) {
         style={{
           background: theme.palette.primary.main,
           width: "100px",
-          height: "3px"
+          height: "3px",
         }}
       ></div>
     </div>
