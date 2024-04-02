@@ -151,8 +151,7 @@ function WrappedToken({ issuer }: Props) {
           <Grid item xs={12} md={12} lg={12} sx={{ textAlign: "left" }}>
             <TextField
               label="User Id"
-              value={formValues.userId}
-              defaultValue=""
+              value={formValues.userId || ""}
               required
               inputProps={{ pattern: "[0-9]+" }}
               onChange={set("userId")}
@@ -162,8 +161,7 @@ function WrappedToken({ issuer }: Props) {
           <Grid item xs={12} md={12} lg={12} sx={{ textAlign: "left" }}>
             <TextField
               label="Exchange Amount"
-              value={formValues.exchangeAmount}
-              defaultValue=""
+              value={formValues.exchangeAmount || ""}
               required
               inputProps={{ pattern: "[0-9]+" }}
               onChange={set("exchangeAmount")}
