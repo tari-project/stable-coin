@@ -4,7 +4,7 @@ import {
   SubmitTransactionRequest,
   TransactionStatus,
   SubstateRequirement,
-} from "@tariproject/tarijs/dist/providers/types";
+} from "@tariproject/tarijs";
 import { NewIssuerParams, SimpleTransactionResult } from "./types.ts";
 import {
   ComponentAddress,

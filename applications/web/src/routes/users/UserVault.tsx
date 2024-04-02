@@ -26,7 +26,7 @@ import * as React from "react";
 
 import { Vault, VaultId } from "@tariproject/typescript-bindings";
 import useTariProvider from "../../store/provider.ts";
-import { VaultBalances } from "@tariproject/tarijs/dist/providers/types";
+import type { VaultBalances } from "@tariproject/tarijs";
 import { useEffect } from "react";
 import { Alert, CircularProgress, Table, TableBody, TableContainer, TableHead, TableRow } from "@mui/material";
 import { DataTableCell } from "../../components/StyledComponents.ts";
@@ -86,7 +86,7 @@ function UserVault(props: Props) {
     return <Alert severity="error">{error.message}</Alert>;
   }
 
-  if (!balances) {
+  if (!balances || !balances.balances) {
     return <Alert severity="info">No balances found</Alert>;
   }
 
@@ -104,12 +104,12 @@ function UserVault(props: Props) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {Object.keys(balances.balances).map((commitment, i) => (
+          {Object.entries(balances.balances).map(([commitment, balance], i) => (
             <TableRow key={i}>
               <DataTableCell>
                 <span title={commitment}>UTXO {i}</span>
               </DataTableCell>
-              <DataTableCell>{balances.balances.get(commitment) || "--"}</DataTableCell>
+              <DataTableCell>{balance?.toString() || "--"}</DataTableCell>
             </TableRow>
           ))}
           <TableRow>
