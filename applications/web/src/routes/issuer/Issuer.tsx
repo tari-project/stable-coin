@@ -26,7 +26,7 @@ import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import { StyledPaper } from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import useActiveIssuer, { ActiveIssuer } from "../../store/activeIssuer.ts";
+import useActiveIssuer, { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import { Alert, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import { useNavigate, useParams } from "react-router-dom";
@@ -37,9 +37,10 @@ import { SimpleTransactionResult } from "../../types.ts";
 import Transfers from "./Transfers.tsx";
 import WrappedToken from "./WrappedToken.tsx";
 import { CborValue } from "../../cbor";
+import useIssuers from "../../store/issuers.ts";
 
 interface IssuerDetailsProps {
-  issuer: ActiveIssuer;
+  issuer: StableCoinIssuer;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
@@ -87,6 +88,7 @@ function Issuer() {
   const [success, setSuccess] = React.useState<string | null>(null);
   const params = useParams();
   const navigate = useNavigate();
+  const { issuers } = useIssuers();
 
   if (!provider) {
     useEffect(() => {
@@ -96,61 +98,14 @@ function Issuer() {
   }
 
   function load() {
-    if (!isLoading && !activeIssuer && !error) {
+    if (!isLoading && activeIssuer?.id !== params.issuerId && !error) {
       setIsLoading(true);
-      const getComponent = provider!.getSubstate(params.issuerId!).then(async (issuer) => {
-        const { substate } = issuer.value;
-        const { substate_id, version } = (issuer as any).record;
-        if (!("Component" in substate)) {
-          throw new Error("Issuer not component");
-        }
-        const structMap = substate.Component.body.state as CborValue;
-        const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
-        const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
-        const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
-        const vault = await provider!.getSubstate(vaultId);
-        if (!("Vault" in vault.value.substate)) {
-          throw new Error("Substate is not a vault");
-        }
-        const container = vault.value.substate.Vault.resource_container;
-        if (!("Confidential" in container)) {
-          throw new Error("Vault is not confidential");
-        }
-
-        const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
-        const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
-        const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
-
-        setActiveIssuer({
-          id: substate_id.Component,
-          version,
-          vault: {
-            id: vaultId,
-            resourceAddress: container.Confidential.address,
-            revealedAmount: container.Confidential.revealed_amount,
-          },
-          adminAuthResource,
-          userAuthResource,
-          wrappedToken: {
-            resource: wrappedContainer.address,
-            balance: wrappedContainer.amount,
-            ...wrappedToken,
-          },
-        } as ActiveIssuer);
-      });
-
-      Promise.allSettled([getComponent])
-        .then((results) => {
-          if (results[0].status === "rejected") {
-            setError(new Error(results[0].reason));
-          } else {
-            setError(null);
-          }
-        })
-        .catch((err) => {
-          setError(err);
-        })
-        .finally(() => setIsLoading(false));
+      const issuer = issuers.find((i) => i.id == params.issuerId!);
+      if (!issuer) {
+        navigate("/");
+        return;
+      }
+      setActiveIssuer(issuer);
     }
   }
 

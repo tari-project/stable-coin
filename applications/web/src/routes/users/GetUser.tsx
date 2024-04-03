@@ -33,7 +33,7 @@ import ManageUser from "./ManageUser.tsx";
 import { ComponentAddress, ResourceAddress, Vault, VaultId } from "@tariproject/typescript-bindings";
 import RecallTokens from "./RecallTokens.tsx";
 import Transfers from "./Transfers.tsx";
-import useActiveIssuer from "../../store/activeIssuer.ts";
+import useActiveIssuer from "../../store/stableCoinIssuer.ts";
 import { CborValue, convertCborValue } from "../../cbor";
 import UserVault from "./UserVault.tsx";
 import { useNavigate } from "react-router-dom";
@@ -187,7 +187,7 @@ function GetUser(props: Props) {
               <ManageUser
                 issuerId={props.issuerId}
                 adminAuthBadge={props.adminAuthBadge}
-                userBadge={userData.record.substate_id.NonFungible}
+                userBadge={userData.address.substate_id}
                 userId={formValues.userId}
                 badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
                 badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}
@@ -196,7 +196,7 @@ function GetUser(props: Props) {
               <RecallTokens
                 issuerId={props.issuerId}
                 adminAuthBadge={props.adminAuthBadge}
-                userBadge={userData.record.substate_id.NonFungible}
+                userBadge={userData.address.substate_id}
                 userId={formValues.userId}
                 badgeData={convertCborValue(userData.value.substate.NonFungible.data)}
                 badgeMutableData={convertCborValue(userData.value.substate.NonFungible.mutable_data)}

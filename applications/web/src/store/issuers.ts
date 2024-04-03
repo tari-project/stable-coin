@@ -21,42 +21,29 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
+import { StableCoinIssuer } from "./stableCoinIssuer.ts";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-export interface Settings {
-  template: string | null;
-  activeIssuerComponent: string | null;
+export interface Store {
+  activeIssuer: StableCoinIssuer[];
+
+  setIssuers(issuers: StableCoinIssuer[]): void;
+
+  addIssuer(issuer: StableCoinIssuer): void;
+
 }
 
-export interface SettingsStore {
-  settings: Settings;
+const useIssuers = create<Store>()(persist<Store>((set) => ({
+  issuers: [],
+  setActiveIssuer(issuers) {
+    set({ issuers });
+  },
+  addIssuer(issuer) {
+    set((state) => ({ issuers: [...state.issuers, issuer] }));
+  },
+}), {
+  name: "issuers",
+  storage: createJSONStorage(() => localStorage),
+}));
 
-  setSettings(settings: object): void;
-
-  setTemplate(template: string): void;
-}
-
-const useSettings = create<SettingsStore>()(
-  persist<SettingsStore>(
-    (set) => ({
-      settings: {
-        template: null,
-        activeIssuerComponent: null,
-      },
-
-      setSettings(settings: Settings) {
-        set({ settings });
-      },
-
-      setTemplate(template: string) {
-        set((state) => ({ settings: { ...state.settings, template } }));
-      },
-    }),
-    {
-      name: "settings",
-      storage: createJSONStorage(() => localStorage),
-    },
-  ),
-);
-
-export default useSettings;
+export default useIssuers;

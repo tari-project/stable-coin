@@ -61,7 +61,7 @@ export function TariWalletSelectionDialog(props: WalletSelectionProps) {
   };
 
   const onMetamaskClick = async () => {
-    const metamaskProvider = new MetamaskTariProvider(SNAP_ID, window.metamask);
+    const metamaskProvider = new MetamaskTariProvider(SNAP_ID, window.ethereum);
     await metamaskProvider.connect();
     onConnected(metamaskProvider);
     handleClose();

@@ -4,6 +4,7 @@ import {
   SubmitTransactionRequest,
   TransactionStatus,
   SubstateRequirement,
+  Substate as TariJsSubstate,
 } from "@tariproject/tarijs";
 import { NewIssuerParams, SimpleTransactionResult } from "./types.ts";
 import {
@@ -32,13 +33,17 @@ export default class TariWallet<TProvider extends TariProvider> {
     return new TariWallet(provider);
   }
 
+  public providerName(): string {
+    return this.provider.providerName;
+  }
+
   public async getTemplateDefinition(template_address: string) {
     return await this.provider.getTemplateDefinition(template_address);
   }
 
   public async listSubstates(template: string | null, substateType: SubstateType | null) {
     if (this.provider.providerName !== "WalletDaemon") {
-      throw new Error(`Unsupported provider ${this.provider.providerName}`);
+      throw new Error(`ListSubstates: Unsupported provider ${this.provider.providerName}`);
     }
     const substates = await (this.provider as unknown as WalletDaemonTariProvider).listSubstates(template, substateType);
     return substates;
@@ -56,13 +61,12 @@ export default class TariWallet<TProvider extends TariProvider> {
         await metamaskProvider.createFreeTestCoins(0);
         break;
       default:
-        throw new Error(`Unsupported provider: ${this.provider.providerName}`);
+        throw new Error(`createFreeTestCoins: Unsupported provider: ${this.provider.providerName}`);
     }
   }
 
-  public async getSubstate(substateId: string): Promise<{ value: Substate }> {
-    const resp = await this.provider.getSubstate(substateId);
-    return resp as { value: Substate };
+  public async getSubstate(substateId: string): Promise<TariJsSubstate> {
+    return await this.provider.getSubstate(substateId);
   }
 
   public async submitTransactionAndWait(request: SubmitTransactionRequest) {
@@ -217,13 +221,17 @@ export default class TariWallet<TProvider extends TariProvider> {
       },
     ] as Instruction[];
 
+    const extraInputs = [
+      { substate_id: userAccount, version: null },
+    ];
+
     return await this.callRestrictedMethod(
       issuerComponent,
       adminBadgeResource,
       "create_new_user",
       [userId, userAccount],
       addBadgeToUserAccount,
-      [],
+      extraInputs,
     );
   }
 
