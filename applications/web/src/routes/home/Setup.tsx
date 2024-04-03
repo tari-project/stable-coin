@@ -34,11 +34,31 @@ import { NewIssuerParams } from "../../types.ts";
 import { Link, useNavigate } from "react-router-dom";
 import { TableContainer, Table, TableRow, TableBody } from "@mui/material";
 import { DataTableCell } from "../../components/StyledComponents";
+import { Account } from "@tariproject/tarijs";
+import useIssuers from "../../store/issuers.ts";
+import { CborValue } from "../../cbor.ts";
+import * as cbor from "../../cbor.ts";
+import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 
 function SetTemplateForm() {
+  const { provider } = useTariProvider();
   const { settings, setTemplate } = useSettings();
+  const navigate = useNavigate();
+  const [account, setAccount] = useState<Account | null>(null);
 
   const [currentSettings, setCurrentSettings] = useState(settings);
+
+  if (provider === null) {
+    useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
+
+  useEffect(() => {
+    provider.getAccount()
+      .then((account) => setAccount(account));
+  }, []);
 
   return (
     <>
@@ -70,6 +90,27 @@ function SetTemplateForm() {
             Set Template
           </Button>
         </Grid>
+        <Grid item xs={12} md={12} lg={12}>
+          {account ? (
+            <p>
+              Connected account (used to pay fees): <br />
+              {account.public_key} <br />
+              {account.address} <br />
+              Balances: <br />
+              {account.resources.length === 0 ? (
+                <p>No Vaults! This account will not be able to transact.</p>
+              ) : (
+                account.resources.map((r) => (
+                  <p>
+                    {r.type} {r.balance} {r.token_symbol || r.resource_address}
+                  </p>
+                ))
+              )}
+            </p>
+          ) : (
+            <CircularProgress />
+          )}
+        </Grid>
       </form>
     </>
   );
@@ -78,6 +119,7 @@ function SetTemplateForm() {
 function IssuerComponents() {
   const { settings } = useSettings();
   const { provider } = useTariProvider();
+  const { issuers, setIssuers, addIssuer } = useIssuers();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
@@ -93,15 +135,21 @@ function IssuerComponents() {
   }
 
   useEffect(() => {
-    if (!isBusy && settings.template && !error && issuerComponents === null) {
-      setIsBusy(true);
-      provider
-        .listSubstates(settings.template, "Component")
-        .then((substates: any) => {
-          setIssuerComponents(substates.filter((s: any) => s.template_address === settings.template));
-        })
-        .catch((e: Error) => setError(e))
-        .finally(() => setIsBusy(false));
+    if (!isBusy && settings.template && !error && !issuerComponents) {
+      if (provider.providerName() === "WalletDaemon") {
+        setIsBusy(true);
+        provider
+          .listSubstates(settings.template, "Component")
+          .then((substates: any) => setIssuerComponents(substates.filter((s: any) => s.template_address === settings.template)))
+          .catch((e: Error) => setError(e))
+          .finally(() => setIsBusy(false));
+      } else {
+        setIssuerComponents(issuers.map((issuer) => ({
+          substate_id: { Component: issuer.id },
+          version: 0,
+          module_name: "<unknown>",
+        })));
+      }
     }
   }, [isBusy, error, issuerComponents]);
 
@@ -125,10 +173,15 @@ function IssuerComponents() {
         }
 
         const diff = result.accept;
-        const [_type, id, _val] = diff.up_substates
+        const [_type, id, val] = diff.up_substates
           .filter(([type, _id, _val]) => type === "Component")
           .find(([_type, _id, val]) => val?.template_address === settings.template)!;
-        navigate(`/issuers/${id}`);
+
+        convertToIssuer(provider, { address: id, value: val })
+          .then((issuer) =>
+            addIssuer(issuer),
+          )
+          .then(() => navigate(`/issuers/${id}`));
       })
       .catch((e) => setError(e))
       .finally(() => setIsBusy(false));
@@ -212,5 +265,43 @@ function InitialSetup() {
     </>
   );
 }
+
+
+async function convertToIssuer(provider, issuer: any): Promise<StableCoinIssuer> {
+  const { value: component, address: substate_id } = issuer;
+  const structMap = component.body.state as CborValue;
+  const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
+  const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
+  const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
+  const { value: vault } = await provider!.getSubstate(vaultId);
+  if (!("Vault" in vault.substate)) {
+    throw new Error(`${vaultId} is not a vault`);
+  }
+  const container = vault.substate.Vault.resource_container;
+  if (!("Confidential" in container)) {
+    throw new Error("Vault is not confidential");
+  }
+
+  const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
+  const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
+  const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
+
+  return {
+    id: substate_id,
+    vault: {
+      id: vaultId,
+      resourceAddress: container.Confidential.address,
+      revealedAmount: container.Confidential.revealed_amount,
+    },
+    adminAuthResource,
+    userAuthResource,
+    wrappedToken: {
+      resource: wrappedContainer.address,
+      balance: wrappedContainer.amount,
+      ...wrappedToken,
+    },
+  } as StableCoinIssuer;
+}
+
 
 export default InitialSetup;

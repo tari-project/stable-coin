@@ -8,7 +8,7 @@ import { Alert, CircularProgress, TextField } from "@mui/material";
 import Button from "@mui/material/Button";
 import useTariProvider from "../../store/provider.ts";
 import { useNavigate } from "react-router-dom";
-import { ActiveIssuer } from "../../store/activeIssuer.ts";
+import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import { SimpleTransactionResult } from "../../types.ts";
 import Box from "@mui/material/Box";
 import { useEffect } from "react";
@@ -17,7 +17,7 @@ import IconButton from "@mui/material/IconButton";
 import { RefreshOutlined } from "@mui/icons-material";
 
 interface Props {
-  issuer: ActiveIssuer;
+  issuer: StableCoinIssuer;
 }
 
 function WrappedToken({ issuer }: Props) {

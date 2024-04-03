@@ -8,12 +8,12 @@ import { Alert, CircularProgress, TextField } from "@mui/material";
 import Button from "@mui/material/Button";
 import useTariProvider from "../../store/provider.ts";
 import { useNavigate } from "react-router-dom";
-import { ActiveIssuer } from "../../store/activeIssuer.ts";
+import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import { SimpleTransactionResult } from "../../types.ts";
 import Box from "@mui/material/Box";
 
 interface Props {
-  issuer: ActiveIssuer;
+  issuer: StableCoinIssuer;
   onTransactionResult: (result: SimpleTransactionResult) => void;
   onTransactionSubmit?: () => void;
 }
@@ -77,8 +77,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit }: Props) 
             <TextField
               label="To"
               fullWidth
-              value={formValues.transferDestAccount}
-              defaultValue=""
+              value={formValues.transferDestAccount || ""}
               placeholder="component_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               onChange={set("transferDestAccount")}
               onBlur={onValidate("transferAmount")}
@@ -87,8 +86,7 @@ function Transfers({ issuer, onTransactionResult, onTransactionSubmit }: Props) 
           <Grid item xs={3} md={3} lg={3} sx={{ textAlign: "left" }}>
             <TextField
               label="Transfer Amount"
-              value={formValues.transferAmount}
-              defaultValue=""
+              value={formValues.transferAmount || ""}
               inputProps={{ pattern: "[0-9]+" }}
               onChange={set("transferAmount")}
               onBlur={onValidate("transferAmount")}
