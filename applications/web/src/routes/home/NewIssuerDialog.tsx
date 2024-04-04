@@ -78,6 +78,7 @@ function NewIssuerDialog(props: NewIssuerDialogProps) {
                 <TextField
                   name="initialSupply"
                   placeholder="1000000"
+                  required
                   disabled={props.isBusy}
                   label="Initial Supply"
                   onChange={(e) => {
@@ -91,6 +92,7 @@ function NewIssuerDialog(props: NewIssuerDialogProps) {
                   name="tokenSymbol"
                   placeholder="xUSD"
                   disabled={props.isBusy}
+                  required
                   label="Token Symbol"
                   onChange={(e) => {
                     setState({ ...state, tokenSymbol: e.target.value });
@@ -103,6 +105,7 @@ function NewIssuerDialog(props: NewIssuerDialogProps) {
                   name="tokenMetadata"
                   label="Provider name"
                   placeholder="Stable4U"
+                  required
                   disabled={props.isBusy}
                   onChange={(e) => {
                     setState({ ...state, tokenMetadata: { provider_name: e.target.value } });

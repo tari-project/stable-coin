@@ -21,45 +21,28 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { ActiveIssuer } from "./activeIssuer.ts";
-import { createJSONStorage, persist } from "zustand/middleware";
-import useActiveAccount from "./account.ts";
+import { Account } from "@tariproject/tarijs";
 
 export interface Store {
-  issuers: Map<string, ActiveIssuer[]>;
+  account: Account | null;
 
-  // setIssuers(issuers: StableCoinIssuer[]): void;
-
-  addIssuer(accountPk: string, issuer: ActiveIssuer): void;
-
-  getIssuers(): ActiveIssuer[];
+  setActiveAccount(account: Account | null): void;
 }
 
-const useIssuers = create<Store>()(persist<Store>((set) => ({
-  issuers: new Map(),
-  // setIssuers(issuers) {
-  //   set({ issuers });
-  // },
-
-  getIssuers() {
-    const { account } = useActiveAccount.getState?.() || { account: null };
-    if (!account) {
-      throw new Error("No active account");
-    }
-    return this.issuers[account.public_key] || [];
+const useActiveAccount = create<Store>()((set) => ({
+  account: null,
+  setActiveAccount(account) {
+    set({ account });
   },
-  addIssuer(accountPk, issuer) {
-    set((state) => {
-      if (!state.issuers[accountPk]) {
-        state.issuers[accountPk] = [];
-      }
-      state.issuers[accountPk].push(issuer);
-      return state;
-    });
-  },
-}), {
-  name: "issuers",
-  storage: createJSONStorage(() => localStorage),
+  // getAccount() {
+  //   set(async (state) => {
+  //     if (!state.account) {
+  //       const {provider} = useTariProvider.getState?.()!;
+  //       const account = await provider!.getAccount();
+  //       state.setActiveAccount(account);
+  //     }
+  //   }):
+  // }
 }));
 
-export default useIssuers;
+export default useActiveAccount;

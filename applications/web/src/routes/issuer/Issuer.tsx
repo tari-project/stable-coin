@@ -26,7 +26,7 @@ import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import { StyledPaper } from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import useActiveIssuer, { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
+import useActiveIssuer, { ActiveIssuer } from "../../store/activeIssuer.ts";
 import { Alert, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import { useNavigate, useParams } from "react-router-dom";
@@ -38,9 +38,10 @@ import Transfers from "./Transfers.tsx";
 import WrappedToken from "./WrappedToken.tsx";
 import { CborValue } from "../../cbor";
 import useIssuers from "../../store/issuers.ts";
+import useActiveAccount from "../../store/account.ts";
 
 interface IssuerDetailsProps {
-  issuer: StableCoinIssuer;
+  issuer: ActiveIssuer;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
@@ -82,13 +83,13 @@ function IssuerDetails({ issuer }: IssuerDetailsProps) {
 
 function Issuer() {
   const { provider } = useTariProvider();
-  const [isLoading, setIsLoading] = React.useState(false);
   const { activeIssuer, setActiveIssuer } = useActiveIssuer();
   const [error, setError] = React.useState<Error | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const params = useParams();
   const navigate = useNavigate();
   const { issuers } = useIssuers();
+  const { account } = useActiveAccount();
 
   if (!provider) {
     useEffect(() => {
@@ -98,9 +99,9 @@ function Issuer() {
   }
 
   function load() {
-    if (!isLoading && activeIssuer?.id !== params.issuerId && !error) {
-      setIsLoading(true);
-      const issuer = issuers.find((i) => i.id == params.issuerId!);
+    if (activeIssuer?.id !== params.issuerId && !error) {
+      const issuer = (issuers[account?.public_key] || [])
+        .find((i) => i.id == params.issuerId!);
       if (!issuer) {
         navigate("/");
         return;
@@ -109,9 +110,9 @@ function Issuer() {
     }
   }
 
-  React.useEffect(load, [isLoading, activeIssuer, error]);
+  React.useEffect(load, [activeIssuer, error, params.issuerId]);
 
-  function handleTransactionResult(result: SimpleTransactionResult) {
+  const handleTransactionResult = (result: SimpleTransactionResult) => {
     if (result.accept) {
       setSuccess(`Transaction ${result.transactionId} succeeded`);
       setActiveIssuer(null);
@@ -123,7 +124,7 @@ function Issuer() {
       setSuccess(null);
       setError(new Error(`Transaction rejected: ${JSON.stringify(reject)}`));
     }
-  }
+  };
 
   return (
     <>
@@ -140,7 +141,7 @@ function Issuer() {
           <Alert severity="success">{success}</Alert>
         </Grid>
       )}
-      {isLoading || !activeIssuer ? (
+      {!activeIssuer ? (
         <CircularProgress />
       ) : (
         <>
