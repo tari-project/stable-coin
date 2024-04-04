@@ -25,25 +25,42 @@ import { StableCoinIssuer } from "./stableCoinIssuer.ts";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 export interface Store {
-  activeIssuer: StableCoinIssuer[];
+  issuers: {
+    [key: string]: StableCoinIssuer[];
+  },
 
-  setIssuers(issuers: StableCoinIssuer[]): void;
+  getIssuers(accountPk: string): StableCoinIssuer[] | undefined;
 
-  addIssuer(issuer: StableCoinIssuer): void;
+  setIssuers(accountPk: string, issuers: StableCoinIssuer[]): void;
+
+  addIssuer(accountPk: string, issuer: StableCoinIssuer): void;
 
 }
 
-const useIssuers = create<Store>()(persist<Store>((set) => ({
-  issuers: [],
-  setActiveIssuer(issuers) {
-    set({ issuers });
+const useIssuers = create<Store>()(persist<Store>((set, get) => ({
+  issuers: {},
+  getIssuers(accountPk: string) {
+    return get().issuers[accountPk];
   },
-  addIssuer(issuer) {
-    set((state) => ({ issuers: [...state.issuers, issuer] }));
+  setIssuers(accountPk: string, accIssuers: StableCoinIssuer[]) {
+    const { issuers } = get();
+    issuers[accountPk] = accIssuers;
+    set({
+      issuers,
+    });
+  },
+
+  addIssuer(accountPk, issuer) {
+    const { issuers } = get();
+    if (!issuers[accountPk]) {
+      issuers[accountPk] = [];
+    }
+    issuers[accountPk]!.push(issuer);
+    set({ issuers });
   },
 }), {
   name: "issuers",
-  storage: createJSONStorage(() => localStorage),
+  storage: createJSONStorage(() => window.localStorage),
 }));
 
 export default useIssuers;

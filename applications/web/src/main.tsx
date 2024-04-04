@@ -3,20 +3,17 @@ import ReactDOM from "react-dom/client";
 import "./theme/theme.css";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import App from "./App";
-import ErrorPage from "./routes/ErrorPage";
-import Users from "./routes/users";
+// import ErrorPage from "./routes/ErrorPage";
+// import Users from "./routes/users";
 import { TariProvider, MetaMaskInpageProvider } from "@tariproject/tarijs";
 
 const router = createBrowserRouter([
   {
     path: "*",
     element: <App />,
-    errorElement: <ErrorPage />,
+    // errorElement: <ErrorPage />,
     children: [
-      {
-        path: "users",
-        element: <Users />,
-      },
+      // { path: "users", element: <Users />, },
     ],
   },
 ]);

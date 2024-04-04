@@ -13,7 +13,7 @@ import {
   ResourceAddress,
   VaultId,
   Amount,
-  SubstateType, Substate,
+  SubstateType,
 } from "@tariproject/typescript-bindings";
 import { KeyBranch } from "@tariproject/typescript-bindings/wallet-daemon-client.ts";
 
@@ -99,7 +99,7 @@ export default class TariWallet<TProvider extends TariProvider> {
   public async createNewIssuer(
     templateAddress: string,
     params: NewIssuerParams,
-    fee: number = 2000,
+    fee: number = 2500,
   ): Promise<SimpleTransactionResult> {
     const account = await this.provider.getAccount();
 

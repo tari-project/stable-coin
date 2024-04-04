@@ -1,7 +1,7 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import { types } from "@tariproject/tarijs";
+import { TransactionResult, TransactionStatus } from "@tariproject/tarijs";
 import { RejectReason, Substate, SubstateId } from "@tariproject/typescript-bindings";
 
 
@@ -14,17 +14,17 @@ export interface NewIssuerParams {
 }
 
 export class SimpleTransactionResult {
-  private inner: types.TransactionResult;
+  private inner: TransactionResult;
 
-  constructor(result: types.TransactionResult) {
+  constructor(result: TransactionResult) {
     this.inner = result;
   }
 
-  static from(result: types.TransactionResult): SimpleTransactionResult {
+  static from(result: TransactionResult): SimpleTransactionResult {
     return new SimpleTransactionResult(result);
   }
 
-  public get status(): types.TransactionStatus {
+  public get status(): TransactionStatus {
     return this.inner.status;
   }
 
@@ -59,16 +59,16 @@ export class SimpleTransactionResult {
       up_substates: accept.up_substates
         .map(([id, val]: [SubstateId, Substate]) => {
           if ("Component" in id && "Component" in val.substate) {
-            return ["Component", id.Component, val.substate.Component];
+            return ["Component", id.Component, val.version, val.substate.Component];
           }
           if ("Resource" in id && "Resource" in val.substate) {
-            return ["Resource", id.Resource, val.substate.Resource];
+            return ["Resource", id.Resource, val.version, val.substate.Resource];
           }
           if ("Vault" in id && "Vault" in val.substate) {
-            return ["Vault", id.Vault, val.substate.Vault];
+            return ["Vault", id.Vault, val.version, val.substate.Vault];
           }
           if ("NonFungible" in id && "NonFungible" in val.substate) {
-            return ["NonFungible", id.NonFungible, val.substate.NonFungible];
+            return ["NonFungible", id.NonFungible, val.version, val.substate.NonFungible];
           }
 
           console.log("Unknown substate type", id);
@@ -117,11 +117,11 @@ export function splitOnce(str: string, separator: string): [string, string] | nu
 }
 
 export interface SubstateDiff {
-  up_substates: SubstateTuple[];
-  down_substates: SubstateTypeAndId[];
+  up_substates: UpTuple[];
+  down_substates: DownTuple[];
 }
 
-export type SubstateTuple = [SubstateType, string, any];
-export type SubstateTypeAndId = [SubstateType, string];
+export type UpTuple = [SubstateType, string, number, any];
+export type DownTuple = [SubstateType, string];
 
 export type SubstateType = "Component" | "Resource" | "Vault" | "NonFungible";

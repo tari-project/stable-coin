@@ -34,34 +34,24 @@ import { NewIssuerParams } from "../../types.ts";
 import { Link, useNavigate } from "react-router-dom";
 import { TableContainer, Table, TableRow, TableBody } from "@mui/material";
 import { DataTableCell } from "../../components/StyledComponents";
-import { Account } from "@tariproject/tarijs";
 import useIssuers from "../../store/issuers.ts";
 import { CborValue } from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
 import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
+import useActiveAccount from "../../store/account.ts";
+import IconButton from "@mui/material/IconButton";
+import { RefreshOutlined } from "@mui/icons-material";
+import { AccountDetails } from "../../components/AccountDetails.tsx";
+import { Substate, TariProvider } from "@tariproject/tarijs";
+import TariWallet from "../../wallet.ts";
 
 function SetTemplateForm() {
-  const { provider } = useTariProvider();
   const { settings, setTemplate } = useSettings();
-  const navigate = useNavigate();
-  const [account, setAccount] = useState<Account | null>(null);
-
   const [currentSettings, setCurrentSettings] = useState(settings);
-
-  if (provider === null) {
-    useEffect(() => {
-      navigate("/");
-    }, []);
-    return <></>;
-  }
-
-  useEffect(() => {
-    provider.getAccount()
-      .then((account) => setAccount(account));
-  }, []);
 
   return (
     <>
+
       <form
         onSubmit={(evt) => {
           evt.preventDefault();
@@ -90,27 +80,7 @@ function SetTemplateForm() {
             Set Template
           </Button>
         </Grid>
-        <Grid item xs={12} md={12} lg={12}>
-          {account ? (
-            <p>
-              Connected account (used to pay fees): <br />
-              {account.public_key} <br />
-              {account.address} <br />
-              Balances: <br />
-              {account.resources.length === 0 ? (
-                <p>No Vaults! This account will not be able to transact.</p>
-              ) : (
-                account.resources.map((r) => (
-                  <p>
-                    {r.type} {r.balance} {r.token_symbol || r.resource_address}
-                  </p>
-                ))
-              )}
-            </p>
-          ) : (
-            <CircularProgress />
-          )}
-        </Grid>
+
       </form>
     </>
   );
@@ -119,13 +89,15 @@ function SetTemplateForm() {
 function IssuerComponents() {
   const { settings } = useSettings();
   const { provider } = useTariProvider();
-  const { issuers, setIssuers, addIssuer } = useIssuers();
+  const { getIssuers, addIssuer, setIssuers } = useIssuers();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [issuerComponents, setIssuerComponents] = useState<object[] | null>(null);
+  const { account } = useActiveAccount();
+
 
   if (provider === null) {
     useEffect(() => {
@@ -135,21 +107,29 @@ function IssuerComponents() {
   }
 
   useEffect(() => {
-    if (!isBusy && settings.template && !error && !issuerComponents) {
-      if (provider.providerName() === "WalletDaemon") {
-        setIsBusy(true);
-        provider
-          .listSubstates(settings.template, "Component")
-          .then((substates: any) => setIssuerComponents(substates.filter((s: any) => s.template_address === settings.template)))
-          .catch((e: Error) => setError(e))
-          .finally(() => setIsBusy(false));
-      } else {
-        setIssuerComponents(issuers.map((issuer) => ({
+    if (provider.providerName() === "WalletDaemon") {
+      setIsBusy(true);
+      provider
+        .listSubstates(settings.template, "Component")
+        .then((substates: any[]) =>
+          Promise.all(substates.map((s) => provider.getSubstate(s.substate_id.Component).then((substate) => ({
+            address: substate.address,
+            value: substate.value.substate.Component,
+          })))))
+        .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
+        .then((issuers) => setIssuers(account!.public_key, issuers))
+        .catch((e: Error) => setError(e))
+        .finally(() => setIsBusy(false));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isBusy && settings.template && !error) {
+      setIssuerComponents(
+        (getIssuers(account!.public_key) || []).map((issuer) => ({
           substate_id: { Component: issuer.id },
-          version: 0,
-          module_name: "<unknown>",
+          version: issuer.version,
         })));
-      }
     }
   }, [isBusy, error, issuerComponents]);
 
@@ -158,7 +138,7 @@ function IssuerComponents() {
     provider!
       .getPublicKey("view_key", 0)
       .then((viewKey) => provider!.createNewIssuer(settings.template!, { ...data, viewKey }))
-      .then((result) => {
+      .then(async (result) => {
         // TODO: improve error formatting
         if (result.rejected) {
           throw new Error(`Transaction rejected: ${JSON.stringify(result.rejected)}`);
@@ -173,15 +153,12 @@ function IssuerComponents() {
         }
 
         const diff = result.accept;
-        const [_type, id, val] = diff.up_substates
-          .filter(([type, _id, _val]) => type === "Component")
-          .find(([_type, _id, val]) => val?.template_address === settings.template)!;
+        const [_type, id, version, val] = diff.up_substates
+          .find(([type, _id, _version, val]) => type == "Component" && val?.template_address === settings.template)!;
 
-        convertToIssuer(provider, { address: id, value: val })
-          .then((issuer) =>
-            addIssuer(issuer),
-          )
-          .then(() => navigate(`/issuers/${id}`));
+        let issuer = await convertToIssuer(provider!, { address: { substate_id: id, version }, value: val });
+        addIssuer(account!.public_key, issuer);
+        navigate(`/issuers/${id}`);
       })
       .catch((e) => setError(e))
       .finally(() => setIsBusy(false));
@@ -213,7 +190,6 @@ function IssuerRow({ data }: { data: any }) {
         <DataTableCell width={90} sx={{ borderBottom: "none", textAlign: "center" }}>
           <Link to={`issuers/${data.substate_id.Component}`}>{data.substate_id.Component}</Link>
         </DataTableCell>
-        <DataTableCell>{data.module_name}</DataTableCell>
         <DataTableCell>{data.version}</DataTableCell>
       </TableRow>
     </>
@@ -227,7 +203,6 @@ function IssuerTable({ data }: { data: object[] }) {
         <TableHead>
           <TableRow>
             <DataTableCell>Component</DataTableCell>
-            <DataTableCell>Template</DataTableCell>
             <DataTableCell>Substate Version</DataTableCell>
           </TableRow>
         </TableHead>
@@ -242,7 +217,31 @@ function IssuerTable({ data }: { data: object[] }) {
 }
 
 function InitialSetup() {
+  const { provider } = useTariProvider();
   const { settings } = useSettings();
+  const navigate = useNavigate();
+  const { account, setActiveAccount } = useActiveAccount();
+
+  if (provider === null) {
+    useEffect(() => {
+      navigate("/");
+    }, []);
+    return <></>;
+  }
+
+  const loadAccount = () => {
+    provider.getAccount().then(setActiveAccount);
+  };
+
+  useEffect(() => {
+    if (!account) {
+      loadAccount();
+    }
+  }, [account]);
+
+  if (!account) {
+    return <CircularProgress />;
+  }
 
   return (
     <>
@@ -262,13 +261,22 @@ function InitialSetup() {
           </StyledPaper>
         </Grid>
       )}
+      <Grid item xs={12} md={12} lg={12}>
+        <StyledPaper>
+          <IconButton onClick={loadAccount}>
+            <RefreshOutlined />
+          </IconButton>
+          <p>Connected {provider.providerName()} account: </p>
+          <AccountDetails account={account} />
+        </StyledPaper>
+      </Grid>
     </>
   );
 }
 
 
-async function convertToIssuer(provider, issuer: any): Promise<StableCoinIssuer> {
-  const { value: component, address: substate_id } = issuer;
+async function convertToIssuer<T extends TariProvider>(provider: TariWallet<T>, issuer: Substate): Promise<StableCoinIssuer> {
+  const { value: component, address } = issuer;
   const structMap = component.body.state as CborValue;
   const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
   const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
@@ -287,7 +295,8 @@ async function convertToIssuer(provider, issuer: any): Promise<StableCoinIssuer>
   const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
 
   return {
-    id: substate_id,
+    id: address.substate_id,
+    version: address.version,
     vault: {
       id: vaultId,
       resourceAddress: container.Confidential.address,

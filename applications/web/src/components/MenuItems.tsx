@@ -27,8 +27,6 @@ import ListItemText from "@mui/material/ListItemText";
 import {
   IoHomeOutline,
   IoHome,
-  IoPerson,
-  IoPersonOutline,
 } from "react-icons/io5";
 import Tooltip from "@mui/material/Tooltip";
 import Fade from "@mui/material/Fade";
@@ -54,8 +52,8 @@ const mainItems = [
   },
   {
     title: "Users",
-    icon: <IoPersonOutline style={iconStyle} />,
-    activeIcon: <IoPerson style={activeIconStyle} />,
+    icon: <IoHomeOutline style={iconStyle} />,
+    activeIcon: <IoHome style={activeIconStyle} />,
     link: "/users",
   },
 ];

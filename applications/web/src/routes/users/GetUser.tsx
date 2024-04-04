@@ -34,7 +34,7 @@ import { ComponentAddress, ResourceAddress, Vault, VaultId } from "@tariproject/
 import RecallTokens from "./RecallTokens.tsx";
 import Transfers from "./Transfers.tsx";
 import useActiveIssuer from "../../store/stableCoinIssuer.ts";
-import { CborValue, convertCborValue } from "../../cbor";
+import { convertCborValue } from "../../cbor";
 import UserVault from "./UserVault.tsx";
 import { useNavigate } from "react-router-dom";
 
@@ -51,7 +51,7 @@ function GetUser(props: Props) {
   const [error, setError] = React.useState<Error | null>(null);
   const [formValues, setFormValues] = React.useState<any>({});
   const [validity, setValidity] = React.useState<Partial<any>>({});
-  const [userAuthBadge, setUserAuthBadge] = React.useState<string | null>(null);
+  const [userAuthBadge, setUserAuthBadge] = React.useState<string | null | undefined>(null);
   const [userData, setUserData] = React.useState<any>(null);
   const [userVault, setUserVault] = React.useState<{ vaultId: VaultId; vault: Vault } | null>(null);
 
@@ -65,20 +65,8 @@ function GetUser(props: Props) {
   }
 
   useEffect(() => {
-    provider
-      .getSubstate(props.issuerId)
-      .then((issuer) => {
-        const { value } = issuer;
-        if (!("Component" in value.substate)) {
-          throw new Error(`Issuer is not a component`);
-        }
-        const structMap = value.substate.Component.body.state as CborValue;
-        const userAuthBadge = cbor.getValueByPath(structMap, "$.user_auth_resource");
-        setUserAuthBadge(userAuthBadge);
-      })
-      .catch((e) => setError(e))
-      .finally(() => setIsBusy(false));
-  }, [formValues]);
+    setUserAuthBadge(activeIssuer?.userAuthResource);
+  }, []);
 
   const set = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues({ ...formValues, [e.target.name]: e.target.value });

@@ -21,46 +21,28 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { ResourceAddress, VaultId } from "../../../../../dan/bindings";
-
-export interface StableCoinIssuer {
-  id: string;
-  version: number;
-  vault: {
-    id: string;
-    resourceAddress: string;
-    revealedAmount: number;
-  };
-  wrappedToken: WrappedExchangeToken | null;
-  adminAuthResource: string;
-  userAuthResource: string;
-}
-
-export interface WrappedExchangeToken {
-  vault: VaultId;
-  resource: ResourceAddress;
-  balance: number;
-  exchange_fee: ExchangeFee;
-}
-
-export type ExchangeFee = { Fixed: number } | { Percentage: number };
+import { Account } from "@tariproject/tarijs";
 
 export interface Store {
-  activeIssuer: StableCoinIssuer | null;
+  account: Account | null;
 
-  setActiveIssuer(issuer: StableCoinIssuer | null): void;
-
-  clearActiveIssuer(): void;
+  setActiveAccount(account: Account | null): void;
 }
 
-const useActiveIssuer = create<Store>()((set) => ({
-  activeIssuer: null,
-  setActiveIssuer(activeIssuer) {
-    set({ activeIssuer });
+const useActiveAccount = create<Store>()((set) => ({
+  account: null,
+  setActiveAccount(account) {
+    set({ account });
   },
-  clearActiveIssuer() {
-    set({ activeIssuer: null });
-  },
+  // getAccount() {
+  //   set(async (state) => {
+  //     if (!state.account) {
+  //       const {provider} = useTariProvider.getState?.()!;
+  //       const account = await provider!.getAccount();
+  //       state.setActiveAccount(account);
+  //     }
+  //   }):
+  // }
 }));
 
-export default useActiveIssuer;
+export default useActiveAccount;

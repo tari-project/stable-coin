@@ -11,10 +11,10 @@ import { useNavigate } from "react-router-dom";
 import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import { SimpleTransactionResult } from "../../types.ts";
 import Box from "@mui/material/Box";
-import { useEffect } from "react";
-import { types } from "@tariproject/tarijs";
 import IconButton from "@mui/material/IconButton";
 import { RefreshOutlined } from "@mui/icons-material";
+import { AccountDetails } from "../../components/AccountDetails.tsx";
+import useActiveAccount from "../../store/account.ts";
 
 interface Props {
   issuer: StableCoinIssuer;
@@ -27,7 +27,7 @@ function WrappedToken({ issuer }: Props) {
   const [error, setError] = React.useState<Error | null>(null);
   const [invalid, setInvalid] = React.useState({} as any);
   const [isBusy, setIsBusy] = React.useState(false);
-  const [account, setAccount] = React.useState<types.Account | null>(null);
+  const { account, setActiveAccount } = useActiveAccount();
   const [exchangeResult, setExchangeResult] = React.useState<SimpleTransactionResult | null>(null);
 
   if (!provider) {
@@ -35,9 +35,6 @@ function WrappedToken({ issuer }: Props) {
     return <></>;
   }
 
-  useEffect(() => {
-    loadAccount();
-  }, [issuer]);
 
   const set = (key: string) => (evt: React.ChangeEvent<HTMLInputElement>) => {
     if (!evt.target.validity.valid) {
@@ -112,11 +109,10 @@ function WrappedToken({ issuer }: Props) {
 
   const loadAccount = () => {
     setIsBusy(true);
-    setAccount(null);
     provider
       .getAccount()
       .then((account) => {
-        setAccount(account);
+        setActiveAccount(account);
       })
       .catch((e) => setError(e))
       .finally(() => setIsBusy(false));
@@ -201,34 +197,5 @@ function WrappedToken({ issuer }: Props) {
   );
 }
 
-function AccountDetails({ account }: { account: types.Account }) {
-  return (
-    <Box sx={{ paddingBottom: 4 }}>
-      <h3>Account Details</h3>
-      <p>
-        <span>Account ID:</span>
-        <span>{account.account_id}</span>
-      </p>
-      <p>
-        <span>Address: </span>
-        <span>{account.address}</span>
-      </p>
-      <p>
-        <span>Public Key: </span>
-        <span>{account.public_key}</span>
-      </p>
-      <p>
-        <span>Vaults: </span>
-        {account.resources.map((r, i: number) => (
-          <p key={i}>
-            <span>
-              {r.type} Available: {r.balance} {("token_symbol" in r) ? r.token_symbol as string : r.resource_address}
-            </span>
-          </p>
-        ))}
-      </p>
-    </Box>
-  );
-}
 
 export default WrappedToken;
