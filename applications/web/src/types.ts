@@ -1,7 +1,7 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import { types } from "@tariproject/tarijs";
+import { TransactionResult, TransactionStatus } from "@tariproject/tarijs";
 import { RejectReason, Substate, SubstateId } from "@tariproject/typescript-bindings";
 
 
@@ -14,17 +14,17 @@ export interface NewIssuerParams {
 }
 
 export class SimpleTransactionResult {
-  private inner: types.TransactionResult;
+  private inner: TransactionResult;
 
-  constructor(result: types.TransactionResult) {
+  constructor(result: TransactionResult) {
     this.inner = result;
   }
 
-  static from(result: types.TransactionResult): SimpleTransactionResult {
+  static from(result: TransactionResult): SimpleTransactionResult {
     return new SimpleTransactionResult(result);
   }
 
-  public get status(): types.TransactionStatus {
+  public get status(): TransactionStatus {
     return this.inner.status;
   }
 

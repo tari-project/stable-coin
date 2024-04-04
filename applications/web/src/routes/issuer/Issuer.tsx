@@ -26,22 +26,20 @@ import SecondaryHeading from "../../components/SecondaryHeading.tsx";
 import { StyledPaper } from "../../components/StyledComponents.ts";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import useActiveIssuer, { ActiveIssuer } from "../../store/activeIssuer.ts";
+import useActiveIssuer, { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import { Alert, CircularProgress } from "@mui/material";
 import Button from "@mui/material/Button";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect } from "react";
-import * as cbor from "../../cbor";
 import SupplyControl from "./SupplyControl.tsx";
 import { SimpleTransactionResult } from "../../types.ts";
 import Transfers from "./Transfers.tsx";
 import WrappedToken from "./WrappedToken.tsx";
-import { CborValue } from "../../cbor";
 import useIssuers from "../../store/issuers.ts";
 import useActiveAccount from "../../store/account.ts";
 
 interface IssuerDetailsProps {
-  issuer: ActiveIssuer;
+  issuer: StableCoinIssuer;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
@@ -88,7 +86,7 @@ function Issuer() {
   const [success, setSuccess] = React.useState<string | null>(null);
   const params = useParams();
   const navigate = useNavigate();
-  const { issuers } = useIssuers();
+  const { getIssuers } = useIssuers();
   const { account } = useActiveAccount();
 
   if (!provider) {
@@ -100,8 +98,8 @@ function Issuer() {
 
   function load() {
     if (activeIssuer?.id !== params.issuerId && !error) {
-      const issuer = (issuers[account?.public_key] || [])
-        .find((i) => i.id == params.issuerId!);
+      const issuer = (getIssuers(account!.public_key) || [])
+        .find((i: StableCoinIssuer) => i.id == params.issuerId!);
       if (!issuer) {
         navigate("/");
         return;

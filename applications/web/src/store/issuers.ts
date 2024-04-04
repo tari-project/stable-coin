@@ -21,45 +21,46 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { ActiveIssuer } from "./activeIssuer.ts";
+import { StableCoinIssuer } from "./stableCoinIssuer.ts";
 import { createJSONStorage, persist } from "zustand/middleware";
-import useActiveAccount from "./account.ts";
 
 export interface Store {
-  issuers: Map<string, ActiveIssuer[]>;
+  issuers: {
+    [key: string]: StableCoinIssuer[];
+  },
 
-  // setIssuers(issuers: StableCoinIssuer[]): void;
+  getIssuers(accountPk: string): StableCoinIssuer[] | undefined;
 
-  addIssuer(accountPk: string, issuer: ActiveIssuer): void;
+  setIssuers(accountPk: string, issuers: StableCoinIssuer[]): void;
 
-  getIssuers(): ActiveIssuer[];
+  addIssuer(accountPk: string, issuer: StableCoinIssuer): void;
+
 }
 
-const useIssuers = create<Store>()(persist<Store>((set) => ({
-  issuers: new Map(),
-  // setIssuers(issuers) {
-  //   set({ issuers });
-  // },
-
-  getIssuers() {
-    const { account } = useActiveAccount.getState?.() || { account: null };
-    if (!account) {
-      throw new Error("No active account");
-    }
-    return this.issuers[account.public_key] || [];
+const useIssuers = create<Store>()(persist<Store>((set, get) => ({
+  issuers: {},
+  getIssuers(accountPk: string) {
+    return get().issuers[accountPk];
   },
-  addIssuer(accountPk, issuer) {
-    set((state) => {
-      if (!state.issuers[accountPk]) {
-        state.issuers[accountPk] = [];
-      }
-      state.issuers[accountPk].push(issuer);
-      return state;
+  setIssuers(accountPk: string, accIssuers: StableCoinIssuer[]) {
+    const { issuers } = get();
+    issuers[accountPk] = accIssuers;
+    set({
+      issuers,
     });
+  },
+
+  addIssuer(accountPk, issuer) {
+    const { issuers } = get();
+    if (!issuers[accountPk]) {
+      issuers[accountPk] = [];
+    }
+    issuers[accountPk]!.push(issuer);
+    set({ issuers });
   },
 }), {
   name: "issuers",
-  storage: createJSONStorage(() => localStorage),
+  storage: createJSONStorage(() => window.localStorage),
 }));
 
 export default useIssuers;

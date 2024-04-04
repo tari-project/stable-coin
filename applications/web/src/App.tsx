@@ -42,7 +42,7 @@ const breadcrumbRoutes = [
   },
   {
     label: "users",
-    path: "/users",
+    path: "/issuers/:issuerId/users",
     dynamic: false,
   },
   {

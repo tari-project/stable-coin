@@ -37,34 +37,17 @@ import { DataTableCell } from "../../components/StyledComponents";
 import useIssuers from "../../store/issuers.ts";
 import { CborValue } from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
-import { ActiveIssuer } from "../../store/activeIssuer.ts";
+import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import useActiveAccount from "../../store/account.ts";
 import IconButton from "@mui/material/IconButton";
 import { RefreshOutlined } from "@mui/icons-material";
-import * as React from "react";
 import { AccountDetails } from "../../components/AccountDetails.tsx";
+import { Substate, TariProvider } from "@tariproject/tarijs";
+import TariWallet from "../../wallet.ts";
 
 function SetTemplateForm() {
-  const { provider } = useTariProvider();
   const { settings, setTemplate } = useSettings();
-  const navigate = useNavigate();
-  const { account, setActiveAccount } = useActiveAccount();
-
   const [currentSettings, setCurrentSettings] = useState(settings);
-
-  if (provider === null) {
-    useEffect(() => {
-      navigate("/");
-    }, []);
-    return <></>;
-  }
-
-  const refreshAccount = () => {
-    provider.getAccount().then((a) => {
-      console.log(a);
-      setActiveAccount(a);
-    });
-  };
 
   return (
     <>
@@ -97,15 +80,7 @@ function SetTemplateForm() {
             Set Template
           </Button>
         </Grid>
-        <Grid item xs={12} md={12} lg={12}>
-          <IconButton onClick={refreshAccount}>
-            <RefreshOutlined />
-          </IconButton>
-          {account ? (<>
-              <p>Connected {provider.providerName()} account: </p>
-              <AccountDetails account={account} /> </>
-          ) : <CircularProgress />}
-        </Grid>
+
       </form>
     </>
   );
@@ -114,7 +89,7 @@ function SetTemplateForm() {
 function IssuerComponents() {
   const { settings } = useSettings();
   const { provider } = useTariProvider();
-  const { issuers, addIssuer } = useIssuers();
+  const { getIssuers, addIssuer, setIssuers } = useIssuers();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
@@ -122,6 +97,7 @@ function IssuerComponents() {
   const [error, setError] = useState<Error | null>(null);
   const [issuerComponents, setIssuerComponents] = useState<object[] | null>(null);
   const { account } = useActiveAccount();
+
 
   if (provider === null) {
     useEffect(() => {
@@ -131,9 +107,26 @@ function IssuerComponents() {
   }
 
   useEffect(() => {
-    if (!isBusy && settings.template && !error && !issuerComponents) {
+    if (provider.providerName() === "WalletDaemon") {
+      setIsBusy(true);
+      provider
+        .listSubstates(settings.template, "Component")
+        .then((substates: any[]) =>
+          Promise.all(substates.map((s) => provider.getSubstate(s.substate_id.Component).then((substate) => ({
+            address: substate.address,
+            value: substate.value.substate.Component,
+          })))))
+        .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
+        .then((issuers) => setIssuers(account!.public_key, issuers))
+        .catch((e: Error) => setError(e))
+        .finally(() => setIsBusy(false));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isBusy && settings.template && !error) {
       setIssuerComponents(
-        (issuers[account?.public_key] || []).map((issuer) => ({
+        (getIssuers(account!.public_key) || []).map((issuer) => ({
           substate_id: { Component: issuer.id },
           version: issuer.version,
         })));
@@ -163,8 +156,8 @@ function IssuerComponents() {
         const [_type, id, version, val] = diff.up_substates
           .find(([type, _id, _version, val]) => type == "Component" && val?.template_address === settings.template)!;
 
-        let issuer = await convertToIssuer(provider, { address: id, version, value: val });
-        addIssuer(account.public_key, issuer);
+        let issuer = await convertToIssuer(provider!, { address: { substate_id: id, version }, value: val });
+        addIssuer(account!.public_key, issuer);
         navigate(`/issuers/${id}`);
       })
       .catch((e) => setError(e))
@@ -225,7 +218,7 @@ function IssuerTable({ data }: { data: object[] }) {
 
 function InitialSetup() {
   const { provider } = useTariProvider();
-  const { settings, setTemplate } = useSettings();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const { account, setActiveAccount } = useActiveAccount();
 
@@ -268,13 +261,22 @@ function InitialSetup() {
           </StyledPaper>
         </Grid>
       )}
+      <Grid item xs={12} md={12} lg={12}>
+        <StyledPaper>
+          <IconButton onClick={loadAccount}>
+            <RefreshOutlined />
+          </IconButton>
+          <p>Connected {provider.providerName()} account: </p>
+          <AccountDetails account={account} />
+        </StyledPaper>
+      </Grid>
     </>
   );
 }
 
 
-async function convertToIssuer(provider, issuer: any): Promise<ActiveIssuer> {
-  const { value: component, address: substate_id, version } = issuer;
+async function convertToIssuer<T extends TariProvider>(provider: TariWallet<T>, issuer: Substate): Promise<StableCoinIssuer> {
+  const { value: component, address } = issuer;
   const structMap = component.body.state as CborValue;
   const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
   const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
@@ -293,8 +295,8 @@ async function convertToIssuer(provider, issuer: any): Promise<ActiveIssuer> {
   const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
 
   return {
-    id: substate_id,
-    version,
+    id: address.substate_id,
+    version: address.version,
     vault: {
       id: vaultId,
       resourceAddress: container.Confidential.address,
@@ -307,7 +309,7 @@ async function convertToIssuer(provider, issuer: any): Promise<ActiveIssuer> {
       balance: wrappedContainer.amount,
       ...wrappedToken,
     },
-  } as ActiveIssuer;
+  } as StableCoinIssuer;
 }
 
 

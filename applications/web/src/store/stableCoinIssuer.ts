@@ -23,7 +23,7 @@
 import { create } from "zustand";
 import { ResourceAddress, VaultId } from "../../../../../dan/bindings";
 
-export interface ActiveIssuer {
+export interface StableCoinIssuer {
   id: string;
   version: number;
   vault: {
@@ -46,9 +46,9 @@ export interface WrappedExchangeToken {
 export type ExchangeFee = { Fixed: number } | { Percentage: number };
 
 export interface Store {
-  activeIssuer: ActiveIssuer | null;
+  activeIssuer: StableCoinIssuer | null;
 
-  setActiveIssuer(issuer: ActiveIssuer | null): void;
+  setActiveIssuer(issuer: StableCoinIssuer | null): void;
 
   clearActiveIssuer(): void;
 }
