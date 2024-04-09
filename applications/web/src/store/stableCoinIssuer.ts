@@ -21,7 +21,7 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { ResourceAddress, VaultId } from "../../../../../dan/bindings";
+import { ResourceAddress, VaultId } from "@tariproject/typescript-bindings";
 
 export interface StableCoinIssuer {
   id: string;
