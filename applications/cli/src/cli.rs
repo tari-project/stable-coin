@@ -85,6 +85,7 @@ impl From<IssuerCreateSubcommand> for StableCoinTransaction {
             initial_token_supply: cmd.initial_token_supply,
             token_symbol: cmd.token_symbol,
             token_metadata: cmd.token_metadata,
+            // TODO: allow to specify via CLI
             view_key: RistrettoPublicKeyBytes::default(),
             enable_wrapped_token: cmd.enable_wrapped_token,
         }
