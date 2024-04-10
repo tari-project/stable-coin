@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { StyledPaper } from "../../components/StyledComponents.ts";
-import { Alert, IconButton, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
+import { Alert, IconButton, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Typography } from "@mui/material";
 import useTariProvider from "../../store/provider.ts";
 import { useNavigate } from "react-router-dom";
 import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
@@ -11,8 +11,11 @@ import Box from "@mui/material/Box";
 import { useEffect } from "react";
 import { utils } from "@tariproject/tarijs";
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 
 const INDEXER_ADDRESS = import.meta.env.VITE_INDEXER_ADDRESS;
+const PAGE_SIZE = 10;
 
 interface Props {
   issuer: StableCoinIssuer;
@@ -25,6 +28,7 @@ function TransactionList({ issuer }: Props) {
   const [invalid, setInvalid] = React.useState<any>({});
   const [busy, setBusy] = React.useState<{ [key: string]: boolean }>({});
   const [transactions, setTransactions] = React.useState([]);
+  const [page, setPage] = React.useState(0);
 
   if (!provider) {
     navigate("/");
@@ -32,12 +36,12 @@ function TransactionList({ issuer }: Props) {
   }
 
   useEffect(() => {
-    query_transactions();
+    query_transactions(page, PAGE_SIZE);
   }, []);
 
   const isBusy = Object.keys(busy).length > 0;
 
-  async function query_transactions() {
+  async function query_transactions(offset: number, limit: number) {
     const resourceAddress = issuer.vault.resourceAddress;
     console.log({resourceAddress});
 
@@ -50,7 +54,7 @@ function TransactionList({ issuer }: Props) {
       },
 
       body: JSON.stringify({
-        query: `{ getEvents(substateId: "${resourceAddress}", offset:0, limit:10) {substateId, templateAddress, txHash, topic, payload } }`,
+        query: `{ getEvents(substateId: "${resourceAddress}", offset:${offset}, limit:${limit}) {substateId, templateAddress, txHash, topic, payload } }`,
         variables: {}
       })
     });
@@ -87,6 +91,12 @@ function TransactionList({ issuer }: Props) {
     if (text) {
         navigator.clipboard.writeText(text);
     }
+  };
+
+  async function handleChangePage(newPage: number) { 
+    const offset = newPage * PAGE_SIZE;
+    await query_transactions(offset, PAGE_SIZE);
+    setPage(newPage);
   };
 
   return (
@@ -127,7 +137,16 @@ function TransactionList({ issuer }: Props) {
             </TableRow>
           ))}
         </TableBody>
-      </Table>          
+      </Table>
+      <Stack direction="row" justifyContent="right" spacing={2} alignItems="center">
+        <IconButton aria-label="copy" onClick={() => handleChangePage(Math.max(page-1, 0))}>
+          <KeyboardArrowLeftIcon />
+        </IconButton>
+        <Typography sx={{ }}>{page}</Typography>
+        <IconButton aria-label="copy" onClick={() => handleChangePage(page+1)}>
+          <KeyboardArrowRightIcon />
+        </IconButton>
+      </Stack>     
     </StyledPaper>
   );
 }
