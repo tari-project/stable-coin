@@ -37,6 +37,7 @@ import Transfers from "./Transfers.tsx";
 import WrappedToken from "./WrappedToken.tsx";
 import useIssuers from "../../store/issuers.ts";
 import useActiveAccount from "../../store/account.ts";
+import TransactionList from "./TransactionList.tsx";
 
 interface IssuerDetailsProps {
   issuer: StableCoinIssuer;
@@ -158,6 +159,10 @@ function Issuer() {
           <Grid item xs={12} md={12} lg={12}>
             <h2>Transfers</h2>
             <Transfers issuer={activeIssuer} onTransactionResult={handleTransactionResult} />
+          </Grid>
+          <Grid item xs={12} md={12} lg={12}>
+            <h2>Transactions</h2>
+            <TransactionList issuer={activeIssuer} />
           </Grid>
           {activeIssuer.wrappedToken && (
             <Grid item xs={12} md={12} lg={12}>

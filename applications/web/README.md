@@ -10,6 +10,8 @@ Currently, only the wallet JSON-RPC interface is supported.
 
 You must have the [tari-dan](https://github.com/tari-project/tari-dan) repo cloned at the same folder level as this repo.
 
+Copy the `.env.example` file to `.env` and edit the correct environment variable values.
+
 To run the web:
 ```shell
 npm install
