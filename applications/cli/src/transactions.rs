@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use tari_template_lib::args;
+use tari_template_lib::crypto::RistrettoPublicKeyBytes;
 use tari_template_lib::models::{Amount, Metadata, TemplateAddress};
 use tari_template_lib::prelude::ComponentAddress;
 use tari_transaction::{Transaction, UnsignedTransaction};
@@ -11,6 +12,7 @@ pub enum StableCoinTransaction {
         initial_token_supply: Amount,
         token_symbol: String,
         token_metadata: Metadata,
+        view_key: RistrettoPublicKeyBytes,
         enable_wrapped_token: bool,
     },
 }
@@ -27,12 +29,14 @@ pub fn build(params: BuildParams, st_transaction: StableCoinTransaction) -> Unsi
             initial_token_supply,
             token_symbol,
             token_metadata,
+            view_key,
             enable_wrapped_token,
         } => create_issuer(
             params,
             initial_token_supply,
             token_symbol,
             token_metadata,
+            view_key,
             enable_wrapped_token,
         ),
     }
@@ -43,6 +47,7 @@ fn create_issuer(
     initial_token_supply: Amount,
     token_symbol: String,
     token_metadata: Metadata,
+    view_key: RistrettoPublicKeyBytes,
     enable_wrapped_token: bool,
 ) -> UnsignedTransaction {
     Transaction::builder()
@@ -54,6 +59,7 @@ fn create_issuer(
                 initial_token_supply,
                 token_symbol,
                 token_metadata,
+                view_key,
                 enable_wrapped_token
             ),
         )

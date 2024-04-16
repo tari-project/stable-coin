@@ -7,6 +7,7 @@ use crate::transactions::StableCoinTransaction;
 use crate::{transactions, value_parsers};
 use clap::ArgAction;
 use clap::Parser;
+use tari_template_lib::crypto::RistrettoPublicKeyBytes;
 use tari_template_lib::models::{Amount, ComponentAddress, Metadata, TemplateAddress};
 use url::Url;
 
@@ -84,6 +85,8 @@ impl From<IssuerCreateSubcommand> for StableCoinTransaction {
             initial_token_supply: cmd.initial_token_supply,
             token_symbol: cmd.token_symbol,
             token_metadata: cmd.token_metadata,
+            // TODO: allow to specify via CLI
+            view_key: RistrettoPublicKeyBytes::default(),
             enable_wrapped_token: cmd.enable_wrapped_token,
         }
     }

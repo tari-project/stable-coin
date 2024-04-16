@@ -13,9 +13,9 @@
     "@mui/icons-material": "^5.11.0",
     "@mui/material": "^5.11.3",
     "@mui/x-data-grid": "^5.17.17",
-    "@tariproject/tarijs": "file:../../../../code/tari.js",
-    "@tariproject/typescript-bindings": "file:../../../dan/bindings",
-    "@tariproject/wallet_jrpc_client": "file:../../../dan/clients/javascript/wallet_daemon_client",
+    "@tariproject/tarijs": "file:../../../tari.js",
+    "@tariproject/typescript-bindings": "file:../../../tari-dan/bindings",
+    "@tariproject/wallet_jrpc_client": "file:../../../tari-dan/clients/javascript/wallet_daemon_client",
     "qrcode.react": "3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -25,10 +25,10 @@
     "zustand": "4.5.1"
   },
   "devDependencies": {
-    "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
     "@emotion/react": "^11.10.5",
     "@emotion/styled": "^11.10.5",
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
+    "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -38,6 +38,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "prettier": "^3.2.5",
+    "rollup-plugin-node-polyfills": "^0.2.1",
     "vite": "^5.1.0"
   }
 }

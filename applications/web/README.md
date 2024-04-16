@@ -6,6 +6,16 @@ Provides a basic Vite + React interface to construct and submit transactions fro
 
 Currently, only the wallet JSON-RPC interface is supported.
 
+## Getting started
+
+You must have the [tari-dan](https://github.com/tari-project/tari-dan) repo cloned at the same folder level as this repo.
+
+To run the web:
+```shell
+npm install
+npm run dev
+```
+
 ### TODO
 
 - [x] Add support for [Tari snap](https://github.com/tari-project/tari-snap)
