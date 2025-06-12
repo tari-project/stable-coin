@@ -27,7 +27,7 @@ import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
 import { Alert, TextField } from "@mui/material";
 import Button from "@mui/material/Button";
-import { ComponentAddress, ResourceAddress } from "@tariproject/typescript-bindings";
+import { ComponentAddress, ResourceAddress } from "@tari-project/typescript-bindings";
 
 interface Props {
   issuerId: ComponentAddress;

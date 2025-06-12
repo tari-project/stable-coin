@@ -52,12 +52,10 @@ mod stable_coin {
             } = issuer.create_user_account(admin_proof, user_public_key);
 
             // Create component access rules
-            let require_user_permission = AccessRule::Restricted(Require(RequireRule::Require(
-                user_badge.resource_address().into(),
-            )));
+            let require_user_permission = rule!(resource(user_badge.resource_address()));
             let component_access_rules = AccessRules::new()
-                .add_method_rule("transfer_to", AccessRule::AllowAll)
-                .add_method_rule("deposit", require_user_permission)
+                .add_method_rule("transfer_to", rule!(allow_all))
+                .add_method_rule("deposit", require_user_permission.or(admin_only_access_rule.clone()))
                 .add_method_rule("deposit_auth_badge", admin_only_access_rule.clone())
                 .add_method_rule("freeze_account", admin_only_access_rule.clone())
                 .add_method_rule("unfreeze_account", admin_only_access_rule)
@@ -72,7 +70,7 @@ mod stable_coin {
                 issuer,
             })
             .with_access_rules(component_access_rules)
-            .with_owner_rule(OwnerRule::OwnedBySigner)
+            .with_owner_rule(OwnerRule::None)
             .create()
         }
 

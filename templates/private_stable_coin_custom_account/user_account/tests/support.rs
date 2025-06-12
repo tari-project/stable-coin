@@ -1,16 +1,16 @@
 // Copyright 2023 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::args;
-use tari_template_lib::crypto::RistrettoPublicKeyBytes;
 use tari_template_lib::models::{
     Amount, Bucket, ComponentAddress, Metadata, NonFungibleAddress, ResourceAddress,
-    TemplateAddress, VaultId,
+     VaultId,
 };
+use tari_template_lib::prelude::RistrettoPublicKeyBytes;
+use tari_template_lib::types::TemplateAddress;
 use tari_template_test_tooling::crypto::RistrettoSecretKey;
 use tari_template_test_tooling::support::confidential::generate_withdraw_proof;
 use tari_template_test_tooling::{support::confidential, TemplateTest};
-use tari_transaction::Transaction;
+use tari_transaction::{args, Transaction};
 
 pub struct UserAccountTest {
     pub test: TemplateTest,
@@ -20,8 +20,8 @@ pub struct UserAccountTest {
     pub admin_proof: NonFungibleAddress,
     pub admin_key: RistrettoSecretKey,
     pub admin_badge_resource: ResourceAddress,
-    pub user_badge_resource: ResourceAddress,
-    pub token_resource: ResourceAddress,
+    pub _user_badge_resource: ResourceAddress,
+    pub _token_resource: ResourceAddress,
     pub supply_output_mask: RistrettoSecretKey,
     pub supply_amount: Amount,
 }
@@ -30,7 +30,7 @@ impl UserAccountTest {
     pub fn new() -> Self {
         const INITIAL_SUPPLY: Amount = Amount(1_000_000_000);
         let mut test = TemplateTest::new(["./", "../issuer"]);
-        let (admin_account, admin_proof, admin_key) = test.create_owned_account();
+        let (admin_account, admin_proof, admin_key) = test.create_funded_account();
         let issuer_template = test.get_template_address("PrivateStableCoinIssuer");
         let user_account_template = test.get_template_address("PrivateStableCoinUserAccount");
         let mut metadata = Metadata::new();
@@ -52,8 +52,7 @@ impl UserAccountTest {
                 )
                 .put_last_instruction_output_on_workspace("ret")
                 .call_method(admin_account, "deposit", args![Workspace("ret.1")])
-                .sign(&admin_key)
-                .build(),
+                .build_and_seal(&admin_key),
             vec![admin_proof.clone()],
         );
 
@@ -93,8 +92,8 @@ impl UserAccountTest {
             admin_proof,
             admin_key,
             admin_badge_resource,
-            user_badge_resource,
-            token_resource,
+            _user_badge_resource: user_badge_resource,
+            _token_resource: token_resource,
             supply_output_mask: initial_supply_mask,
             supply_amount: INITIAL_SUPPLY,
         }
@@ -120,8 +119,7 @@ impl UserAccountTest {
         let result = self.test.execute_expect_success(
             builder
                 .drop_all_proofs_in_workspace()
-                .sign(&self.admin_key)
-                .build(),
+                .build_and_seal(&self.admin_key),
             vec![self.admin_proof.clone()],
         );
 
@@ -166,8 +164,7 @@ impl UserAccountTest {
                     args![Workspace("proof"), Workspace("funds")],
                 )
                 .drop_all_proofs_in_workspace()
-                .sign(&self.admin_key)
-                .build(),
+                .build_and_seal(&self.admin_key),
             vec![self.admin_proof.clone()],
         );
 
@@ -194,8 +191,7 @@ impl UserAccountTest {
                     args![Workspace("proof"), pk, account, vault_id],
                 )
                 .drop_all_proofs_in_workspace()
-                .sign(&self.admin_key)
-                .build(),
+                .build_and_seal(&self.admin_key),
             vec![self.admin_proof.clone()],
         );
     }
@@ -213,8 +209,7 @@ impl UserAccountTest {
                     args![Workspace("proof"), pk],
                 )
                 .drop_all_proofs_in_workspace()
-                .sign(&self.admin_key)
-                .build(),
+                .build_and_seal(&self.admin_key),
             vec![self.admin_proof.clone()],
         );
     }

@@ -1,32 +1,31 @@
 // Copyright 2023 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::args;
 use tari_template_lib::models::{
     Amount, Bucket, ComponentAddress, Metadata, NonFungibleAddress, ResourceAddress,
-    TemplateAddress,
 };
+use tari_template_lib::types::TemplateAddress;
 use tari_template_test_tooling::crypto::RistrettoSecretKey;
 use tari_template_test_tooling::{support::confidential, TemplateTest};
-use tari_transaction::Transaction;
+use tari_transaction::{args, Transaction};
 
 pub struct IssuerTest {
     pub test: TemplateTest,
     pub stable_coin_issuer_component: ComponentAddress,
-    pub user_account_template: TemplateAddress,
+    pub _user_account_template: TemplateAddress,
     pub admin_account: ComponentAddress,
     pub admin_proof: NonFungibleAddress,
     pub admin_key: RistrettoSecretKey,
     pub admin_badge_resource: ResourceAddress,
-    pub user_badge_resource: ResourceAddress,
-    pub token_resource: ResourceAddress,
-    pub initial_supply_mask: RistrettoSecretKey,
+    pub _user_badge_resource: ResourceAddress,
+    pub _token_resource: ResourceAddress,
+    pub _initial_supply_mask: RistrettoSecretKey,
 }
 
 impl IssuerTest {
     pub fn new() -> Self {
         let mut test = TemplateTest::new(["./", "../user_account"]);
-        let (admin_account, admin_proof, admin_key) = test.create_owned_account();
+        let (admin_account, admin_proof, admin_key) = test.create_funded_account();
         let issuer_template = test.get_template_address("PrivateStableCoinIssuer");
         let user_account_template = test.get_template_address("PrivateStableCoinUserAccount");
         let mut metadata = Metadata::new();
@@ -48,8 +47,7 @@ impl IssuerTest {
                 )
                 .put_last_instruction_output_on_workspace("ret")
                 .call_method(admin_account, "deposit", args![Workspace("ret.1")])
-                .sign(&admin_key)
-                .build(),
+                .build_and_seal(&admin_key),
             vec![admin_proof.clone()],
         );
 
@@ -84,14 +82,14 @@ impl IssuerTest {
         IssuerTest {
             test,
             stable_coin_issuer_component,
-            user_account_template,
+            _user_account_template: user_account_template,
             admin_account,
             admin_proof,
             admin_key,
             admin_badge_resource,
-            user_badge_resource,
-            token_resource,
-            initial_supply_mask,
+            _user_badge_resource: user_badge_resource,
+            _token_resource: token_resource,
+            _initial_supply_mask: initial_supply_mask,
         }
     }
 }

@@ -26,7 +26,7 @@ import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
 import { Alert, Table, TableBody, TableHead, TableRow, TextField } from "@mui/material";
 import Button from "@mui/material/Button";
-import { ComponentAddress, ResourceAddress } from "@tariproject/typescript-bindings";
+import { ComponentAddress, ResourceAddress } from "@tari-project/typescript-bindings";
 import { convertCborValue } from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
 import { SimpleTransactionResult, splitOnce } from "../../types.ts";

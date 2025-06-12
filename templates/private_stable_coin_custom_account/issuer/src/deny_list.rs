@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use std::collections::HashMap;
-use tari_template_lib::crypto::RistrettoPublicKeyBytes;
 use tari_template_lib::models::ComponentAddress;
+use tari_template_lib::prelude::RistrettoPublicKeyBytes;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DenyList {

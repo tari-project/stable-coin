@@ -3,7 +3,7 @@ import * as React from "react";
 import Button from "@mui/material/Button";
 import TariLogoWhite from "./content/tari-logo-white.svg";
 import { TariWalletSelectionDialog } from "./TariWalletSelectionDialog";
-import { TariProvider } from "@tariproject/tarijs";
+import { TariProvider, TariSigner } from "@tari-project/tarijs-all";
 import useTariProvider from "../store/provider.ts";
 import TariWallet from "../wallet.ts";
 
@@ -24,8 +24,8 @@ export function TariConnectButton(props: Props) {
     setWalletSelectionOpen(false);
   };
 
-  const handleOnConnected = (provider: TariProvider) => {
-    setProvider(TariWallet.new(provider));
+  const handleOnConnected = (provider: TariProvider, signer: TariSigner) => {
+    setProvider(TariWallet.new(provider, signer));
     onConnected?.(provider);
   };
 

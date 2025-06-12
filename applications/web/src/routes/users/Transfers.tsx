@@ -9,7 +9,7 @@ import useTariProvider from "../../store/provider.ts";
 import { useNavigate } from "react-router-dom";
 import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
 import { SimpleTransactionResult } from "../../types.ts";
-import { ComponentAddress } from "@tariproject/typescript-bindings";
+import { ComponentAddress } from "@tari-project/typescript-bindings";
 
 interface Props {
   issuer: StableCoinIssuer;

@@ -1,12 +1,13 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import { Account } from "@tariproject/tarijs";
+import { AccountData } from "@tari-project/tarijs-all";
+import { substateIdToString} from "@tari-project/typescript-bindings";
 import { Table, TableBody, TableContainer, TableRow } from "@mui/material";
 import { DataTableCell } from "./StyledComponents.ts";
 import Grid from "@mui/material/Grid";
 
-export function AccountDetails({ account }: { account: Account }) {
+export function AccountDetails({ account }: { account: AccountData }) {
   return (
     <Grid container sx={{ paddingBottom: 4 }}>
       <Grid item xs={12}>
@@ -19,7 +20,7 @@ export function AccountDetails({ account }: { account: Account }) {
                   Account Address:
                 </DataTableCell>
                 <DataTableCell>
-                  {account.address}
+                  {substateIdToString(account.address)}
                 </DataTableCell>
               </TableRow>
               <TableRow>
@@ -43,7 +44,7 @@ export function AccountDetails({ account }: { account: Account }) {
                     {r.type}
                   </DataTableCell>
                   <DataTableCell>
-                    {r.balance || (("token_ids" in r && Array.isArray(r.token_ids)) ? r.token_ids.length : "")} {("token_symbol" in r) ? r.token_symbol as string : r.resource_address}
+                    {r.balance || (("token_ids" in r && Array.isArray(r.token_ids)) ? r.token_ids.length : "")} {r.token_symbol || r.resource_address}
                   </DataTableCell>
                 </TableRow>
               ))}

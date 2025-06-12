@@ -1,13 +1,11 @@
 mod support;
 
+use tari_engine_types::ToByteType;
 use support::UserAccountTest;
-use tari_template_lib::args;
 use tari_template_lib::models::{Amount, VaultId};
-use tari_template_test_tooling::crypto::{PublicKey as _, RistrettoPublicKey};
 use tari_template_test_tooling::support::assert_error::assert_reject_reason;
 use tari_template_test_tooling::support::confidential::generate_withdraw_proof;
-use tari_template_test_tooling::support::crypto::public_key_to_ristretto_bytes;
-use tari_transaction::Transaction;
+use tari_transaction::{args, Transaction};
 
 #[test]
 fn it_creates_and_funds_a_user_account() {
@@ -21,10 +19,10 @@ fn it_creates_and_funds_a_user_account() {
 #[test]
 fn it_allows_a_user_to_transact() {
     let mut test = UserAccountTest::new();
-    let (alice_proof, alice_key) = test.test.create_owner_proof();
-    let alice_pk = public_key_to_ristretto_bytes(&RistrettoPublicKey::from_secret_key(&alice_key));
-    let (_bob_proof, bob_key) = test.test.create_owner_proof();
-    let bob_pk = public_key_to_ristretto_bytes(&RistrettoPublicKey::from_secret_key(&bob_key));
+    let (alice_proof, alice_pk, alice_key) = test.test.create_owner_proof();
+    let alice_pk = alice_pk.to_byte_type();
+    let (_bob_proof, bob_pk, _bob_key) = test.test.create_owner_proof();
+    let bob_pk = bob_pk.to_byte_type();
 
     let accounts = test.open_accounts(vec![alice_pk, bob_pk]);
     let (alice_account, bob_account) = (accounts[0], accounts[1]);
@@ -45,8 +43,7 @@ fn it_allows_a_user_to_transact() {
                 "transfer_to",
                 args![bob_account, alice_to_bob_proof.proof],
             )
-            .sign(&alice_key)
-            .build(),
+            .build_and_seal(&alice_key),
         vec![alice_proof],
     );
 }
@@ -54,10 +51,10 @@ fn it_allows_a_user_to_transact() {
 #[test]
 fn it_rejects_transaction_if_dest_is_on_deny_list() {
     let mut test = UserAccountTest::new();
-    let (alice_proof, alice_key) = test.test.create_owner_proof();
-    let alice_pk = public_key_to_ristretto_bytes(&RistrettoPublicKey::from_secret_key(&alice_key));
-    let (_bob_proof, bob_key) = test.test.create_owner_proof();
-    let bob_pk = public_key_to_ristretto_bytes(&RistrettoPublicKey::from_secret_key(&bob_key));
+    let (alice_proof, alice_pk, alice_key) = test.test.create_owner_proof();
+    let alice_pk = alice_pk.to_byte_type();
+    let (_bob_proof, bob_pk, _bob_key) = test.test.create_owner_proof();
+    let bob_pk = bob_pk.to_byte_type();
 
     let accounts = test.open_accounts(vec![alice_pk, bob_pk]);
     let (alice_account, bob_account) = (accounts[0], accounts[1]);
@@ -83,8 +80,7 @@ fn it_rejects_transaction_if_dest_is_on_deny_list() {
                 "transfer_to",
                 args![bob_account, alice_to_bob_proof.proof],
             )
-            .sign(&alice_key)
-            .build(),
+            .build_and_seal(&alice_key),
         vec![alice_proof.clone()],
     );
 
@@ -99,8 +95,7 @@ fn it_rejects_transaction_if_dest_is_on_deny_list() {
                 "transfer_to",
                 args![bob_account, alice_to_bob_proof.proof],
             )
-            .sign(&alice_key)
-            .build(),
+            .build_and_seal(&alice_key),
         vec![alice_proof],
     );
 }

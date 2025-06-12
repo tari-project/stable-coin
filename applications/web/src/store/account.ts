@@ -21,12 +21,12 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import { create } from "zustand";
-import { Account } from "@tariproject/tarijs";
+import {AccountData} from "@tari-project/tarijs-all";
 
 export interface Store {
-  account: Account | null;
+  account: AccountData | null;
 
-  setActiveAccount(account: Account | null): void;
+  setActiveAccount(account: AccountData | null): void;
 }
 
 const useActiveAccount = create<Store>()((set) => ({
