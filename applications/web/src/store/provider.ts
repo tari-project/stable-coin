@@ -20,21 +20,21 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import { create } from "zustand";
-import { TariProvider } from "@tariproject/tarijs";
+import {create} from "zustand";
 import TariWallet from "../wallet.ts";
+import {TariSigner, TariProvider} from "@tari-project/tarijs-all";
 
-export interface ProviderStore<TProvider extends TariProvider> {
-  provider: TariWallet<TProvider> | null;
+export interface ProviderStore<TProvider extends TariProvider, TSigner extends TariSigner> {
+    provider: TariWallet<TProvider, TSigner> | null;
 
-  setProvider(provider: TariWallet<TProvider>): void;
+    setProvider(provider: TariWallet<TProvider, TSigner>): void;
 }
 
-const useTariProvider = create<ProviderStore<TariProvider>>()((set) => ({
-  provider: null,
-  setProvider(provider: TariWallet<TariProvider>) {
-    set({ provider });
-  },
+const useTariProvider = create<ProviderStore<TariProvider, TariSigner>>()((set) => ({
+    provider: null,
+    setProvider(provider: TariWallet<TariProvider, TariSigner>) {
+        set({provider});
+    },
 }));
 
 export default useTariProvider;

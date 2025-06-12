@@ -45,7 +45,7 @@ mod stable_coin {
     impl PrivateStableCoinIssuer {
         /// Instantiates a new stable coin component, returning the component and an bucket containing an admin badge
         pub fn instantiate(
-            initial_token_supply: ConfidentialOutputProof,
+            initial_token_supply: ConfidentialOutputStatement,
             token_symbol: String,
             user_account_template: TemplateAddress,
             token_metadata: Metadata,
@@ -56,14 +56,11 @@ mod stable_coin {
 
             // Create admin badge resource
             let admin_badge = ResourceBuilder::non_fungible()
-                .with_non_fungible(NonFungibleId::random(), &(), &())
-                .build_bucket();
+                .initial_supply(Some(NonFungibleId::random()));
 
             // Create admin access rules
             let admin_resource = admin_badge.resource_address();
-            let require_admin = AccessRule::Restricted(RestrictedAccessRule::Require(
-                RequireRule::Require(admin_resource.into()),
-            ));
+            let require_admin = rule!(resource(admin_resource));
 
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
@@ -75,15 +72,10 @@ mod stable_coin {
                 .build();
 
             // Create user access rules
-            let require_user =
-                AccessRule::Restricted(RestrictedAccessRule::Require(RequireRule::AnyOf(vec![
-                    admin_resource.into(),
-                    user_auth_resource.into(),
-                ])));
+            let require_user = rule!(any_of(resource(admin_resource), resource(user_auth_resource)));
 
             // Create tokens resource with initial supply
             let initial_tokens = ResourceBuilder::confidential()
-                .initial_supply(initial_token_supply)
                 .with_token_symbol(token_symbol)
                 .with_metadata(token_metadata)
                 // Access rules
@@ -91,7 +83,7 @@ mod stable_coin {
                 .burnable(require_admin.clone())
                 .depositable(require_user.clone())
                 .withdrawable(require_user.clone())
-                .build_bucket();
+                .initial_supply(initial_token_supply);
 
             // Create component access rules
             let component_access_rules = AccessRules::new()
@@ -135,9 +127,9 @@ mod stable_coin {
         }
 
         /// Increase token supply by amount.
-        pub fn increase_supply(&mut self, proof: ConfidentialOutputProof) {
+        pub fn increase_supply(&mut self, funds: ConfidentialOutputStatement) {
             let new_tokens =
-                ResourceManager::get(self.token_vault.resource_address()).mint_confidential(proof);
+                ResourceManager::get(self.token_vault.resource_address()).mint_confidential(funds);
             self.token_vault.deposit(new_tokens);
             emit_event("increase_supply", [] as [(&str, String); 0]);
         }

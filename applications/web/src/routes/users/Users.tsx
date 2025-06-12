@@ -29,7 +29,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useEffect } from "react";
 import AddUser from "./AddUser.tsx";
 import GetUser from "./GetUser.tsx";
-import { ResourceAddress } from "@tariproject/typescript-bindings";
+import { ResourceAddress } from "@tari-project/typescript-bindings";
 import Button from "@mui/material/Button";
 import useActiveIssuer from "../../store/stableCoinIssuer.ts";
 

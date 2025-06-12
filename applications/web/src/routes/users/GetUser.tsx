@@ -30,7 +30,7 @@ import Button from "@mui/material/Button";
 import { useEffect } from "react";
 import * as cbor from "../../cbor";
 import ManageUser from "./ManageUser.tsx";
-import { ComponentAddress, ResourceAddress, Vault, VaultId } from "@tariproject/typescript-bindings";
+import { ComponentAddress, ResourceAddress, Vault, VaultId } from "@tari-project/typescript-bindings";
 import RecallTokens from "./RecallTokens.tsx";
 import Transfers from "./Transfers.tsx";
 import useActiveIssuer from "../../store/stableCoinIssuer.ts";

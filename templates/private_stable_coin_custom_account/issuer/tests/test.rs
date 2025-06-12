@@ -1,12 +1,11 @@
 mod setup;
 
 use crate::setup::IssuerTest;
-use tari_template_lib::args;
 use tari_template_lib::models::Amount;
 use tari_template_test_tooling::support::confidential::{
     generate_confidential_proof, generate_withdraw_proof,
 };
-use tari_transaction::Transaction;
+use tari_transaction::{args, Transaction};
 
 #[test]
 fn it_increases_and_decreases_supply() {
@@ -32,8 +31,7 @@ fn it_increases_and_decreases_supply() {
                 args![output],
             )
             .drop_all_proofs_in_workspace()
-            .sign(&admin_key)
-            .build(),
+            .build_and_seal(&admin_key),
         vec![admin_proof.clone()],
     );
 
@@ -51,8 +49,7 @@ fn it_increases_and_decreases_supply() {
                 args![proof.proof],
             )
             .drop_all_proofs_in_workspace()
-            .sign(&admin_key)
-            .build(),
+            .build_and_seal(&admin_key),
         vec![admin_proof],
     );
 }

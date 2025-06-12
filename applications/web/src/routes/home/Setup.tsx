@@ -22,294 +22,294 @@
 
 import "./Home.css";
 import Button from "@mui/material/Button";
-import { CircularProgress, TableHead, TextField } from "@mui/material";
-import { useEffect, useState } from "react";
+import {CircularProgress, TableHead, TextField} from "@mui/material";
+import {useEffect, useState} from "react";
 import Grid from "@mui/material/Grid";
 import useSettings from "../../store/settings.ts";
 import SecondaryHeading from "../../components/SecondaryHeading.tsx";
-import { StyledPaper } from "../../components/StyledComponents.ts";
+import {StyledPaper} from "../../components/StyledComponents.ts";
 import NewIssuerDialog from "./NewIssuerDialog.tsx";
 import useTariProvider from "../../store/provider.ts";
-import { NewIssuerParams } from "../../types.ts";
-import { Link, useNavigate } from "react-router-dom";
-import { TableContainer, Table, TableRow, TableBody } from "@mui/material";
-import { DataTableCell } from "../../components/StyledComponents";
+import {NewIssuerParams} from "../../types.ts";
+import {Link, useNavigate} from "react-router-dom";
+import {TableContainer, Table, TableRow, TableBody} from "@mui/material";
+import {DataTableCell} from "../../components/StyledComponents";
 import useIssuers from "../../store/issuers.ts";
-import { CborValue } from "../../cbor.ts";
+import {CborValue} from "../../cbor.ts";
 import * as cbor from "../../cbor.ts";
-import { StableCoinIssuer } from "../../store/stableCoinIssuer.ts";
+import {StableCoinIssuer} from "../../store/stableCoinIssuer.ts";
 import useActiveAccount from "../../store/account.ts";
 import IconButton from "@mui/material/IconButton";
-import { RefreshOutlined } from "@mui/icons-material";
-import { AccountDetails } from "../../components/AccountDetails.tsx";
-import { Substate, TariProvider } from "@tariproject/tarijs";
+import {RefreshOutlined} from "@mui/icons-material";
+import {AccountDetails} from "../../components/AccountDetails.tsx";
+import {Substate, TariProvider, TariSigner} from "@tari-project/tarijs-all";
 import TariWallet from "../../wallet.ts";
 
 function SetTemplateForm() {
-  const { settings, setTemplate } = useSettings();
-  const [currentSettings, setCurrentSettings] = useState(settings);
+    const {settings, setTemplate} = useSettings();
+    const [currentSettings, setCurrentSettings] = useState(settings);
 
-  return (
-    <>
+    return (
+        <>
 
-      <form
-        onSubmit={(evt) => {
-          evt.preventDefault();
-          if (currentSettings.template) {
-            setTemplate(currentSettings.template);
-          }
-        }}
-      >
-        <Grid item xs={12} md={12} lg={12}>
-          <p>1. Set the template ID of the issuer template on the current network</p>
-          <TextField
-            name="template ID"
-            placeholder="Template ID"
-            fullWidth
-            onChange={(evt) =>
-              setCurrentSettings({
-                ...currentSettings,
-                template: evt.target.value,
-              })
-            }
-            value={currentSettings.template || ""}
-          />
-        </Grid>
-        <Grid item xs={12} md={12} lg={12}>
-          <Button type="submit" disabled={settings.template === currentSettings.template}>
-            Set Template
-          </Button>
-        </Grid>
+            <form
+                onSubmit={(evt) => {
+                    evt.preventDefault();
+                    if (currentSettings.template) {
+                        setTemplate(currentSettings.template);
+                    }
+                }}
+            >
+                <Grid item xs={12} md={12} lg={12}>
+                    <p>1. Set the template ID of the issuer template on the current network</p>
+                    <TextField
+                        name="template ID"
+                        placeholder="Template ID"
+                        fullWidth
+                        onChange={(evt) =>
+                            setCurrentSettings({
+                                ...currentSettings,
+                                template: evt.target.value,
+                            })
+                        }
+                        value={currentSettings.template || ""}
+                    />
+                </Grid>
+                <Grid item xs={12} md={12} lg={12}>
+                    <Button type="submit" disabled={settings.template === currentSettings.template}>
+                        Set Template
+                    </Button>
+                </Grid>
 
-      </form>
-    </>
-  );
+            </form>
+        </>
+    );
 }
 
 function IssuerComponents() {
-  const { settings } = useSettings();
-  const { provider } = useTariProvider();
-  const { getIssuers, addIssuer, setIssuers } = useIssuers();
+    const {settings} = useSettings();
+    const {provider} = useTariProvider();
+    const {getIssuers, addIssuer, setIssuers} = useIssuers();
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const navigate = useNavigate();
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [issuerComponents, setIssuerComponents] = useState<object[] | null>(null);
-  const { account } = useActiveAccount();
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const navigate = useNavigate();
+    const [isBusy, setIsBusy] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+    const [issuerComponents, setIssuerComponents] = useState<object[] | null>(null);
+    const {account} = useActiveAccount();
 
 
-  if (provider === null) {
+    if (provider === null) {
+        useEffect(() => {
+            navigate("/");
+        }, []);
+        return <></>;
+    }
+
     useEffect(() => {
-      navigate("/");
+        if (provider.providerName() === "WalletDaemon") {
+            setIsBusy(true);
+            provider
+                .listSubstates(settings.template, "Component")
+                .then((resp) =>
+                    Promise.all(resp.substates.map((s) => provider.getSubstate(s.substate_id).then((substate) => ({
+                        address: substate.address,
+                        value: substate.value.substate.Component,
+                    })))))
+                .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
+                .then((issuers) => setIssuers(account!.public_key, issuers))
+                .catch((e: Error) => setError(e))
+                .finally(() => setIsBusy(false));
+        }
     }, []);
-    return <></>;
-  }
 
-  useEffect(() => {
-    if (provider.providerName() === "WalletDaemon") {
-      setIsBusy(true);
-      provider
-        .listSubstates(settings.template, "Component")
-        .then((substates: any[]) =>
-          Promise.all(substates.map((s) => provider.getSubstate(s.substate_id.Component).then((substate) => ({
-            address: substate.address,
-            value: substate.value.substate.Component,
-          })))))
-        .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
-        .then((issuers) => setIssuers(account!.public_key, issuers))
-        .catch((e: Error) => setError(e))
-        .finally(() => setIsBusy(false));
+    useEffect(() => {
+        if (!isBusy && settings.template && !error) {
+            setIssuerComponents(
+                (getIssuers(account!.public_key) || []).map((issuer) => ({
+                    substate_id: {Component: issuer.id},
+                    version: issuer.version,
+                })));
+        }
+    }, [isBusy, error, issuerComponents]);
+
+    function handleOnCreate(data: NewIssuerParams) {
+        setIsBusy(true);
+        provider!
+            .getPublicKey("view_key", 0)
+            .then((viewKey) => provider!.createNewIssuer(settings.template!, {...data, viewKey}))
+            .then(async (result) => {
+                // TODO: improve error formatting
+                if (result.rejected) {
+                    throw new Error(`Transaction rejected: ${JSON.stringify(result.rejected)}`);
+                }
+                if (result.onlyFeeAccepted) {
+                    let [_diff, reason] = result.onlyFeeAccepted;
+                    throw new Error(`Transaction rejected (fees charged): ${JSON.stringify(reason)}`);
+                }
+                // Strict null checking
+                if (!result.accept) {
+                    throw new Error(`Invariant error: result must be accepted if it is not rejected: ${JSON.stringify(result)}`);
+                }
+
+                const diff = result.accept;
+                const [_type, id, version, val] = diff.up_substates
+                    .find(([type, _id, _version, val]) => type == "Component" && val?.template_address === settings.template)!;
+
+                let issuer = await convertToIssuer(provider!, {address: {substate_id: id, version}, value: val});
+                addIssuer(account!.public_key, issuer);
+                navigate(`/issuers/${id}`);
+            })
+            .catch((e) => setError(e))
+            .finally(() => setIsBusy(false));
     }
-  }, []);
 
-  useEffect(() => {
-    if (!isBusy && settings.template && !error) {
-      setIssuerComponents(
-        (getIssuers(account!.public_key) || []).map((issuer) => ({
-          substate_id: { Component: issuer.id },
-          version: issuer.version,
-        })));
-    }
-  }, [isBusy, error, issuerComponents]);
-
-  function handleOnCreate(data: NewIssuerParams) {
-    setIsBusy(true);
-    provider!
-      .getPublicKey("view_key", 0)
-      .then((viewKey) => provider!.createNewIssuer(settings.template!, { ...data, viewKey }))
-      .then(async (result) => {
-        // TODO: improve error formatting
-        if (result.rejected) {
-          throw new Error(`Transaction rejected: ${JSON.stringify(result.rejected)}`);
-        }
-        if (result.onlyFeeAccepted) {
-          let [_diff, reason] = result.onlyFeeAccepted;
-          throw new Error(`Transaction rejected (fees charged): ${JSON.stringify(reason)}`);
-        }
-        // Strict null checking
-        if (!result.accept) {
-          throw new Error(`Invariant error: result must be accepted if it is not rejected: ${JSON.stringify(result)}`);
-        }
-
-        const diff = result.accept;
-        const [_type, id, version, val] = diff.up_substates
-          .find(([type, _id, _version, val]) => type == "Component" && val?.template_address === settings.template)!;
-
-        let issuer = await convertToIssuer(provider!, { address: { substate_id: id, version }, value: val });
-        addIssuer(account!.public_key, issuer);
-        navigate(`/issuers/${id}`);
-      })
-      .catch((e) => setError(e))
-      .finally(() => setIsBusy(false));
-  }
-
-  return (
-    <>
-      <NewIssuerDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onCreate={handleOnCreate}
-        isBusy={isBusy}
-        error={error}
-      />
-      <Grid item xs={12} md={12} lg={12}>
-        <p>2. Create a new issuer component, or select an existing one</p>
-        <Button onClick={() => setDialogOpen(true)}>Create New Issuer</Button>
-        <br />
-        {issuerComponents ? <IssuerTable data={issuerComponents} /> : <CircularProgress />}
-      </Grid>
-    </>
-  );
+    return (
+        <>
+            <NewIssuerDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                onCreate={handleOnCreate}
+                isBusy={isBusy}
+                error={error}
+            />
+            <Grid item xs={12} md={12} lg={12}>
+                <p>2. Create a new issuer component, or select an existing one</p>
+                <Button onClick={() => setDialogOpen(true)}>Create New Issuer</Button>
+                <br/>
+                {issuerComponents ? <IssuerTable data={issuerComponents}/> : <CircularProgress/>}
+            </Grid>
+        </>
+    );
 }
 
-function IssuerRow({ data }: { data: any }) {
-  return (
-    <>
-      <TableRow>
-        <DataTableCell width={90} sx={{ borderBottom: "none", textAlign: "center" }}>
-          <Link to={`issuers/${data.substate_id.Component}`}>{data.substate_id.Component}</Link>
-        </DataTableCell>
-        <DataTableCell>{data.version}</DataTableCell>
-      </TableRow>
-    </>
-  );
+function IssuerRow({data}: { data: any }) {
+    return (
+        <>
+            <TableRow>
+                <DataTableCell width={90} sx={{borderBottom: "none", textAlign: "center"}}>
+                    <Link to={`issuers/${data.substate_id.Component}`}>{data.substate_id.Component}</Link>
+                </DataTableCell>
+                <DataTableCell>{data.version}</DataTableCell>
+            </TableRow>
+        </>
+    );
 }
 
-function IssuerTable({ data }: { data: object[] }) {
-  return (
-    <TableContainer>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <DataTableCell>Component</DataTableCell>
-            <DataTableCell>Substate Version</DataTableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {data.map((item, key) => (
-            <IssuerRow key={key} data={item} />
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
+function IssuerTable({data}: { data: object[] }) {
+    return (
+        <TableContainer>
+            <Table>
+                <TableHead>
+                    <TableRow>
+                        <DataTableCell>Component</DataTableCell>
+                        <DataTableCell>Substate Version</DataTableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {data.map((item, key) => (
+                        <IssuerRow key={key} data={item}/>
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    );
 }
 
 function InitialSetup() {
-  const { provider } = useTariProvider();
-  const { settings } = useSettings();
-  const navigate = useNavigate();
-  const { account, setActiveAccount } = useActiveAccount();
+    const {provider} = useTariProvider();
+    const {settings} = useSettings();
+    const navigate = useNavigate();
+    const {account, setActiveAccount} = useActiveAccount();
 
-  if (provider === null) {
-    useEffect(() => {
-      navigate("/");
-    }, []);
-    return <></>;
-  }
-
-  const loadAccount = () => {
-    provider.getAccount().then(setActiveAccount);
-  };
-
-  useEffect(() => {
-    if (!account) {
-      loadAccount();
+    if (provider === null) {
+        useEffect(() => {
+            navigate("/");
+        }, []);
+        return <></>;
     }
-  }, [account]);
 
-  if (!account) {
-    return <CircularProgress />;
-  }
+    const loadAccount = () => {
+        provider.getAccount().then(setActiveAccount);
+    };
 
-  return (
-    <>
-      <Grid item sm={12} md={12} xs={12}>
-        <SecondaryHeading>Setup</SecondaryHeading>
-      </Grid>
-      <Grid item xs={12} md={12} lg={12}>
-        <StyledPaper>
-          <SetTemplateForm />
-        </StyledPaper>
-      </Grid>
+    useEffect(() => {
+        if (!account) {
+            loadAccount();
+        }
+    }, [account]);
 
-      {settings.template && (
-        <Grid item xs={12} md={12} lg={12}>
-          <StyledPaper>
-            <IssuerComponents />
-          </StyledPaper>
-        </Grid>
-      )}
-      <Grid item xs={12} md={12} lg={12}>
-        <StyledPaper>
-          <IconButton onClick={loadAccount}>
-            <RefreshOutlined />
-          </IconButton>
-          <p>Connected {provider.providerName()} account: </p>
-          <AccountDetails account={account} />
-        </StyledPaper>
-      </Grid>
-    </>
-  );
+    if (!account) {
+        return <CircularProgress/>;
+    }
+
+    return (
+        <>
+            <Grid item sm={12} md={12} xs={12}>
+                <SecondaryHeading>Setup</SecondaryHeading>
+            </Grid>
+            <Grid item xs={12} md={12} lg={12}>
+                <StyledPaper>
+                    <SetTemplateForm/>
+                </StyledPaper>
+            </Grid>
+
+            {settings.template && (
+                <Grid item xs={12} md={12} lg={12}>
+                    <StyledPaper>
+                        <IssuerComponents/>
+                    </StyledPaper>
+                </Grid>
+            )}
+            <Grid item xs={12} md={12} lg={12}>
+                <StyledPaper>
+                    <IconButton onClick={loadAccount}>
+                        <RefreshOutlined/>
+                    </IconButton>
+                    <p>Connected {provider.providerName()} account: </p>
+                    <AccountDetails account={account}/>
+                </StyledPaper>
+            </Grid>
+        </>
+    );
 }
 
 
-async function convertToIssuer<T extends TariProvider>(provider: TariWallet<T>, issuer: Substate): Promise<StableCoinIssuer> {
-  const { value: component, address } = issuer;
-  const structMap = component.body.state as CborValue;
-  const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
-  const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
-  const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
-  const { value: vault } = await provider!.getSubstate(vaultId);
-  if (!("Vault" in vault.substate)) {
-    throw new Error(`${vaultId} is not a vault`);
-  }
-  const container = vault.substate.Vault.resource_container;
-  if (!("Confidential" in container)) {
-    throw new Error("Vault is not confidential");
-  }
+async function convertToIssuer<T extends TariProvider, S extends TariSigner>(provider: TariWallet<T, S>, issuer: Substate): Promise<StableCoinIssuer> {
+    const {value: component, address} = issuer;
+    const structMap = component.body.state as CborValue;
+    const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
+    const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
+    const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
+    const {value: vault} = await provider!.getSubstate(vaultId);
+    if (!("Vault" in vault.substate)) {
+        throw new Error(`${vaultId} is not a vault`);
+    }
+    const container = vault.substate.Vault.resource_container;
+    if (!("Confidential" in container)) {
+        throw new Error("Vault is not confidential");
+    }
 
-  const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
-  const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
-  const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
+    const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
+    const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
+    const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
 
-  return {
-    id: address.substate_id,
-    version: address.version,
-    vault: {
-      id: vaultId,
-      resourceAddress: container.Confidential.address,
-      revealedAmount: container.Confidential.revealed_amount,
-    },
-    adminAuthResource,
-    userAuthResource,
-    wrappedToken: {
-      resource: wrappedContainer.address,
-      balance: wrappedContainer.amount,
-      ...wrappedToken,
-    },
-  } as StableCoinIssuer;
+    return {
+        id: address.substate_id,
+        version: address.version,
+        vault: {
+            id: vaultId,
+            resourceAddress: container.Confidential.address,
+            revealedAmount: container.Confidential.revealed_amount,
+        },
+        adminAuthResource,
+        userAuthResource,
+        wrappedToken: {
+            resource: wrappedContainer.address,
+            balance: wrappedContainer.amount,
+            ...wrappedToken,
+        },
+    } as StableCoinIssuer;
 }
 
 
