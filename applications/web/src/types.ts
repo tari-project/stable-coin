@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import {GetTransactionResultResponse, TransactionStatus} from "@tari-project/tarijs-all";
-import {RejectReason, Substate, SubstateId,} from "@tari-project/typescript-bindings";
+import {RejectReason, Substate, SubstateId, SubstateType,} from "@tari-project/typescript-bindings";
 
 
 export interface NewIssuerParams {
@@ -57,7 +57,50 @@ export class SimpleTransactionResult {
 
         return {
             up_substates: accept.up_substates
-                .map(([id, val]: [SubstateId, Substate]) => {
+                .map(([id, val]: [SubstateId | string, Substate]) => {
+
+                    if (!val.substate) {
+                        console.error("Substate is missing in the accept result", id, val);
+                    }
+                    if (typeof id === "string") {
+                        const s = splitOnce(id, "_");
+                        if (!s) {
+                            throw new Error("Invalid substate ID format " + id);
+                        }
+                        const [type, idValue] = s;
+                        if (!type || !idValue) {
+                            console.log("Invalid substate ID format", id);
+                            return null;
+                        }
+                        switch (type) {
+                            case "component":
+                                return ["Component", idValue, val.version, val.substate.Component];
+                            case "resource":
+                                return ["Resource", idValue, val.version, val.substate.Resource];
+                            case "vault":
+                                return ["Vault", idValue, val.version, val.substate.Vault];
+                            case "nft":
+                                return ["NonFungible", idValue, val.version, val.substate.NonFungible];
+                            case 'txreceipt':
+                                return ["TransactionReceipt", idValue, val.version, val.substate.TransactionReceipt];
+                            case 'vnfp':
+                                return ["ValidatorFeePool", idValue, val.version, val.substate.ValidatorFeePool];
+                            case 'template':
+                                return ["Template", idValue, val.version, val.substate.Template];
+
+                            default:
+                                console.log("Unknown substate type", id);
+                                return null;
+                        }
+                    }
+                    if (!id || typeof id !== "object") {
+                        console.log("Invalid substate ID type", id);
+                        return null;
+                    }
+
+
+                    console.log("Substate ID", id, val);
+
                     if ("Component" in id && "Component" in val.substate) {
                         return ["Component", id.Component, val.version, val.substate.Component];
                     }
@@ -70,13 +113,56 @@ export class SimpleTransactionResult {
                     if ("NonFungible" in id && "NonFungible" in val.substate) {
                         return ["NonFungible", id.NonFungible, val.version, val.substate.NonFungible];
                     }
+                    if ("TransactionReceipt" in id && "TransactionReceipt" in val.substate) {
+                        return ["TransactionReceipt", id.TransactionReceipt, val.version, val.substate.TransactionReceipt];
+                    }
+                    if ("ValidatorFeePool" in id && "ValidatorFeePool" in val.substate) {
+                        return ["ValidatorFeePool", id.ValidatorFeePool, val.version, val.substate.ValidatorFeePool];
+                    }
 
                     console.log("Unknown substate type", id);
                     return null;
                 })
                 .filter((x: [string, any] | null) => x !== null),
             down_substates: accept.down_substates
-                .map(([id, _version]: [SubstateId, number]) => {
+                .map(([id, _version]: [SubstateId | string, number]) => {
+                    if (typeof id === "string") {
+                        const s = splitOnce(id, "_");
+                        if (!s) {
+                            throw new Error("Invalid substate ID format " + id);
+                        }
+                        const [type, idValue] = s;
+                        if (!type || !idValue) {
+                            console.log("Invalid substate ID format", id);
+                            return null;
+                        }
+                        switch (type) {
+                            case "component":
+                                return ["Component", idValue];
+                            case "resource":
+                                return ["Resource", idValue];
+                            case "vault":
+                                return ["Vault", idValue];
+                            case "nft":
+                                return ["NonFungible", idValue];
+                            case 'txreceipt':
+                                return ["TransactionReceipt", idValue];
+                            case 'vnfp':
+                                return ["ValidatorFeePool", idValue];
+                            case 'template':
+                                return ["Template", idValue];
+
+                            default:
+                                console.log("Unknown substate type", id);
+                                return null;
+                        }
+                    }
+
+                    if (!id || typeof id !== "object") {
+                        console.log("Invalid substate ID type", id);
+                        return null;
+                    }
+
                     if ("Component" in id) {
                         return ["Component", id.Component];
                     }
@@ -88,6 +174,12 @@ export class SimpleTransactionResult {
                     }
                     if ("NonFungible" in id) {
                         return ["NonFungible", id.NonFungible];
+                    }
+                    if ("TransactionReceipt" in id) {
+                        return ["TransactionReceipt", id.TransactionReceipt];
+                    }
+                    if ("ValidatorFeePool" in id) {
+                        return ["ValidatorFeePool", id.ValidatorFeePool];
                     }
 
                     console.log("Unknown substate type", id);
@@ -123,5 +215,3 @@ export interface SubstateDiff {
 
 export type UpTuple = [SubstateType, string, number, any];
 export type DownTuple = [SubstateType, string];
-
-export type SubstateType = "Component" | "Resource" | "Vault" | "NonFungible";

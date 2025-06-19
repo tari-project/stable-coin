@@ -24,112 +24,113 @@ import "./Style.css";
 import Grid from "@mui/material/Grid";
 import * as React from "react";
 import useTariProvider from "../../store/provider.ts";
-import { Alert, TextField } from "@mui/material";
+import {Alert, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
-import { ComponentAddress, ResourceAddress } from "@tari-project/typescript-bindings";
-import { SimpleTransactionResult, splitOnce } from "../../types.ts";
-import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import {ComponentAddress, ResourceAddress} from "@tari-project/typescript-bindings";
+import {SimpleTransactionResult, splitOnce} from "../../types.ts";
+import {useNavigate} from "react-router-dom";
+import {useEffect} from "react";
 
 interface Props {
-  issuerId: ComponentAddress;
-  userId: number;
-  userBadge: ResourceAddress;
-  adminAuthBadge: ResourceAddress;
-  badgeData: object;
-  badgeMutableData: object;
-  onChange?: (result: SimpleTransactionResult) => void;
+    issuerId: ComponentAddress;
+    userId: number;
+    userBadge: ResourceAddress;
+    adminAuthBadge: ResourceAddress;
+    badgeData: object;
+    badgeMutableData: object;
+    onChange?: (result: SimpleTransactionResult) => void;
 }
 
 function RecallTokens(props: Props) {
-  const { provider } = useTariProvider();
+    const {provider} = useTariProvider();
 
-  const [isBusy, setIsBusy] = React.useState(false);
-  const [error, setError] = React.useState<Error | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
-  const [recallAmount, setRecallAmount] = React.useState<number>(0);
+    const [isBusy, setIsBusy] = React.useState(false);
+    const [error, setError] = React.useState<Error | null>(null);
+    const [success, setSuccess] = React.useState<string | null>(null);
+    const [recallAmount, setRecallAmount] = React.useState<number>(0);
 
-  const [userBadgeResource, _nft] = splitOnce(props.userBadge, " ")!;
-  const navigate = useNavigate();
+    const userBadgeResource = props.userBadge.split("_")[1];
+    const navigate = useNavigate();
 
-  const userAccount = (props.badgeData as any)!.user_account!;
+    const userAccount = (props.badgeData as any)!.user_account!;
 
-  if (!provider) {
-    useEffect(() => {
-      navigate("/");
-    }, []);
-    return <></>;
-  }
-
-  const handleOnRecall = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsBusy(true);
-    setSuccess(null);
-    setError(null);
-
-    try {
-      const result = await provider.recallTokens(
-        props.issuerId,
-        props.adminAuthBadge,
-        userAccount,
-        userBadgeResource,
-        props.userId,
-        recallAmount,
-      );
-      if (result.accept) {
-        props.onChange?.(result);
-        setSuccess(`User tokens recalled in transaction ${result.transactionId}`);
-      }
-
-      throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
-    } catch (e) {
-      setError(e as Error);
-    } finally {
-      setIsBusy(false);
+    if (!provider) {
+        useEffect(() => {
+            navigate("/");
+        }, []);
+        return <></>;
     }
-  };
 
-  return (
-    <Grid container spacing={2} sx={{ textAlign: "left", paddingY: 4 }}>
-      <Grid item xs={12} md={12} lg={12}>
-        <h2>Recall</h2>
-      </Grid>
-      <Grid item xs={12} md={12} lg={12}>
-        <form onSubmit={handleOnRecall}>
-          <Grid container spacing={2}>
-            <Grid item xs={4} md={4} lg={4}>
-              <TextField
-                name="recall_amount"
-                placeholder="Recall amount"
-                label="Recall amount"
-                fullWidth
-                required
-                type="number"
-                value={recallAmount}
-                onChange={(e) => setRecallAmount(parseInt(e.target.value))}
-              />
-            </Grid>
-            <Grid item xs={4} md={4} lg={4}>
-              <Button variant="contained" type="submit" disabled={isBusy || !recallAmount} color="secondary">
-                Recall
-              </Button>
-            </Grid>
-          </Grid>
-        </form>
-      </Grid>
+    const handleOnRecall = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsBusy(true);
+        setSuccess(null);
+        setError(null);
 
-      {error && (
-        <Grid item xs={12} md={12} lg={12}>
-          <Alert severity="error">{error.message}</Alert>
+        try {
+            const result = await provider.recallTokens(
+                `component_${props.issuerId}`,
+                props.adminAuthBadge,
+                userAccount,
+                userBadgeResource,
+                props.userId,
+                recallAmount,
+            );
+            if (result.accept) {
+                props.onChange?.(result);
+                setSuccess(`User tokens recalled in transaction ${result.transactionId}`);
+            }
+
+            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+        } catch (e) {
+            setError(e as Error);
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    return (
+        <Grid container spacing={2} sx={{textAlign: "left", paddingY: 4}}>
+            <Grid item xs={12} md={12} lg={12}>
+                <h2>Recall</h2>
+            </Grid>
+            <Grid item xs={12} md={12} lg={12}>
+                <form onSubmit={handleOnRecall}>
+                    <Grid container spacing={2}>
+                        <Grid item xs={4} md={4} lg={4}>
+                            <TextField
+                                name="recall_amount"
+                                placeholder="Recall amount"
+                                label="Recall amount"
+                                fullWidth
+                                required
+                                type="number"
+                                value={recallAmount}
+                                onChange={(e) => setRecallAmount(parseInt(e.target.value))}
+                            />
+                        </Grid>
+                        <Grid item xs={4} md={4} lg={4}>
+                            <Button variant="contained" type="submit" disabled={isBusy || !recallAmount}
+                                    color="secondary">
+                                Recall
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </form>
+            </Grid>
+
+            {error && (
+                <Grid item xs={12} md={12} lg={12}>
+                    <Alert severity="error">{error.message}</Alert>
+                </Grid>
+            )}
+            {success && (
+                <Grid item xs={12} md={12} lg={12}>
+                    <Alert severity="success">{success}</Alert>
+                </Grid>
+            )}
         </Grid>
-      )}
-      {success && (
-        <Grid item xs={12} md={12} lg={12}>
-          <Alert severity="success">{success}</Alert>
-        </Grid>
-      )}
-    </Grid>
-  );
+    );
 }
 
 export default RecallTokens;

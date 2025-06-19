@@ -44,6 +44,7 @@ import {RefreshOutlined} from "@mui/icons-material";
 import {AccountDetails} from "../../components/AccountDetails.tsx";
 import {Substate, TariProvider, TariSigner} from "@tari-project/tarijs-all";
 import TariWallet from "../../wallet.ts";
+import {substateIdToString} from "@tari-project/typescript-bindings";
 
 function SetTemplateForm() {
     const {settings, setTemplate} = useSettings();
@@ -114,7 +115,7 @@ function IssuerComponents() {
                 .then((resp) =>
                     Promise.all(resp.substates.map((s) => provider.getSubstate(s.substate_id).then((substate) => ({
                         address: substate.address,
-                        value: substate.value.substate.Component,
+                        value: substate.value.Component,
                     })))))
                 .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
                 .then((issuers) => setIssuers(account!.public_key, issuers))
@@ -131,7 +132,7 @@ function IssuerComponents() {
                     version: issuer.version,
                 })));
         }
-    }, [isBusy, error, issuerComponents]);
+    }, [isBusy, error]);
 
     function handleOnCreate(data: NewIssuerParams) {
         setIsBusy(true);
@@ -158,7 +159,7 @@ function IssuerComponents() {
 
                 let issuer = await convertToIssuer(provider!, {address: {substate_id: id, version}, value: val});
                 addIssuer(account!.public_key, issuer);
-                navigate(`/issuers/${id}`);
+                navigate(`/issuers/component_${id}`);
             })
             .catch((e) => setError(e))
             .finally(() => setIsBusy(false));
@@ -188,7 +189,8 @@ function IssuerRow({data}: { data: any }) {
         <>
             <TableRow>
                 <DataTableCell width={90} sx={{borderBottom: "none", textAlign: "center"}}>
-                    <Link to={`issuers/${data.substate_id.Component}`}>{data.substate_id.Component}</Link>
+                    <Link
+                        to={`issuers/${substateIdToString(data.substate_id)}`}>{substateIdToString(data.substate_id)}</Link>
                 </DataTableCell>
                 <DataTableCell>{data.version}</DataTableCell>
             </TableRow>
@@ -233,11 +235,11 @@ function InitialSetup() {
         provider.getAccount().then(setActiveAccount);
     };
 
-    useEffect(() => {
-        if (!account) {
-            loadAccount();
-        }
-    }, [account]);
+    // useEffect(() => {
+    if (!account) {
+        loadAccount();
+    }
+    // }, [account]);
 
     if (!account) {
         return <CircularProgress/>;
@@ -282,17 +284,18 @@ async function convertToIssuer<T extends TariProvider, S extends TariSigner>(pro
     const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
     const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
     const {value: vault} = await provider!.getSubstate(vaultId);
-    if (!("Vault" in vault.substate)) {
+    console.log({vaultId, vault});
+    if (!vault || !("Vault" in vault)) {
         throw new Error(`${vaultId} is not a vault`);
     }
-    const container = vault.substate.Vault.resource_container;
+    const container = vault.Vault.resource_container;
     if (!("Confidential" in container)) {
         throw new Error("Vault is not confidential");
     }
 
     const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
     const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
-    const wrappedContainer = (wrappedVault?.value.substate as any).Vault.resource_container.Fungible;
+    const wrappedContainer = (wrappedVault?.value as any).Vault.resource_container.Fungible;
 
     return {
         id: address.substate_id,

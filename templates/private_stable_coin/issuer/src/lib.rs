@@ -61,9 +61,8 @@ mod template {
                 .expect("provider_name metadata entry is required");
 
             // Create admin badge resource
-            let admin_badge = ResourceBuilder::non_fungible()
-                .with_non_fungible(NonFungibleId::from_u64(0), &(), &())
-                .build_bucket();
+            let admin_badge =
+                ResourceBuilder::non_fungible().initial_supply(Some(NonFungibleId::from_u64(0)));
 
             // Create admin access rules
             let admin_resource = admin_badge.resource_address();
@@ -79,17 +78,16 @@ mod template {
                 .build();
 
             // Create user access rules
-            let require_user = AccessRule::Restricted(Require(RequireRule::AnyOf(vec![
-                admin_resource.into(),
-                user_auth_resource.into(),
-            ])));
+            let require_user = rule!(any_of(
+                resource(admin_resource),
+                resource(user_auth_resource)
+            ));
 
-            let component_alloc = CallerContext::allocate_component_address();
+            let component_alloc = CallerContext::allocate_component_address(None);
             // Create tokens resource with initial supply
             let initial_supply_proof =
                 ConfidentialOutputStatement::mint_revealed(initial_token_supply);
             let initial_tokens = ResourceBuilder::confidential()
-                .initial_supply(initial_supply_proof)
                 .with_metadata(token_metadata.clone())
                 .with_token_symbol(&token_symbol)
                 // Access rules
@@ -98,20 +96,19 @@ mod template {
                 .depositable(require_user.clone())
                 .withdrawable(require_user.clone())
                 .recallable(require_admin.clone())
-                .with_authorization_hook(*component_alloc.address(), "authorize_user_deposit")
+                .with_authorization_hook(component_alloc.get_address(), "authorize_user_deposit")
                 .with_view_key(view_key)
-                .build_bucket();
+                .initial_supply(initial_supply_proof);
 
             // Create tokens resource with initial supply
             let wrapped_token = if enable_wrapped_token {
                 let wrapped_resource = ResourceBuilder::fungible()
-                    .initial_supply(initial_token_supply)
                     .with_metadata(token_metadata)
                     .with_token_symbol(format!("w{token_symbol}"))
                     // Access rules
                     .mintable(require_admin.clone())
                     .burnable(require_admin.clone())
-                    .build_bucket();
+                    .initial_supply(initial_token_supply);
 
                 Some(WrappedExchangeToken {
                     vault: Vault::from_bucket(wrapped_resource),
@@ -341,7 +338,7 @@ mod template {
         pub fn recall_tokens(
             &mut self,
             user_id: UserId,
-            commitments: BTreeSet<PedersonCommitmentBytes>,
+            commitments: BTreeSet<PedersenCommitmentBytes>,
             amount: Amount,
         ) {
             // Fetch the user badge
