@@ -9,7 +9,7 @@ import {
     TransactionStatus,
     Substate as TariJsSubstate,
 } from "@tari-project/tarijs-all";
-import {NewIssuerParams, SimpleTransactionResult} from "./types.ts";
+import {NewIssuerParams, SimpleTransactionResult, splitOnce} from "./types.ts";
 import {
     ComponentAddress,
     Instruction,
@@ -106,7 +106,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const instructions = [
             {
                 CallFunction: {
-                    template_address: templateAddress,
+                    address: templateAddress,
                     function: "instantiate",
                     args: [
                         params.initialSupply,
@@ -119,18 +119,18 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                     ],
                 },
             },
-            {PutLastInstructionOutputOnWorkspace: {key: [0]}},
+            {PutLastInstructionOutputOnWorkspace: {key: 0}},
             {
                 CallMethod: {
                     call: {Address: account.address},
                     method: "deposit",
-                    args: [{Workspace: [0]}],
+                    args: [{Workspace: {id: 0, offset: null}}],
                 },
             },
             "DropAllProofsInWorkspace",
         ] as Instruction[];
 
-        const inputs = [{substate_id: {Component: account.address}, version: null}] as SubstateRequirement[];
+        const inputs = [{substate_id: account.address, version: null}] as SubstateRequirement[];
 
         const request = {
             account_id: account.account_id,
@@ -190,7 +190,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                         CallMethod: {
                             call: {Address: destAccount},
                             method: "deposit",
-                            args: [{Workspace: 1}],
+                            args: [{Workspace: {id: 1}}],
                         },
                     },
                 ] as Instruction[],
@@ -208,13 +208,13 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                 CallMethod: {
                     call: {Address: userAccount},
                     method: "deposit",
-                    args: [{Workspace: 1}],
+                    args: [{Workspace: {id: 1, offset: null}}],
                 },
             },
         ] as Instruction[];
 
         const extraInputs = [
-            {substate_id: {Component: userAccount}, version: null},
+            {substate_id: userAccount, version: null},
         ];
 
         return await this.callRestrictedMethod(
@@ -237,7 +237,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
     ): Promise<SimpleTransactionResult> {
         const extraInputs = [
             {
-                substate_id: {NonFungible: `nft_${userBadgeResource}_u64_${userId}`},
+                substate_id: `nft_${userBadgeResource}_u64_${userId}`,
                 version: null,
             },
         ] as SubstateRequirement[];
@@ -267,14 +267,14 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                     CallMethod: {
                         call: {Address: userAccount},
                         method: "deposit",
-                        args: [{Workspace: 1}],
+                        args: [{Workspace: {id: 1, offset: null}}],
                     },
                 },
             ] as Instruction[];
 
         const extraInputs = [
             {
-                substate_id: {NonFungible: `nft_${userBadgeResource}_u64_${userId}`},
+                substate_id: `nft_${userBadgeResource}_u64_${userId}`,
                 version: null,
             },
         ] as SubstateRequirement[];
@@ -300,7 +300,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
     ): Promise<SimpleTransactionResult> {
         const extraInputs = [
             {
-                substate_id: {NonFungible: `nft_${userBadgeResource}_u64_${userId}`},
+                substate_id: `nft_${userBadgeResource}_u64_${userId}`,
                 version: null,
             },
         ] as SubstateRequirement[];
@@ -327,11 +327,11 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
     ): Promise<SimpleTransactionResult> {
         const extraInputs = [
             {
-                substate_id: {NonFungible: `nft_${userBadgeResource}_u64_${userId}`},
+                substate_id: `nft_${userBadgeResource}_u64_${userId}`,
                 version: null,
             },
             {
-                substate_id: {Component: userAccount},
+                substate_id: userAccount,
                 version: null,
             },
         ] as SubstateRequirement[];
@@ -378,48 +378,49 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const instructions = [
             {
                 CallMethod: {
-                    component_address: userAccount,
+                    call: {Address: userAccount},
                     method: "create_proof_for_resource",
                     args: [userBadgeResource],
                 },
             },
-            {PutLastInstructionOutputOnWorkspace: {key: [0]}},
+            {PutLastInstructionOutputOnWorkspace: {key: 0}},
             {
                 CallMethod: {
-                    component_address: userAccount,
+                    call: {Address: userAccount},
                     method: "withdraw",
                     args: [stableCoinResource, amount],
                 },
             },
-            {PutLastInstructionOutputOnWorkspace: {key: [1]}},
+            {PutLastInstructionOutputOnWorkspace: {key: 1}},
             {
                 CallMethod: {
-                    component_address: issuerComponent,
+                    call: {Address: issuerComponent},
                     method: "exchange_stable_for_wrapped_tokens",
-                    args: [{Workspace: [0]}, {Workspace: [1]}],
+                    args: [{Workspace: {id: 0, offset: null}}, {Workspace: {id: 1, offset: null}}],
                 },
             },
-            {PutLastInstructionOutputOnWorkspace: {key: [2]}},
+            {PutLastInstructionOutputOnWorkspace: {key: 2}},
             {
                 CallMethod: {
-                    component_address: userAccount,
+                    call: {Address: userAccount},
                     method: "deposit",
-                    args: [{Workspace: [2]}],
+                    args: [{Workspace: {id: 2, offset: null}}],
                 },
             },
             "DropAllProofsInWorkspace",
         ] as Instruction[];
 
+        const [_t, userBadgeResx] = splitOnce(userBadgeResource, '_')!;
         const required_substates = [
-            {substate_id: {Component: userAccount}, version: null},
-            {substate_id: {Component: issuerComponent}, version: null},
-            {substate_id: {Resource: userBadgeResource}, version: null},
+            {substate_id: userAccount, version: null},
+            {substate_id: issuerComponent, version: null},
+            {substate_id: userBadgeResource, version: null},
             {
-                substate_id: {NonFungible: `nft_${userBadgeResource}_u64_${userId}`},
+                substate_id: `nft_${userBadgeResx}_u64_${userId}`,
                 version: null,
             },
             {
-                substate_id: {Resource: stableCoinResource},
+                substate_id: stableCoinResource,
                 version: null,
             },
         ] as SubstateRequirement[];
@@ -449,7 +450,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
             {PutLastInstructionOutputOnWorkspace: {key: 0}},
             {
                 CallMethod: {
-                    component_address: userAccount,
+                    call: {Address: userAccount},
                     method: "withdraw",
                     args: [wrappedCoinResource, amount],
                 },
@@ -457,7 +458,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
             {PutLastInstructionOutputOnWorkspace: {key: 1}},
             {
                 CallMethod: {
-                    component_address: issuerComponent,
+                    call: {Address: issuerComponent},
                     method: "exchange_wrapped_for_stable_tokens",
                     args: [{Workspace: 0}, {Workspace: 1}],
                 },
@@ -474,15 +475,15 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         ] as Instruction[];
 
         const required_substates = [
-            {substate_id: {Component: userAccount}, version: null},
-            {substate_id: {Component: issuerComponent}, version: null},
-            {substate_id: {Resource: userBadgeResource}, version: null},
+            {substate_id: userAccount, version: null},
+            {substate_id: issuerComponent, version: null},
+            {substate_id: userBadgeResource, version: null},
             {
-                substate_id: {NonFungible: `nft_${userBadgeResource}_u64_${userId}`},
+                substate_id: `nft_${userBadgeResource}_u64_${userId}`,
                 version: null,
             },
             {
-                substate_id: {Resource: wrappedCoinResource},
+                substate_id: wrappedCoinResource,
                 version: null,
             },
         ] as SubstateRequirement[];
@@ -499,6 +500,11 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         extraInputs: Array<SubstateRequirement>,
         fee: number = 2000,
     ) {
+        // HACK to avoid doing this everywhere
+        if (!component_address.startsWith("component_")) {
+            component_address = `component_${component_address}`;
+        }
+
         const account = await this.signer.getAccount();
 
         const extra = extraInstructions(account);
@@ -554,6 +560,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const request = {
             account_id: account.account_id,
             transaction: {
+                network: Network.LocalNet,
                 fee_instructions,
                 instructions,
                 inputs,

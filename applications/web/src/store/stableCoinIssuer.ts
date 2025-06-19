@@ -20,47 +20,95 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import { create } from "zustand";
-import { ResourceAddress, VaultId } from "@tari-project/typescript-bindings";
+import {create} from "zustand";
+import {ComponentAddress, ResourceAddress, VaultId} from "@tari-project/typescript-bindings";
 
-export interface StableCoinIssuer {
-  id: string;
-  version: number;
-  vault: {
-    id: string;
-    resourceAddress: string;
-    revealedAmount: number;
-  };
-  wrappedToken: WrappedExchangeToken | null;
-  adminAuthResource: string;
-  userAuthResource: string;
+export class StableCoinIssuer {
+    public id: string;
+    public version: number;
+    public vault: {
+        id: string;
+        resourceAddress: string;
+        revealedAmount: number;
+    };
+    public wrappedToken: WrappedExchangeToken | null;
+    public adminAuthResource: string;
+    public userAuthResource: string;
+
+    constructor(
+        id: string,
+        version: number,
+        vaultId: VaultId,
+        vaultResourceAddress: ResourceAddress,
+        revealedAmount: number,
+        wrappedToken: WrappedExchangeToken | null,
+        adminAuthResource: ResourceAddress,
+        userAuthResource: ResourceAddress
+    ) {
+        this.id = id;
+        this.version = version;
+        this.vault = {
+            id: vaultId.toString(),
+            resourceAddress: vaultResourceAddress.toString(),
+            revealedAmount
+        };
+        this.wrappedToken = wrappedToken;
+        this.adminAuthResource = adminAuthResource.toString();
+        this.userAuthResource = userAuthResource.toString();
+    }
+
+    static new(
+        id: string,
+        version: number,
+        vaultId: VaultId,
+        vaultResourceAddress: ResourceAddress,
+        revealedAmount: number,
+        wrappedToken: WrappedExchangeToken | null,
+        adminAuthResource: ResourceAddress,
+        userAuthResource: ResourceAddress
+    ): StableCoinIssuer {
+        return new StableCoinIssuer(
+            id,
+            version,
+            vaultId,
+            vaultResourceAddress,
+            revealedAmount,
+            wrappedToken,
+            adminAuthResource,
+            userAuthResource
+        );
+    }
+
+    get issuerComponentAddress(): ComponentAddress {
+        return `component_${this.id}`;
+    }
 }
 
 export interface WrappedExchangeToken {
-  vault: VaultId;
-  resource: ResourceAddress;
-  balance: number;
-  exchange_fee: ExchangeFee;
+    vault: VaultId;
+    resource: ResourceAddress;
+    balance: number;
+    exchange_fee: ExchangeFee;
 }
 
 export type ExchangeFee = { Fixed: number } | { Percentage: number };
 
 export interface Store {
-  activeIssuer: StableCoinIssuer | null;
+    activeIssuer: StableCoinIssuer | null;
 
-  setActiveIssuer(issuer: StableCoinIssuer | null): void;
+    setActiveIssuer(issuer: StableCoinIssuer | null): void;
 
-  clearActiveIssuer(): void;
+    clearActiveIssuer(): void;
 }
 
 const useActiveIssuer = create<Store>()((set) => ({
-  activeIssuer: null,
-  setActiveIssuer(activeIssuer) {
-    set({ activeIssuer });
-  },
-  clearActiveIssuer() {
-    set({ activeIssuer: null });
-  },
+    activeIssuer: null,
+    setActiveIssuer(activeIssuer) {
+        set({activeIssuer});
+    },
+    clearActiveIssuer() {
+        set({activeIssuer: null});
+    },
 }));
 
 export default useActiveIssuer;
