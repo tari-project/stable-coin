@@ -27,11 +27,10 @@ import useTariProvider from "../../store/provider.ts";
 import {Alert, Table, TableBody, TableHead, TableRow, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
 import {ComponentAddress, ResourceAddress} from "@tari-project/typescript-bindings";
-import {convertCborValue} from "../../cbor.ts";
-import * as cbor from "../../cbor.ts";
-import {SimpleTransactionResult, splitOnce} from "../../types.ts";
+import {SimpleTransactionResult,} from "../../types.ts";
 import {DataTableCell} from "../../components/StyledComponents.ts";
 import {useNavigate} from "react-router-dom";
+import {getCborValueByPath, parseCbor} from "@tari-project/tarijs-all";
 
 interface Props {
     issuerId: ComponentAddress;
@@ -83,7 +82,7 @@ function ManageUser(props: Props) {
     const handleOnRevoke = async () => {
         await runQuery(async () => {
             const substate = await provider.getSubstate(userAccount) as any;
-            const vaults = cbor.getValueByPath(substate.value.Component.body.state, "$.vaults");
+            const vaults = getCborValueByPath(substate.value.Component.body.state, "$.vaults");
             const vaultToRevoke = vaults[userBadgeResource];
             if (!vaultToRevoke) {
                 throw new Error(`User does not have a stable coin user badge ${userBadgeResource}`);
@@ -147,11 +146,11 @@ function ManageUser(props: Props) {
             <Grid item xs={12} md={12} lg={12}>
                 <h3>Data</h3>
             </Grid>
-            <UserData userData={convertCborValue(props.badgeData)}/>
+            <UserData userData={parseCbor(props.badgeData)}/>
             <Grid item xs={12} md={12} lg={12}>
                 <h3>Mutable Data</h3>
             </Grid>
-            <UserData userData={convertCborValue(props.badgeMutableData)}/>
+            <UserData userData={parseCbor(props.badgeMutableData)}/>
             <h3>Wrapped Token</h3>
             <Grid item xs={12} md={12} lg={12}>
                 <form onSubmit={handleOnSave}>

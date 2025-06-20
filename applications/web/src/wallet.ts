@@ -156,7 +156,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         badge_resource: ResourceAddress,
         amount: number,
         fee: number = 2000,
-    ) {
+    ): SimpleTransactionResult {
         return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, [], fee);
     }
 
@@ -499,7 +499,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         extraInstructions: (account: AccountData) => Array<Instruction>,
         extraInputs: Array<SubstateRequirement>,
         fee: number = 2000,
-    ) {
+    ): SimpleTransactionResult {
         // HACK to avoid doing this everywhere
         if (!component_address.startsWith("component_")) {
             component_address = `component_${component_address}`;
