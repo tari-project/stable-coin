@@ -42,7 +42,7 @@ import useActiveAccount from "../../store/account.ts";
 import IconButton from "@mui/material/IconButton";
 import {RefreshOutlined} from "@mui/icons-material";
 import {AccountDetails} from "../../components/AccountDetails.tsx";
-import {Substate, TariProvider, TariSigner} from "@tari-project/tarijs-all";
+import {getCborValueByPath, Substate, TariProvider, TariSigner} from "@tari-project/tarijs-all";
 import TariWallet from "../../wallet.ts";
 import {substateIdToString} from "@tari-project/typescript-bindings";
 
@@ -108,20 +108,18 @@ function IssuerComponents() {
     }
 
     useEffect(() => {
-        if (provider.providerName() === "WalletDaemon") {
-            setIsBusy(true);
-            provider
-                .listSubstates(settings.template, "Component")
-                .then((resp) =>
-                    Promise.all(resp.substates.map((s) => provider.getSubstate(s.substate_id).then((substate) => ({
-                        address: substate.address,
-                        value: substate.value.Component,
-                    })))))
-                .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
-                .then((issuers) => setIssuers(account!.public_key, issuers))
-                .catch((e: Error) => setError(e))
-                .finally(() => setIsBusy(false));
-        }
+        setIsBusy(true);
+        provider
+            .listSubstates(settings.template, "Component")
+            .then((resp) =>
+                Promise.all(resp.substates.map((s) => provider.getSubstate(s.substate_id).then((substate) => ({
+                    address: substate.address,
+                    value: substate.value.Component,
+                })))))
+            .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
+            .then((issuers) => setIssuers(account!.public_key, issuers))
+            .catch((e: Error) => setError(e))
+            .finally(() => setIsBusy(false));
     }, []);
 
     useEffect(() => {
@@ -161,7 +159,10 @@ function IssuerComponents() {
                 addIssuer(account!.public_key, issuer);
                 navigate(`/issuers/component_${id}`);
             })
-            .catch((e) => setError(e))
+            .catch((e) => {
+                console.log(e);
+                setError(e)
+            })
             .finally(() => setIsBusy(false));
     }
 
@@ -277,12 +278,12 @@ function InitialSetup() {
 }
 
 
-async function convertToIssuer<T extends TariProvider, S extends TariSigner>(provider: TariWallet<T, S>, issuer: Substate): Promise<StableCoinIssuer> {
+export async function convertToIssuer<T extends TariProvider, S extends TariSigner>(provider: TariWallet<T, S>, issuer: Substate): Promise<StableCoinIssuer> {
     const {value: component, address} = issuer;
     const structMap = component.body.state as CborValue;
-    const vaultId = cbor.getValueByPath(structMap, "$.token_vault");
-    const adminAuthResource = cbor.getValueByPath(structMap, "$.admin_auth_resource");
-    const userAuthResource = cbor.getValueByPath(structMap, "$.user_auth_resource");
+    const vaultId = getCborValueByPath(structMap, "$.token_vault");
+    const adminAuthResource = getCborValueByPath(structMap, "$.admin_auth_resource");
+    const userAuthResource = getCborValueByPath(structMap, "$.user_auth_resource");
     const {value: vault} = await provider!.getSubstate(vaultId);
     console.log({vaultId, vault});
     if (!vault || !("Vault" in vault)) {
@@ -293,9 +294,15 @@ async function convertToIssuer<T extends TariProvider, S extends TariSigner>(pro
         throw new Error("Vault is not confidential");
     }
 
-    const wrappedToken = cbor.getValueByPath(structMap, "$.wrapped_token");
-    const wrappedVault = wrappedToken ? await provider!.getSubstate(wrappedToken.vault) : null;
-    const wrappedContainer = (wrappedVault?.value as any).Vault.resource_container.Fungible;
+    const wrappedTokenComponent = getCborValueByPath(structMap, "$.wrapped_token");
+    const wrappedVault = wrappedTokenComponent ? await provider!.getSubstate(wrappedTokenComponent.vault) : null;
+    const wrappedContainer = (wrappedVault?.value as any)?.Vault.resource_container.Fungible;
+
+    const wrappedToken = wrappedContainer && {
+        resource: wrappedContainer.address,
+        balance: wrappedContainer.amount,
+        ...wrappedTokenComponent,
+    };
 
     return {
         id: address.substate_id,
@@ -307,11 +314,7 @@ async function convertToIssuer<T extends TariProvider, S extends TariSigner>(pro
         },
         adminAuthResource,
         userAuthResource,
-        wrappedToken: {
-            resource: wrappedContainer.address,
-            balance: wrappedContainer.amount,
-            ...wrappedToken,
-        },
+        wrappedToken,
     } as StableCoinIssuer;
 }
 

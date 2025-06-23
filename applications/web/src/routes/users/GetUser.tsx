@@ -34,10 +34,10 @@ import {ComponentAddress, ResourceAddress, Vault, VaultId} from "@tari-project/t
 import RecallTokens from "./RecallTokens.tsx";
 import Transfers from "./Transfers.tsx";
 import useActiveIssuer from "../../store/stableCoinIssuer.ts";
-import {convertCborValue} from "../../cbor";
 import UserVault from "./UserVault.tsx";
 import {useNavigate} from "react-router-dom";
 import {splitOnce} from "../../types.ts";
+import {getCborValueByPath, parseCbor} from "@tari-project/tarijs-all";
 
 interface Props {
     issuerId: ComponentAddress;
@@ -94,7 +94,7 @@ function GetUser(props: Props) {
             if (!("NonFungible" in substate.value)) {
                 throw new Error(`User badge is not a non-fungible token`);
             }
-            const userAccountId = cbor.getValueByPath(substate.value.NonFungible?.data, "$.user_account");
+            const userAccountId = getCborValueByPath(substate.value.NonFungible?.data, "$.user_account");
             setUserData(substate as object);
 
             const stableCoinResource = activeIssuer?.vault?.resourceAddress;
@@ -105,7 +105,7 @@ function GetUser(props: Props) {
             if (!("Component" in userAccount.value)) {
                 throw new Error(`User account is not a component`);
             }
-            const vaultId = cbor.getValueByPath(
+            const vaultId = getCborValueByPath(
                 userAccount.value.Component.body.state,
                 `$.vaults.${stableCoinResource}`,
             );
@@ -179,8 +179,8 @@ function GetUser(props: Props) {
                                 adminAuthBadge={props.adminAuthBadge}
                                 userBadge={userData.address.substate_id}
                                 userId={formValues.userId}
-                                badgeData={convertCborValue(userData.value.NonFungible.data)}
-                                badgeMutableData={convertCborValue(userData.value.NonFungible.mutable_data)}
+                                badgeData={parseCbor(userData.value.NonFungible.data)}
+                                badgeMutableData={parseCbor(userData.value.NonFungible.mutable_data)}
                                 onChange={() => getUser(formValues.userId)}
                             />
                             <RecallTokens
@@ -188,13 +188,13 @@ function GetUser(props: Props) {
                                 adminAuthBadge={props.adminAuthBadge}
                                 userBadge={userData.address.substate_id}
                                 userId={formValues.userId}
-                                badgeData={convertCborValue(userData.value.NonFungible.data)}
-                                badgeMutableData={convertCborValue(userData.value.NonFungible.mutable_data)}
+                                badgeData={parseCbor(userData.value.NonFungible.data)}
+                                badgeMutableData={parseCbor(userData.value.NonFungible.mutable_data)}
                                 onChange={() => getUser(formValues.userId)}
                             />
                             <Transfers
                                 issuer={activeIssuer!}
-                                userAccount={cbor.getValueByPath(userData.value.NonFungible.data, "$.user_account")!}
+                                userAccount={getCborValueByPath(userData.value.NonFungible.data, "$.user_account")!}
                                 onTransactionResult={() => getUser(formValues.userId)}
                             />
                         </>

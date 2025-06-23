@@ -69,7 +69,7 @@ function RecallTokens(props: Props) {
 
         try {
             const result = await provider.recallTokens(
-                `component_${props.issuerId}`,
+                props.issuerId,
                 props.adminAuthBadge,
                 userAccount,
                 userBadgeResource,

@@ -53,7 +53,7 @@ function Transfers({issuer, onTransactionResult, onTransactionSubmit, userAccoun
             onTransactionSubmit && onTransactionSubmit();
             setIsBusy(true);
             const result = await provider.transfer(
-                issuer.issuerComponentAddress,
+                issuer.id,
                 issuer.adminAuthResource,
                 userAccount,
                 formValues.transferAmount.trim(),

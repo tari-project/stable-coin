@@ -68,7 +68,7 @@ function AddUser(props: Props) {
         setSuccess(null);
         try {
             const result = await provider!.createUser(
-                `component_${props.issuerId}`, props.adminAuthBadge, values.userId, values.userAccount);
+                props.issuerId, props.adminAuthBadge, values.userId, values.userAccount);
             if (result.rejectReason) {
                 setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
                 return;
