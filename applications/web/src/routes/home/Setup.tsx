@@ -278,7 +278,7 @@ function InitialSetup() {
 }
 
 
-async function convertToIssuer<T extends TariProvider, S extends TariSigner>(provider: TariWallet<T, S>, issuer: Substate): Promise<StableCoinIssuer> {
+export async function convertToIssuer<T extends TariProvider, S extends TariSigner>(provider: TariWallet<T, S>, issuer: Substate): Promise<StableCoinIssuer> {
     const {value: component, address} = issuer;
     const structMap = component.body.state as CborValue;
     const vaultId = getCborValueByPath(structMap, "$.token_vault");

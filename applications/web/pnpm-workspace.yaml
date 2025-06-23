@@ -1,2 +1,5 @@
 ignoredBuiltDependencies:
   - esbuild
+
+overrides:
+  '@tari-project/tarijs-all': link:../../../js/packages/tarijs

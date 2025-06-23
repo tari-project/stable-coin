@@ -500,11 +500,6 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         extraInputs: Array<SubstateRequirement>,
         fee: number = 2000,
     ): SimpleTransactionResult {
-        // HACK to avoid doing this everywhere
-        if (!component_address.startsWith("component_")) {
-            component_address = `component_${component_address}`;
-        }
-
         const account = await this.signer.getAccount();
 
         const extra = extraInstructions(account);

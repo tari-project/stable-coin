@@ -30,7 +30,7 @@ import {ComponentAddress, ResourceAddress} from "@tari-project/typescript-bindin
 import {SimpleTransactionResult,} from "../../types.ts";
 import {DataTableCell} from "../../components/StyledComponents.ts";
 import {useNavigate} from "react-router-dom";
-import {getCborValueByPath, parseCbor} from "@tari-project/tarijs-all";
+import {getCborValueByPath} from "@tari-project/tarijs-all";
 
 interface Props {
     issuerId: ComponentAddress;
@@ -89,7 +89,7 @@ function ManageUser(props: Props) {
             }
 
             const result = await provider.revokeUserAccess(
-                `component_${props.issuerId}`,
+                props.issuerId,
                 props.adminAuthBadge,
                 userBadgeResource,
                 props.userId,
@@ -107,7 +107,7 @@ function ManageUser(props: Props) {
     const handleOnReinstate = async () => {
         await runQuery(async () => {
             const result = await provider.reinstateUserAccess(
-                `component_${props.issuerId}`,
+                props.issuerId,
                 props.adminAuthBadge,
                 userBadgeResource,
                 props.userId,
@@ -126,7 +126,7 @@ function ManageUser(props: Props) {
         e.preventDefault();
         await runQuery(async () => {
             const result = await provider.setUserExchangeLimit(
-                `component_${props.issuerId}`,
+                props.issuerId,
                 props.adminAuthBadge,
                 userBadgeResource,
                 props.userId,
@@ -146,11 +146,11 @@ function ManageUser(props: Props) {
             <Grid item xs={12} md={12} lg={12}>
                 <h3>Data</h3>
             </Grid>
-            <UserData userData={parseCbor(props.badgeData)}/>
+            <UserData userData={props.badgeData}/>
             <Grid item xs={12} md={12} lg={12}>
                 <h3>Mutable Data</h3>
             </Grid>
-            <UserData userData={parseCbor(props.badgeMutableData)}/>
+            <UserData userData={props.badgeMutableData}/>
             <h3>Wrapped Token</h3>
             <Grid item xs={12} md={12} lg={12}>
                 <form onSubmit={handleOnSave}>
