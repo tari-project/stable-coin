@@ -30,13 +30,11 @@ use tari_template_lib::prelude::*;
 #[template]
 mod template {
     use super::*;
-    use crate::user_data::Account;
     use crate::wrapped_exchange_token::{ExchangeFee, WrappedExchangeToken};
     use std::collections::BTreeSet;
-    use tari_template_lib::args::LogLevel;
     use tari_template_lib::engine;
 
-    const DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE: ExchangeFee = ExchangeFee::Fixed(Amount::new(5));
+    const DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE: ExchangeFee = ExchangeFee::Fixed(amount!("5"));
 
     pub struct TariStableCoin {
         token_vault: Vault,
@@ -44,6 +42,7 @@ mod template {
         admin_auth_resource: ResourceAddress,
         blacklisted_users: Vault,
         wrapped_token: Option<WrappedExchangeToken>,
+        total_supply: Amount,
     }
 
     impl TariStableCoin {
@@ -133,6 +132,7 @@ mod template {
                 admin_auth_resource: admin_badge.resource_address(),
                 blacklisted_users: Vault::new_empty(user_auth_resource),
                 wrapped_token,
+                total_supply: initial_token_supply,
             })
             .with_address_allocation(component_alloc)
             .with_access_rules(component_access_rules)
@@ -149,15 +149,15 @@ mod template {
                     let Some(component_state) = caller.component_state() else {
                         panic!("deposit not permitted from static template function")
                     };
-                    engine().emit_log(
-                        LogLevel::Info,
-                        format!(
-                            "Authorizing deposit for user with component {}",
-                            caller.component().unwrap()
-                        ),
+                    info!(
+                        "Authorizing deposit for user with component {}",
+                        caller.component().unwrap()
                     );
-                    let user_account = tari_bor::from_value::<Account>(component_state).unwrap();
-                    let vault = user_account.get_vault(&self.user_auth_resource);
+                    let user_account =
+                        Account::from_value(component_state).expect("not called from an account");
+                    let vault = user_account
+                        .get_vault_by_resource(&self.user_auth_resource)
+                        .expect("This account does not have permission to deposit");
 
                     // User must own a badge of this user auth resource. The badge may be locked when sending to self.
                     if vault.balance().is_zero() && vault.locked_balance().is_zero() {
@@ -175,6 +175,7 @@ mod template {
             let proof = ConfidentialOutputStatement::mint_revealed(amount);
             let new_tokens = self.token_vault_manager().mint_confidential(proof);
             self.token_vault.deposit(new_tokens);
+            self.total_supply += amount;
 
             if let Some(ref mut wrapped_token) = self.wrapped_token {
                 let new_tokens =
@@ -191,6 +192,7 @@ mod template {
 
             let tokens = self.token_vault.withdraw_confidential(proof);
             tokens.burn();
+            self.total_supply -= amount;
 
             if let Some(ref mut wrapped_token) = self.wrapped_token {
                 let wrapped_tokens = wrapped_token.vault_mut().withdraw(amount);
@@ -204,7 +206,7 @@ mod template {
         }
 
         pub fn total_supply(&self) -> Amount {
-            self.token_vault_manager().total_supply()
+            self.total_supply
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
@@ -348,7 +350,9 @@ mod template {
             let component_manager = engine().component_manager(user.user_account);
             let account = component_manager.get_state::<Account>();
 
-            let vault = account.get_vault(&self.token_vault.resource_address());
+            let vault = account
+                .get_vault_by_resource(&self.token_vault.resource_address())
+                .expect("User account does not have a stable coin vault");
             let vault_id = vault.vault_id();
             let num_commitments = commitments.len();
 
@@ -386,7 +390,7 @@ mod template {
             user_account: ComponentAddress,
         ) -> Bucket {
             // TODO: configurable?
-            const DEFAULT_EXCHANGE_LIMIT: Amount = Amount::new(1_000);
+            const DEFAULT_EXCHANGE_LIMIT: Amount = amount!("1000");
 
             let badge = self.user_badge_manager().mint_non_fungible(
                 user_id.into(),

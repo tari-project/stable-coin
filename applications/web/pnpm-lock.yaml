@@ -11,6 +11,12 @@ importers:
 
   .:
     dependencies:
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.1.8)(react@19.1.0)
+      '@emotion/styled':
+        specifier: ^11.14.0
+        version: 11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)
       '@mui/icons-material':
         specifier: ^6.4.3
         version: 6.4.12(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)
@@ -24,8 +30,8 @@ importers:
         specifier: link:../../../js/packages/tarijs
         version: link:../../../js/packages/tarijs
       '@tari-project/typescript-bindings':
-        specifier: ^1.10.1
-        version: 1.10.1
+        specifier: file:../../../dan/bindings
+        version: file:../../../dan/bindings
       '@tari-project/wallet_jrpc_client':
         specifier: ^1.6.2
         version: 1.6.2
@@ -51,12 +57,6 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@types/react@19.1.8)(react@19.1.0)(use-sync-external-store@1.2.0(react@19.1.0))
     devDependencies:
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.1.8)(react@19.1.0)
-      '@emotion/styled':
-        specifier: ^11.14.0
-        version: 11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)
       '@esbuild-plugins/node-globals-polyfill':
         specifier: ^0.2.3
         version: 0.2.3(esbuild@0.25.5)
@@ -759,8 +759,8 @@ packages:
   '@swc/types@0.1.22':
     resolution: {integrity: sha512-D13mY/ZA4PPEFSy6acki9eBT/3WgjMoRqNcdpIvjaYLQ44Xk5BdaL7UkDxAh6Z9UOe7tCCp67BVmZCojYp9owg==}
 
-  '@tari-project/typescript-bindings@1.10.1':
-    resolution: {integrity: sha512-bJ4LT/935dHjAo4GNUhSDHuAEnu36lJP6EizE2xTgxn+FvSHYIGG7qdF0MlUDxq8F/0ij6pUNnuf+bdIH1qgSQ==}
+  '@tari-project/typescript-bindings@file:../../../dan/bindings':
+    resolution: {directory: ../../../dan/bindings, type: directory}
 
   '@tari-project/wallet_jrpc_client@1.6.2':
     resolution: {integrity: sha512-uY/keWkZL7M4LqFSXghg6Lt2N2/e6YmtnlLoe73DN4pcfECgmY/hAs+DvBojmCj4Db/8X5BKnQkY2SDhwlwLwQ==}
@@ -2074,7 +2074,7 @@ snapshots:
     dependencies:
       '@swc/counter': 0.1.3
 
-  '@tari-project/typescript-bindings@1.10.1': {}
+  '@tari-project/typescript-bindings@file:../../../dan/bindings': {}
 
   '@tari-project/wallet_jrpc_client@1.6.2':
     dependencies:

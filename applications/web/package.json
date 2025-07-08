@@ -16,7 +16,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/x-data-grid": "^7.25.0",
     "@tari-project/tarijs-all": "^0.10.1",
-    "@tari-project/typescript-bindings": "^1.10.1",
+    "@tari-project/typescript-bindings": "file:../../../dan/bindings",
     "@tari-project/wallet_jrpc_client": "^1.6.2",
     "qrcode.react": "4.2.0",
     "react": "^19.0.0",

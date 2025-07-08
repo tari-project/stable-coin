@@ -20,6 +20,7 @@ import {
     KeyBranch,
     SubstateRequirement,
 } from "@tari-project/typescript-bindings";
+import BigAmount from "../../../../dan/bindings/src/helpers/BigAmount.ts";
 
 export default class TariWallet<TProvider extends TariProvider, TSigner extends TariSigner> {
     private provider: TProvider;
@@ -109,7 +110,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                     address: templateAddress,
                     function: "instantiate",
                     args: [
-                        params.initialSupply,
+                        BigAmount.from(params.initialSupply),
                         params.tokenSymbol,
                         Object.keys(params.tokenMetadata)
                             .map((k) => `${k}=${params.tokenMetadata[k as keyof object]}`)
@@ -340,7 +341,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
             issuerComponent,
             adminBadgeResource,
             "recall_tokens",
-            [userId, [], amount],
+            [userId, [], BigAmount.from(amount)],
             empty,
             extraInputs,
             fee,
@@ -388,7 +389,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                 CallMethod: {
                     call: {Address: userAccount},
                     method: "withdraw",
-                    args: [stableCoinResource, amount],
+                    args: [stableCoinResource, BigAmount.from(amount)],
                 },
             },
             {PutLastInstructionOutputOnWorkspace: {key: 1}},
@@ -452,7 +453,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                 CallMethod: {
                     call: {Address: userAccount},
                     method: "withdraw",
-                    args: [wrappedCoinResource, amount],
+                    args: [wrappedCoinResource, BigAmount.from(amount)],
                 },
             },
             {PutLastInstructionOutputOnWorkspace: {key: 1}},

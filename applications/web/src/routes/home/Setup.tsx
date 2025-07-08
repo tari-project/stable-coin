@@ -284,8 +284,9 @@ export async function convertToIssuer<T extends TariProvider, S extends TariSign
     const vaultId = getCborValueByPath(structMap, "$.token_vault");
     const adminAuthResource = getCborValueByPath(structMap, "$.admin_auth_resource");
     const userAuthResource = getCborValueByPath(structMap, "$.user_auth_resource");
-    const {value: vault} = await provider!.getSubstate(vaultId);
-    console.log({vaultId, vault});
+    const resp = await provider!.getSubstate(vaultId);
+    const {substate: vault} = resp;
+    console.log({vaultId, vault, resp});
     if (!vault || !("Vault" in vault)) {
         throw new Error(`${vaultId} is not a vault`);
     }
