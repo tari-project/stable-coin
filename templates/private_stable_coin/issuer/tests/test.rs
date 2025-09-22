@@ -1,10 +1,8 @@
-use tari_template_lib::args;
-use tari_template_lib::models::{
-    Amount, ComponentAddress, Metadata, NonFungibleAddress, ResourceAddress,
-};
+use tari_template_lib::models::{ComponentAddress, Metadata, NonFungibleAddress, ResourceAddress};
+use tari_template_lib::types::Amount;
 use tari_template_test_tooling::crypto::RistrettoSecretKey;
 use tari_template_test_tooling::TemplateTest;
-use tari_transaction::Transaction;
+use tari_transaction::{args, Transaction};
 
 #[test]
 fn it_increases_and_decreases_supply() {
@@ -25,8 +23,7 @@ fn it_increases_and_decreases_supply() {
             .call_method(stable_coin_component, "increase_supply", args![123])
             .call_method(stable_coin_component, "total_supply", args![])
             .drop_all_proofs_in_workspace()
-            .sign(&admin_key)
-            .build(),
+            .build_and_seal(&admin_key),
         vec![admin_proof.clone()],
     );
 
@@ -34,7 +31,7 @@ fn it_increases_and_decreases_supply() {
         .decode::<Amount>()
         .unwrap();
 
-    assert_eq!(total_supply, Amount(1_000_000_123));
+    assert_eq!(total_supply, 1_000_000_123u64);
 
     let result = test.execute_expect_success(
         Transaction::builder()
@@ -43,8 +40,7 @@ fn it_increases_and_decreases_supply() {
             .call_method(stable_coin_component, "decrease_supply", args![Amount(456)])
             .call_method(stable_coin_component, "total_supply", args![])
             .drop_all_proofs_in_workspace()
-            .sign(&admin_key)
-            .build(),
+            .build_and_seal(&admin_key),
         vec![admin_proof],
     );
 
@@ -52,7 +48,7 @@ fn it_increases_and_decreases_supply() {
         .decode::<Amount>()
         .unwrap();
 
-    assert_eq!(total_supply, Amount(1_000_000_123 - 456));
+    assert_eq!(total_supply, 1_000_000_123u64 - 456);
 }
 
 #[test]
@@ -91,8 +87,7 @@ fn it_allows_users_to_transact() {
             .call_method(alice_account, "deposit", args![Workspace("badge")])
             .call_method(alice_account, "deposit", args![Workspace("funds")])
             .drop_all_proofs_in_workspace()
-            .sign(&admin_key)
-            .build(),
+            .build_and_seal(&admin_key),
         vec![admin_proof.clone()],
     );
 
@@ -106,15 +101,14 @@ fn it_allows_users_to_transact() {
             .call_method(bob_account, "deposit", args![Workspace("funds")])
             .call_method(bob_account, "balance", args![token_resource])
             .drop_all_proofs_in_workspace()
-            .sign(&alice_key)
-            .build(),
+            .build_and_seal(&alice_key),
         vec![alice_proof.clone()],
     );
 
     let bob_balance = result.finalize.execution_results[5]
         .decode::<Amount>()
         .unwrap();
-    assert_eq!(bob_balance, Amount(456));
+    assert_eq!(bob_balance, 456);
 }
 
 struct TestSetup {
@@ -130,7 +124,7 @@ struct TestSetup {
 
 fn setup() -> TestSetup {
     let mut test = TemplateTest::new(["./"]);
-    let (admin_account, admin_proof, admin_key) = test.create_owned_account();
+    let (admin_account, admin_proof, admin_key) = test.create_funded_account();
     let template = test.get_template_address("TariStableCoin");
     let mut metadata = Metadata::new();
     metadata
@@ -148,15 +142,14 @@ fn setup() -> TestSetup {
             )
             .put_last_instruction_output_on_workspace("admin_badge")
             .call_method(admin_account, "deposit", args![Workspace("admin_badge")])
-            .sign(&admin_key)
-            .build(),
+            .build_and_seal(&admin_key),
         vec![admin_proof.clone()],
     );
 
     let stable_coin_component = result
         .finalize
         .result
-        .accept()
+        .any_accept()
         .unwrap()
         .up_iter()
         .find(|(id, s)| {

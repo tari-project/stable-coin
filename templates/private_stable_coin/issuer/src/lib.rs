@@ -20,6 +20,7 @@
 //   WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //   USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+mod config;
 mod user_data;
 mod wrapped_exchange_token;
 
@@ -30,20 +31,19 @@ use tari_template_lib::prelude::*;
 #[template]
 mod template {
     use super::*;
-    use crate::user_data::Account;
-    use crate::wrapped_exchange_token::{ExchangeFee, WrappedExchangeToken};
+    use crate::config::FeeSpec;
+    use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
     use std::collections::BTreeSet;
-    use tari_template_lib::args::LogLevel;
-    use tari_template_lib::engine;
-
-    const DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE: ExchangeFee = ExchangeFee::Fixed(Amount::new(5));
+    use tari_template_lib::{args::LogLevel, engine};
 
     pub struct TariStableCoin {
+        config: StableCoinConfig,
         token_vault: Vault,
-        user_auth_resource: ResourceAddress,
-        admin_auth_resource: ResourceAddress,
+        user_auth_manager: ResourceManager,
+        admin_auth_manager: ResourceManager,
         blacklisted_users: Vault,
         wrapped_token: Option<WrappedExchangeToken>,
+        is_paused: bool,
     }
 
     impl TariStableCoin {
@@ -60,14 +60,15 @@ mod template {
                 .filter(|v| !v.trim().is_empty())
                 .expect("provider_name metadata entry is required");
 
+            let config = StableCoinConfig::default();
+
             // Create admin badge resource
             let admin_badge =
                 ResourceBuilder::non_fungible().initial_supply(Some(NonFungibleId::from_u64(0)));
 
             // Create admin access rules
             let admin_resource = admin_badge.resource_address();
-            let require_admin =
-                AccessRule::Restricted(Require(RequireRule::Require(admin_resource.into())));
+            let require_admin = rule!(resource(admin_resource));
 
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
@@ -78,27 +79,25 @@ mod template {
                 .build();
 
             // Create user access rules
-            let require_user = rule!(any_of(
+            let require_user_or_admin = rule!(any_of(
                 resource(admin_resource),
                 resource(user_auth_resource)
             ));
 
             let component_alloc = CallerContext::allocate_component_address(None);
             // Create tokens resource with initial supply
-            let initial_supply_proof =
-                ConfidentialOutputStatement::mint_revealed(initial_token_supply);
-            let initial_tokens = ResourceBuilder::confidential()
+            let initial_tokens = ResourceBuilder::stealth()
                 .with_metadata(token_metadata.clone())
                 .with_token_symbol(&token_symbol)
                 // Access rules
                 .mintable(require_admin.clone())
                 .burnable(require_admin.clone())
-                .depositable(require_user.clone())
-                .withdrawable(require_user.clone())
+                .depositable(require_user_or_admin.clone())
+                .withdrawable(require_user_or_admin.clone())
                 .recallable(require_admin.clone())
                 .with_authorization_hook(component_alloc.get_address(), "authorize_user_deposit")
                 .with_view_key(view_key)
-                .initial_supply(initial_supply_proof);
+                .initial_supply(initial_token_supply);
 
             // Create tokens resource with initial supply
             let wrapped_token = if enable_wrapped_token {
@@ -112,7 +111,6 @@ mod template {
 
                 Some(WrappedExchangeToken {
                     vault: Vault::from_bucket(wrapped_resource),
-                    exchange_fee: DEFAULT_WRAPPED_TOKEN_EXCHANGE_FEE,
                 })
             } else {
                 None
@@ -121,23 +119,32 @@ mod template {
             // Create component access rules
             let component_access_rules = AccessRules::new()
                 .add_method_rule("total_supply", AccessRule::AllowAll)
-                .add_method_rule("exchange_stable_for_wrapped_tokens", require_user.clone())
-                .add_method_rule("exchange_wrapped_for_stable_tokens", require_user.clone())
-                .add_method_rule("authorize_user_deposit", AccessRule::AllowAll)
+                .add_method_rule(
+                    "exchange_stable_for_wrapped_tokens",
+                    require_user_or_admin.clone(),
+                )
+                .add_method_rule(
+                    "exchange_wrapped_for_stable_tokens",
+                    require_user_or_admin.clone(),
+                )
+                // authorize_user_deposit is an auth hook, so needs to be callable by any user/admin
+                .add_method_rule("authorize_user_deposit", require_user_or_admin)
                 .default(require_admin);
 
             // Create component
             let _component = Component::new(Self {
+                config,
                 token_vault: Vault::from_bucket(initial_tokens),
-                user_auth_resource,
-                admin_auth_resource: admin_badge.resource_address(),
+                user_auth_manager: user_auth_resource.into(),
+                admin_auth_manager: admin_badge.resource_address().into(),
                 blacklisted_users: Vault::new_empty(user_auth_resource),
                 wrapped_token,
+                is_paused: false,
             })
             .with_address_allocation(component_alloc)
             .with_access_rules(component_access_rules)
-            // Access is controlled by anyone with an admin badge, there is no single owner
-            .with_owner_rule(OwnerRule::None)
+            // Access is controlled by anyone with an admin badge
+            .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
             .create();
 
             admin_badge
@@ -145,7 +152,11 @@ mod template {
 
         pub fn authorize_user_deposit(&self, action: ResourceAuthAction, caller: AuthHookCaller) {
             match action {
+                // Non-stealth deposits
                 ResourceAuthAction::Deposit => {
+                    if self.is_paused {
+                        panic!("Token is paused");
+                    }
                     let Some(component_state) = caller.component_state() else {
                         panic!("deposit not permitted from static template function")
                     };
@@ -156,8 +167,11 @@ mod template {
                             caller.component().unwrap()
                         ),
                     );
-                    let user_account = tari_bor::from_value::<Account>(component_state).unwrap();
-                    let vault = user_account.get_vault(&self.user_auth_resource);
+                    let user_account = Account::from_value(component_state)
+                        .expect("Deposit must be to an account");
+                    let vault = user_account
+                        .get_vault_by_resource(&self.user_auth_manager.resource_address())
+                        .expect("Caller account does not have a vault for the resource");
 
                     // User must own a badge of this user auth resource. The badge may be locked when sending to self.
                     if vault.balance().is_zero() && vault.locked_balance().is_zero() {
@@ -247,11 +261,11 @@ mod template {
                 "The bucket must contain some tokens"
             );
 
-            proof.assert_resource(self.user_auth_resource);
+            proof.assert_resource(self.user_auth_manager.resource_address());
             let badges = proof.get_non_fungibles();
             assert_eq!(badges.len(), 1, "The proof must contain exactly one badge");
             let badge = badges.into_iter().next().unwrap();
-            let badge = self.user_badge_manager().get_non_fungible(&badge);
+            let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
             let user_data = badge.get_mutable_data::<UserMutableData>();
 
@@ -266,10 +280,7 @@ mod template {
                 user_data.wrapped_exchange_limit - amount,
             );
 
-            let fee = self
-                .wrapped_token_mut()
-                .exchange_fee()
-                .calculate_fee(amount);
+            let fee = self.config.wrapped_exchange_fee.calculate_fee(amount);
             let new_amount = amount
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
@@ -296,7 +307,7 @@ mod template {
             proof: Proof,
             wrapped_bucket: Bucket,
         ) -> Bucket {
-            proof.assert_resource(self.user_auth_resource);
+            proof.assert_resource(self.user_auth_manager.resource_address());
 
             assert_eq!(
                 wrapped_bucket.resource_address(),
@@ -312,16 +323,14 @@ mod template {
             let badges = proof.get_non_fungibles();
             assert_eq!(badges.len(), 1, "The proof must contain exactly one badge");
             let badge = badges.into_iter().next().unwrap();
-            let badge = self.user_badge_manager().get_non_fungible(&badge);
+            let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
 
             let amount = wrapped_bucket.amount();
 
             self.wrapped_token_mut().vault_mut().deposit(wrapped_bucket);
 
-            // TODO: we should be able to call withdraw on the confidential resource without creating a revealed proof
-            let withdraw = ConfidentialWithdrawProof::revealed_withdraw(amount);
-            let tokens = self.token_vault.withdraw_confidential(withdraw);
+            let tokens = self.token_vault.withdraw(amount);
 
             emit_event(
                 "exchange_wrapped_for_stable_tokens",
@@ -342,13 +351,15 @@ mod template {
             amount: Amount,
         ) {
             // Fetch the user badge
-            let badge = self.user_badge_manager().get_non_fungible(&user_id.into());
+            let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let user = badge.get_data::<UserData>();
 
             let component_manager = engine().component_manager(user.user_account);
             let account = component_manager.get_state::<Account>();
 
-            let vault = account.get_vault(&self.token_vault.resource_address());
+            let vault = account
+                .get_vault_by_resource(&self.token_vault.resource_address())
+                .expect("The user's account does not have a vault for the stable coin resource");
             let vault_id = vault.vault_id();
             let num_commitments = commitments.len();
 
@@ -372,11 +383,9 @@ mod template {
             emit_event("create_new_admin", [("admin_id", id.to_string())]);
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", employee_id);
-            let badge = ResourceManager::get(self.admin_auth_resource).mint_non_fungible(
-                id,
-                &metadata,
-                &(),
-            );
+            let badge = self
+                .admin_auth_manager
+                .mint_non_fungible(id, &metadata, &());
             badge
         }
 
@@ -385,20 +394,17 @@ mod template {
             user_id: UserId,
             user_account: ComponentAddress,
         ) -> Bucket {
-            // TODO: configurable?
-            const DEFAULT_EXCHANGE_LIMIT: Amount = Amount::new(1_000);
-
-            let badge = self.user_badge_manager().mint_non_fungible(
+            let epoch = Consensus::current_epoch();
+            let badge = self.user_auth_manager.mint_non_fungible(
                 user_id.into(),
                 &UserData {
                     user_id,
                     user_account,
-                    // TODO: real time not implemented
-                    created_at: 0,
+                    created_at_epoch: epoch,
                 },
                 &UserMutableData {
                     is_blacklisted: false,
-                    wrapped_exchange_limit: DEFAULT_EXCHANGE_LIMIT,
+                    wrapped_exchange_limit: self.config.default_exchange_limit,
                 },
             );
             emit_event("create_new_user", [("user_id", user_id.to_string())]);
@@ -409,10 +415,9 @@ mod template {
             assert!(limit.is_positive(), "Exchange limit must be positive");
             let non_fungible_id: NonFungibleId = user_id.into();
 
-            let manager = self.user_badge_manager();
-            let user_badge = manager.get_non_fungible(&non_fungible_id);
+            let user_badge = self.user_auth_manager.get_non_fungible(&non_fungible_id);
             let user_data = user_badge.get_mutable_data::<UserMutableData>();
-            manager.update_non_fungible_data(
+            self.user_auth_manager.update_non_fungible_data(
                 non_fungible_id,
                 &UserMutableData {
                     wrapped_exchange_limit: limit,
@@ -434,11 +439,12 @@ mod template {
         pub fn blacklist_user(&mut self, vault_id: VaultId, user_id: UserId) {
             let non_fungible_id: NonFungibleId = user_id.into();
 
-            let manager = self.user_badge_manager();
-            let recalled = manager.recall_non_fungible(vault_id, non_fungible_id.clone());
-            let user_badge = manager.get_non_fungible(&non_fungible_id);
+            let recalled = self
+                .user_auth_manager
+                .recall_non_fungible(vault_id, non_fungible_id.clone());
+            let user_badge = self.user_auth_manager.get_non_fungible(&non_fungible_id);
             let user_data = user_badge.get_mutable_data::<UserMutableData>();
-            manager.update_non_fungible_data(
+            self.user_auth_manager.update_non_fungible_data(
                 non_fungible_id,
                 &UserMutableData {
                     is_blacklisted: true,
@@ -455,10 +461,9 @@ mod template {
             let user_badge_bucket = self
                 .blacklisted_users
                 .withdraw_non_fungible(non_fungible_id.clone());
-            let manager = self.user_badge_manager();
-            let user_badge = manager.get_non_fungible(&non_fungible_id);
+            let user_badge = self.user_auth_manager.get_non_fungible(&non_fungible_id);
             let user_data = user_badge.get_mutable_data::<UserMutableData>();
-            manager.update_non_fungible_data(
+            self.user_auth_manager.update_non_fungible_data(
                 non_fungible_id,
                 &UserMutableData {
                     is_blacklisted: false,
@@ -470,12 +475,12 @@ mod template {
         }
 
         pub fn get_user_data(&self, user_id: UserId) -> UserData {
-            let badge = self.user_badge_manager().get_non_fungible(&user_id.into());
+            let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             badge.get_data()
         }
 
         pub fn set_user_wrapped_exchange_limit(&mut self, user_id: UserId, new_limit: Amount) {
-            let mut badge = self.user_badge_manager().get_non_fungible(&user_id.into());
+            let mut badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let mut user_data = badge.get_mutable_data::<UserMutableData>();
             user_data.set_wrapped_exchange_limit(new_limit);
             badge.set_mutable_data(&user_data);
@@ -488,8 +493,79 @@ mod template {
             );
         }
 
-        fn user_badge_manager(&self) -> ResourceManager {
-            ResourceManager::get(self.user_auth_resource)
+        pub fn set_config_transfer_fee_fixed(&mut self, new_fee: Amount) {
+            emit_event(
+                "config.set_transfer_fee_fixed",
+                metadata!({
+                    "old_transfer_fee" => self.config.transfer_fee.to_string(),
+                    "new_transfer_fee" => new_fee.to_string(),
+                }),
+            );
+            self.config.transfer_fee = FeeSpec::Fixed(new_fee);
+        }
+
+        pub fn set_config_transfer_fee_percentage(&mut self, new_fee_perc: u8) {
+            assert!(
+                new_fee_perc <= 100,
+                "Percentage fee must be between 0 and 100"
+            );
+            emit_event(
+                "config.set_transfer_fee_percentage",
+                [
+                    ("old_transfer_fee", self.config.transfer_fee.to_string()),
+                    ("new_transfer_fee", format!("{new_fee_perc}%")),
+                ],
+            );
+            self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
+        }
+
+        pub fn pause(&mut self, proof: Proof) {
+            proof.assert_resource(self.admin_auth_manager.resource_address());
+            // Could also add an additional check for a specific admin badge ID if desired
+            let badge = proof
+                .get_non_fungibles()
+                .first()
+                .expect("Proof must contain an admin badge")
+                .to_string();
+            self.is_paused = true;
+            emit_event(
+                "admin.paused",
+                [
+                    (
+                        "tx_signer",
+                        CallerContext::transaction_signer_public_key().to_string(),
+                    ),
+                    ("admin_badge", badge),
+                ],
+            );
+        }
+
+        pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
+            emit_event(
+                "admin.freeze_utxos",
+                [
+                    (
+                        "tx_signer",
+                        CallerContext::transaction_signer_public_key().to_string(),
+                    ),
+                    ("num_utxos", utxos.len().to_string()),
+                ],
+            );
+            self.token_vault_manager().freeze_utxos(utxos);
+        }
+
+        pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
+            emit_event(
+                "admin.unfreeze_utxos",
+                [
+                    (
+                        "tx_signer",
+                        CallerContext::transaction_signer_public_key().to_string(),
+                    ),
+                    ("num_utxos", utxos.len().to_string()),
+                ],
+            );
+            self.token_vault_manager().unfreeze_utxos(utxos);
         }
 
         fn token_vault_manager(&self) -> ResourceManager {

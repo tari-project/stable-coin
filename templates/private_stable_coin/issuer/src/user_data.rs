@@ -1,9 +1,11 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
-use tari_template_lib::models::{Amount, ComponentAddress, NonFungibleId, ResourceAddress, Vault};
+use tari_template_lib::{
+    models::{ComponentAddress, NonFungibleId},
+    types::Amount,
+};
 
 #[derive(Clone, Debug, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
@@ -25,7 +27,7 @@ impl Display for UserId {
 pub struct UserData {
     pub user_id: UserId,
     pub user_account: ComponentAddress,
-    pub created_at: u64,
+    pub created_at_epoch: u64,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -50,15 +52,15 @@ impl Default for UserMutableData {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Account {
-    pub vaults: BTreeMap<ResourceAddress, Vault>,
-}
-
-impl Account {
-    pub fn get_vault(&self, address: &ResourceAddress) -> &Vault {
-        self.vaults
-            .get(address)
-            .unwrap_or_else(|| panic!("Vault not found for address: {}", address))
-    }
-}
+// #[derive(Debug, serde::Serialize, serde::Deserialize)]
+// pub struct Account {
+//     pub vaults: BTreeMap<ResourceAddress, Vault>,
+// }
+//
+// impl Account {
+//     pub fn get_vault(&self, address: &ResourceAddress) -> &Vault {
+//         self.vaults
+//             .get(address)
+//             .unwrap_or_else(|| panic!("Vault not found for address: {}", address))
+//     }
+// }
