@@ -1,16 +1,15 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Grid from "@mui/material/Grid";
 import * as React from "react";
-import {StyledPaper} from "../../components/StyledComponents.ts";
-import {Alert, CircularProgress, TextField} from "@mui/material";
+import {StyledPaper} from "../../components/StyledComponents";
+import {Alert, CircularProgress, Grid2 as Grid, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
-import useTariProvider from "../../store/provider.ts";
+import useTariProvider from "../../store/provider";
 import {useNavigate} from "react-router-dom";
-import {StableCoinIssuer} from "../../store/stableCoinIssuer.ts";
-import {SimpleTransactionResult} from "../../types.ts";
+import {StableCoinIssuer} from "../../store/stableCoinIssuer";
 import Box from "@mui/material/Box";
+import {SimpleTransactionResult} from "@tari-project/tarijs-all";
 
 interface Props {
     issuer: StableCoinIssuer;
@@ -89,17 +88,17 @@ function SupplyControl({issuer, onTransactionResult, onTransactionSubmit}: Props
             )}
             <Grid container spacing={2}>
                 <Grid container spacing={2} sx={{paddingBottom: 2}}>
-                    <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                    <Grid size={3} sx={{textAlign: "left"}}>
                         <TextField
                             label="Increase supply"
                             value={formValues.increaseSupply}
-                            inputProps={{pattern: "[0-9]+"}}
+                            slotProps={{htmlInput: {pattern: "[0-9]+"}}}
                             defaultValue=""
                             onChange={set("increaseSupply")}
                             onBlur={onValidate("increaseSupply")}
                         />
                     </Grid>
-                    <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                    <Grid size={3} sx={{textAlign: "left"}}>
                         <Button
                             variant="contained"
                             color="primary"
@@ -110,23 +109,23 @@ function SupplyControl({issuer, onTransactionResult, onTransactionSubmit}: Props
                         </Button>
                     </Grid>
                     {invalid.increaseSupply && (
-                        <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                        <Grid size={3} sx={{textAlign: "left"}}>
                             <Alert severity="error">{invalid.increaseSupply}</Alert>
                         </Grid>
                     )}
                 </Grid>
                 <Grid container spacing={2} sx={{paddingBottom: 2}}>
-                    <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                    <Grid size={3} sx={{textAlign: "left"}}>
                         <TextField
                             label="Decrease supply"
                             value={formValues.decreaseSupply}
                             defaultValue=""
-                            inputProps={{pattern: "[0-9]+"}}
+                            slotProps={{htmlInput: {pattern: "[0-9]+"}}}
                             onChange={set("decreaseSupply")}
                             onBlur={onValidate("decreaseSupply")}
                         />
                     </Grid>
-                    <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                    <Grid size={3} sx={{textAlign: "left"}}>
                         <Button
                             variant="contained"
                             color="primary"
@@ -137,7 +136,7 @@ function SupplyControl({issuer, onTransactionResult, onTransactionSubmit}: Props
                         </Button>
                     </Grid>
                     {invalid.decreaseSupply && (
-                        <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                        <Grid size={3} sx={{textAlign: "left"}}>
                             <Alert severity="error">{invalid.decreaseSupply}</Alert>
                         </Grid>
                     )}

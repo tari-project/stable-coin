@@ -1,3 +1,3 @@
-import Users from "./Users.tsx";
+import Users from "./Users";
 
 export default Users;

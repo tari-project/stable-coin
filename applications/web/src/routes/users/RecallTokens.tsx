@@ -21,15 +21,14 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import "./Style.css";
-import Grid from "@mui/material/Grid";
 import * as React from "react";
-import useTariProvider from "../../store/provider.ts";
-import {Alert, TextField} from "@mui/material";
+import {useEffect} from "react";
+import useTariProvider from "../../store/provider";
+import {Alert, Grid2 as Grid, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
 import {ComponentAddress, ResourceAddress} from "@tari-project/typescript-bindings";
-import {SimpleTransactionResult, splitOnce} from "../../types.ts";
 import {useNavigate} from "react-router-dom";
-import {useEffect} from "react";
+import {SimpleTransactionResult} from "@tari-project/tarijs-all";
 
 interface Props {
     issuerId: ComponentAddress;
@@ -81,7 +80,7 @@ function RecallTokens(props: Props) {
                 setSuccess(`User tokens recalled in transaction ${result.transactionId}`);
             }
 
-            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+            throw new Error(`Transaction failed ${JSON.stringify(result.anyRejectReason.unwrap())}`);
         } catch (e) {
             setError(e as Error);
         } finally {
@@ -91,13 +90,13 @@ function RecallTokens(props: Props) {
 
     return (
         <Grid container spacing={2} sx={{textAlign: "left", paddingY: 4}}>
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <h2>Recall</h2>
             </Grid>
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <form onSubmit={handleOnRecall}>
                     <Grid container spacing={2}>
-                        <Grid item xs={4} md={4} lg={4}>
+                        <Grid size={4}>
                             <TextField
                                 name="recall_amount"
                                 placeholder="Recall amount"
@@ -109,7 +108,7 @@ function RecallTokens(props: Props) {
                                 onChange={(e) => setRecallAmount(parseInt(e.target.value))}
                             />
                         </Grid>
-                        <Grid item xs={4} md={4} lg={4}>
+                        <Grid size={4}>
                             <Button variant="contained" type="submit" disabled={isBusy || !recallAmount}
                                     color="secondary">
                                 Recall
@@ -120,12 +119,12 @@ function RecallTokens(props: Props) {
             </Grid>
 
             {error && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Alert severity="error">{error.message}</Alert>
                 </Grid>
             )}
             {success && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Alert severity="success">{success}</Alert>
                 </Grid>
             )}

@@ -23,13 +23,13 @@
 import "./Style.css";
 
 import * as React from "react";
-
-import {Vault, VaultId} from "@tari-project/typescript-bindings";
-import useTariProvider from "../../store/provider.ts";
-import type {VaultBalances} from "@tari-project/tarijs-all";
 import {useEffect} from "react";
+
+import {Amount, Vault, VaultId} from "@tari-project/typescript-bindings";
+import useTariProvider from "../../store/provider";
+import type {VaultBalances} from "@tari-project/tarijs-all";
 import {Alert, CircularProgress, Table, TableBody, TableContainer, TableHead, TableRow} from "@mui/material";
-import {DataTableCell} from "../../components/StyledComponents.ts";
+import {DataTableCell} from "../../components/StyledComponents";
 import {useNavigate} from "react-router-dom";
 
 
@@ -44,7 +44,7 @@ function UserVault(props: Props) {
     const [error, setError] = React.useState<Error | null>(null);
     const [loading, setLoading] = React.useState<boolean>(false);
     const [total, setTotal] = React.useState<number>(0);
-    const [revealedAmount, setRevealedAmount] = React.useState<number>(0);
+    const [revealedAmount, setRevealedAmount] = React.useState<Amount>(0);
     const navigate = useNavigate();
 
     if (!provider) {

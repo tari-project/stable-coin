@@ -196,7 +196,7 @@ mod template {
                 wrapped_token.vault_mut().deposit(new_tokens);
             }
 
-            emit_event("increase_supply", [("amount", amount.to_string())]);
+            emit_event("increase_supply", metadata!("amount" => amount.to_string()));
         }
 
         /// Decrease token supply by amount.
@@ -213,7 +213,7 @@ mod template {
 
             emit_event(
                 "decrease_supply",
-                [("revealed_burn_amount", amount.to_string())],
+                metadata!("revealed_burn_amount" => amount.to_string()),
             );
         }
 
@@ -226,7 +226,7 @@ mod template {
             let bucket = self.token_vault.withdraw_confidential(proof);
             emit_event(
                 "withdraw",
-                [("amount_withdrawn", bucket.amount().to_string())],
+                metadata!("amount_withdrawn" => bucket.amount().to_string()),
             );
             bucket
         }
@@ -234,7 +234,7 @@ mod template {
         pub fn deposit(&mut self, bucket: Bucket) {
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
-            emit_event("deposit", [("amount", amount.to_string())]);
+            emit_event("deposit", metadata!("amount" => amount.to_string()));
         }
 
         /// Allow the user to exchange their tokens for wrapped tokens
@@ -291,11 +291,11 @@ mod template {
 
             emit_event(
                 "exchange_stable_for_wrapped_tokens",
-                [
-                    ("user_id", user.user_id.to_string()),
-                    ("amount", amount.to_string()),
-                    ("fee", fee.to_string()),
-                ],
+                metadata!(
+                        "user_id" => user.user_id.to_string(),
+                        "amount" => amount.to_string(),
+                        "fee" => fee.to_string(),
+                ),
             );
 
             wrapped_tokens
@@ -334,11 +334,11 @@ mod template {
 
             emit_event(
                 "exchange_wrapped_for_stable_tokens",
-                [
-                    ("user_id", user.user_id.to_string()),
-                    ("amount", amount.to_string()),
-                    ("fee", 0.to_string()),
-                ],
+                metadata!(
+                        "user_id" => user.user_id.to_string(),
+                        "amount" => amount.to_string(),
+                        "fee" => 0.to_string(),
+                ),
             );
 
             tokens
@@ -370,17 +370,17 @@ mod template {
 
             emit_event(
                 "recall_tokens",
-                [
-                    ("user_id", user_id.to_string()),
-                    ("revealed_amount", amount.to_string()),
-                    ("num_commitments", num_commitments.to_string()),
-                ],
+                metadata!(
+                        "user_id" => user_id.to_string(),
+                        "revealed_amount" => amount.to_string(),
+                        "num_commitments" => num_commitments.to_string(),
+                ),
             );
         }
 
         pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
             let id = NonFungibleId::random();
-            emit_event("create_new_admin", [("admin_id", id.to_string())]);
+            emit_event("create_new_admin", metadata!("admin_id" => id.to_string()));
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", employee_id);
             let badge = self
@@ -407,7 +407,10 @@ mod template {
                     wrapped_exchange_limit: self.config.default_exchange_limit,
                 },
             );
-            emit_event("create_new_user", [("user_id", user_id.to_string())]);
+            emit_event(
+                "create_new_user",
+                metadata!("user_id" => user_id.to_string()),
+            );
             badge
         }
 
@@ -428,11 +431,11 @@ mod template {
             let admin = CallerContext::transaction_signer_public_key();
             emit_event(
                 "set_user_exchange_limit",
-                [
-                    ("user_id", user_id.to_string()),
-                    ("limit", limit.to_string()),
-                    ("admin", admin.to_string()),
-                ],
+                metadata!(
+                        "user_id" => user_id.to_string(),
+                        "limit" => limit.to_string(),
+                        "admin" => admin.to_string(),
+                ),
             );
         }
 
@@ -453,7 +456,10 @@ mod template {
             );
 
             self.blacklisted_users.deposit(recalled);
-            emit_event("blacklist_user", [("user_id", user_id.to_string())]);
+            emit_event(
+                "blacklist_user",
+                metadata!("user_id" => user_id.to_string()),
+            );
         }
 
         pub fn remove_from_blacklist(&mut self, user_id: UserId) -> Bucket {
@@ -496,10 +502,10 @@ mod template {
         pub fn set_config_transfer_fee_fixed(&mut self, new_fee: Amount) {
             emit_event(
                 "config.set_transfer_fee_fixed",
-                metadata!({
+                metadata!(
                     "old_transfer_fee" => self.config.transfer_fee.to_string(),
                     "new_transfer_fee" => new_fee.to_string(),
-                }),
+                ),
             );
             self.config.transfer_fee = FeeSpec::Fixed(new_fee);
         }
@@ -511,10 +517,10 @@ mod template {
             );
             emit_event(
                 "config.set_transfer_fee_percentage",
-                [
-                    ("old_transfer_fee", self.config.transfer_fee.to_string()),
-                    ("new_transfer_fee", format!("{new_fee_perc}%")),
-                ],
+                metadata!(
+                        "old_transfer_fee" => self.config.transfer_fee.to_string(),
+                        "new_transfer_fee" => format!("{new_fee_perc}%"),
+                ),
             );
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
         }
@@ -530,26 +536,20 @@ mod template {
             self.is_paused = true;
             emit_event(
                 "admin.paused",
-                [
-                    (
-                        "tx_signer",
-                        CallerContext::transaction_signer_public_key().to_string(),
-                    ),
-                    ("admin_badge", badge),
-                ],
+                metadata!(
+                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
+                    "admin_badge" => badge
+                ),
             );
         }
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
             emit_event(
                 "admin.freeze_utxos",
-                [
-                    (
-                        "tx_signer",
-                        CallerContext::transaction_signer_public_key().to_string(),
-                    ),
-                    ("num_utxos", utxos.len().to_string()),
-                ],
+                metadata!(
+                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
+                    "num_utxos" => utxos.len().to_string(),
+                ),
             );
             self.token_vault_manager().freeze_utxos(utxos);
         }
@@ -557,13 +557,10 @@ mod template {
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
             emit_event(
                 "admin.unfreeze_utxos",
-                [
-                    (
-                        "tx_signer",
-                        CallerContext::transaction_signer_public_key().to_string(),
-                    ),
-                    ("num_utxos", utxos.len().to_string()),
-                ],
+                metadata!(
+                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
+                    "num_utxos" => utxos.len().to_string(),
+                ),
             );
             self.token_vault_manager().unfreeze_utxos(utxos);
         }

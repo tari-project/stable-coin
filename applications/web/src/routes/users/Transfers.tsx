@@ -1,15 +1,13 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Grid from "@mui/material/Grid";
 import * as React from "react";
-import {Alert, CircularProgress, TextField} from "@mui/material";
-import Button from "@mui/material/Button";
-import useTariProvider from "../../store/provider.ts";
+import {Alert, Button, CircularProgress, Grid2 as Grid, TextField} from "@mui/material";
+import useTariProvider from "../../store/provider";
 import {useNavigate} from "react-router-dom";
-import {StableCoinIssuer} from "../../store/stableCoinIssuer.ts";
-import {SimpleTransactionResult} from "../../types.ts";
+import {StableCoinIssuer} from "../../store/stableCoinIssuer";
 import {ComponentAddress} from "@tari-project/typescript-bindings";
+import {SimpleTransactionResult} from "@tari-project/tarijs-all";
 
 interface Props {
     issuer: StableCoinIssuer;
@@ -73,20 +71,20 @@ function Transfers({issuer, onTransactionResult, onTransactionSubmit, userAccoun
     return (
         <>
             <Grid container spacing={2} sx={{textAlign: "left"}}>
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <h2>Transfer</h2>
                 </Grid>
-                <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                <Grid size={3} sx={{textAlign: "left"}}>
                     <TextField
                         label="Transfer Amount"
                         value={formValues.transferAmount}
                         defaultValue=""
-                        inputProps={{pattern: "[0-9]+"}}
+                        slotProps={{htmlInput: {pattern: "[0-9]+"}}}
                         onChange={set("transferAmount")}
                         onBlur={onValidate("transferAmount")}
                     />
                 </Grid>
-                <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                <Grid size={3} sx={{textAlign: "left"}}>
                     <Button
                         variant="contained"
                         color="primary"
@@ -97,13 +95,13 @@ function Transfers({issuer, onTransactionResult, onTransactionSubmit, userAccoun
                     </Button>
                 </Grid>
                 {invalid.transferAmount && (
-                    <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                    <Grid size={3} sx={{textAlign: "left"}}>
                         <Alert severity="error">{invalid.transferAmount}</Alert>
                     </Grid>
                 )}
 
                 {error && (
-                    <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+                    <Grid size={3} sx={{textAlign: "left"}}>
                         <Alert severity="error">{error.message}</Alert>
                     </Grid>
                 )}

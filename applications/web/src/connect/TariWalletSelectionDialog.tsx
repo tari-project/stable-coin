@@ -6,27 +6,21 @@ import CloseIcon from '@mui/icons-material/Close';
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import TariLogo from './content/tari-logo.svg';
-import WalletConnectLogo from "./content/walletconnect-logo.svg";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import {
     TariPermissions,
     TariProvider,
-    // WalletConnectTariProvider,
+    TariSigner,
+    WalletDaemonFetchParameters,
     WalletDaemonTariProvider,
-    WalletDaemonFetchParameters, WalletDaemonTariSigner, TariSigner,
-    // TariPermissionAccountInfo,
-    // TariPermissionKeyList,
-    // TariPermissionSubstatesRead,
-    // TariPermissionTemplatesRead,
-    // TariPermissionTransactionSend,
-    // TariPermissionTransactionsGet
+    WalletDaemonTariSigner,
 } from "@tari-project/tarijs-all";
-import TariWallet from "../wallet.ts";
+import TariWallet from "../wallet";
 
 
-const WALLET_CONNECT_PROJECT_ID = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || null;
+// const WALLET_CONNECT_PROJECT_ID = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || null;
 // const WALLET_DAEMON_ENABLED = import.meta.env.VITE_WALLET_DAEMON_ENABLED || false;
 
 // Minimal permissions for the example site

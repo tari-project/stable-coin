@@ -21,8 +21,8 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import {create} from "zustand";
-import TariWallet from "../wallet.ts";
-import {TariSigner, TariProvider} from "@tari-project/tarijs-all";
+import TariWallet from "../wallet";
+import {TariProvider, TariSigner} from "@tari-project/tarijs-all";
 
 export interface ProviderStore<TProvider extends TariProvider, TSigner extends TariSigner> {
     provider: TariWallet<TProvider, TSigner> | null;

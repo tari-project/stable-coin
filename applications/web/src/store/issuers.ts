@@ -20,47 +20,47 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import { create } from "zustand";
-import { StableCoinIssuer } from "./stableCoinIssuer.ts";
-import { createJSONStorage, persist } from "zustand/middleware";
+import {create} from "zustand";
+import {StableCoinIssuer} from "./stableCoinIssuer";
+import {createJSONStorage, persist} from "zustand/middleware";
 
 export interface Store {
-  issuers: {
-    [key: string]: StableCoinIssuer[];
-  },
+    issuers: {
+        [key: string]: StableCoinIssuer[];
+    },
 
-  getIssuers(accountPk: string): StableCoinIssuer[] | undefined;
+    getIssuers(accountPk: string): StableCoinIssuer[] | undefined;
 
-  setIssuers(accountPk: string, issuers: StableCoinIssuer[]): void;
+    setIssuers(accountPk: string, issuers: StableCoinIssuer[]): void;
 
-  addIssuer(accountPk: string, issuer: StableCoinIssuer): void;
+    addIssuer(accountPk: string, issuer: StableCoinIssuer): void;
 
 }
 
 const useIssuers = create<Store>()(persist<Store>((set, get) => ({
-  issuers: {},
-  getIssuers(accountPk: string) {
-    return get().issuers[accountPk];
-  },
-  setIssuers(accountPk: string, accIssuers: StableCoinIssuer[]) {
-    const { issuers } = get();
-    issuers[accountPk] = accIssuers;
-    set({
-      issuers,
-    });
-  },
+    issuers: {},
+    getIssuers(accountPk: string) {
+        return get().issuers[accountPk];
+    },
+    setIssuers(accountPk: string, accIssuers: StableCoinIssuer[]) {
+        const {issuers} = get();
+        issuers[accountPk] = accIssuers;
+        set({
+            issuers,
+        });
+    },
 
-  addIssuer(accountPk, issuer) {
-    const { issuers } = get();
-    if (!issuers[accountPk]) {
-      issuers[accountPk] = [];
-    }
-    issuers[accountPk]!.push(issuer);
-    set({ issuers });
-  },
+    addIssuer(accountPk, issuer) {
+        const {issuers} = get();
+        if (!issuers[accountPk]) {
+            issuers[accountPk] = [];
+        }
+        issuers[accountPk]!.push(issuer);
+        set({issuers});
+    },
 }), {
-  name: "issuers",
-  storage: createJSONStorage(() => window.localStorage),
+    name: "issuers",
+    storage: createJSONStorage(() => window.localStorage),
 }));
 
 export default useIssuers;

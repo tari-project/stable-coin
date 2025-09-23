@@ -15,13 +15,14 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/x-data-grid": "^7.25.0",
-    "@tari-project/tarijs-all": "^0.10.1",
-    "@tari-project/typescript-bindings": "^1.10.1",
-    "@tari-project/wallet_jrpc_client": "^1.6.2",
+    "@tari-project/tarijs-all": "^0.14.2",
+    "@tari-project/typescript-bindings": "^1.17.0",
+    "@tari-project/wallet_jrpc_client": "^1.9.0",
+    "@tari-project/react-mui-connect-button": "0.14.2",
     "qrcode.react": "4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-icons": "^5.4.0",
+    "react-icons": "5.4.0",
     "react-router-dom": "^7.1.5",
     "use-react-router-breadcrumbs": "^4.0.1",
     "zustand": "5.0.3"
@@ -40,8 +41,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.14.0",
-    "rollup-plugin-node-polyfills": "^0.2.1",
-    "typescript": "4",
-    "vite": "6.3.5"
+    "typescript": "5.8",
+    "vite": "7.1.7"
   }
 }

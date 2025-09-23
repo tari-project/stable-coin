@@ -24,19 +24,20 @@ import "./Style.css";
 import SecondaryHeading from "../../components/SecondaryHeading.js";
 import {StyledPaper} from "../../components/StyledComponents.js";
 import * as React from "react";
+import {useEffect} from "react";
 import useTariProvider from "../../store/provider.js";
 import useActiveIssuer, {StableCoinIssuer} from "../../store/stableCoinIssuer.js";
-import {Alert, CircularProgress, Grid, Button} from "@mui/material";
+import {Alert, Button, CircularProgress, Grid2 as Grid} from "@mui/material";
 import {useNavigate, useParams} from "react-router-dom";
-import {useEffect} from "react";
 import SupplyControl from "./SupplyControl.js";
-import {SimpleTransactionResult} from "../../types.js";
 import Transfers from "./Transfers.js";
 import WrappedToken from "./WrappedToken.js";
 import useIssuers from "../../store/issuers.js";
 import useActiveAccount from "../../store/account.js";
 import TransactionList from "./TransactionList.js";
 import {convertToIssuer} from "../home/Setup.js";
+import {decodeOotleAddress} from "@tari-project/typescript-bindings";
+import {SimpleTransactionResult} from "@tari-project/tarijs-all";
 
 interface IssuerDetailsProps {
     issuer: StableCoinIssuer;
@@ -44,11 +45,11 @@ interface IssuerDetailsProps {
 
 function Detail({label, value}: { label: string; value: string }) {
     return (
-        <Grid container item xs={12} md={12} lg={12}>
-            <Grid item xs={3} md={3} lg={3} sx={{textAlign: "left"}}>
+        <Grid container size={12}>
+            <Grid size={3} sx={{textAlign: "left"}}>
                 {label}
             </Grid>
-            <Grid item xs={9} md={9} lg={9} sx={{textAlign: "left"}}>
+            <Grid size={9} sx={{textAlign: "left"}}>
                 {value}
             </Grid>
         </Grid>
@@ -100,18 +101,22 @@ function Issuer() {
 
 
     function load() {
-        if (activeIssuer) {
+        if (!activeIssuer) {
             return;
         }
-        const issuers = getIssuers(account!.public_key);
+        const decoded = decodeOotleAddress(account!.wallet_address);
+        const issuers = getIssuers(decoded.accountPublicKey);
+        if (!issuers) {
+            return;
+        }
         Promise.all(issuers.map((s) => provider!.getSubstate(s.id).then((substate) => ({
             address: substate.address,
             value: substate.value.Component,
         }))))
             .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider!, s))))
             .then((issuers) => {
-                if (activeIssuer?.id !== params.issuerId && !error) {
-                    setIssuers(account!.public_key, issuers);
+                if (activeIssuer.id !== params.issuerId && !error) {
+                    setIssuers(decoded.accountPublicKey, issuers);
                     const issuer = (issuers || [])
                         .find((i: StableCoinIssuer) => i.id == params.issuerId!);
                     if (!issuer) {
@@ -138,25 +143,25 @@ function Issuer() {
             load();
         }
 
-        const reject = result.onlyFeeAccepted?.[1] || result.rejected;
-        if (reject) {
+        const reject = result.anyRejectReason;
+        if (reject.isSome()) {
             setSuccess(null);
-            setError(new Error(`Transaction rejected: ${JSON.stringify(reject)}`));
+            setError(new Error(`Transaction rejected: ${JSON.stringify(reject.unwrap())}`));
         }
     };
 
     return (
         <>
-            <Grid item sm={12} md={12} xs={12}>
+            <Grid size={12}>
                 <SecondaryHeading>Issuer</SecondaryHeading>
             </Grid>
             {error && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Alert severity="error">{error.message}</Alert>
                 </Grid>
             )}
             {success && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Alert severity="success">{success}</Alert>
                 </Grid>
             )}
@@ -164,11 +169,11 @@ function Issuer() {
                 <CircularProgress/>
             ) : (
                 <>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <h2>Details</h2>
                         <IssuerDetails issuer={activeIssuer}/>
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <h2>Supply</h2>
                         <SupplyControl
                             issuer={activeIssuer}
@@ -176,16 +181,16 @@ function Issuer() {
                             onTransactionResult={handleTransactionResult}
                         />
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <h2>Transfers</h2>
                         <Transfers issuer={activeIssuer} onTransactionResult={handleTransactionResult}/>
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <h2>Transactions</h2>
                         <TransactionList issuer={activeIssuer}/>
                     </Grid>
                     {activeIssuer.wrappedToken && (
-                        <Grid item xs={12} md={12} lg={12}>
+                        <Grid size={12}>
                             <h2>Wrapped Token</h2>
                             <WrappedToken issuer={activeIssuer}/>
                         </Grid>

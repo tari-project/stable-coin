@@ -20,179 +20,195 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import { useState } from "react";
-import { styled } from "@mui/material/styles";
+import {useState} from "react";
+import {styled} from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import MuiDrawer from "@mui/material/Drawer";
 import Box from "@mui/material/Box";
-import MuiAppBar, { AppBarProps as MuiAppBarProps } from "@mui/material/AppBar";
-import Toolbar from "@mui/material/Toolbar";
+import MuiAppBar, {AppBarProps as MuiAppBarProps} from "@mui/material/AppBar";
 import List from "@mui/material/List";
 import IconButton from "@mui/material/IconButton";
 import MenuOpenOutlinedIcon from "@mui/icons-material/MenuOpenOutlined";
 import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
-import { mainListItems } from "../components/MenuItems";
-import { ThemeProvider } from "@mui/material";
+import {mainListItems} from "../components/MenuItems";
+import {Container, Grid2 as Grid, ThemeProvider, Toolbar} from "@mui/material";
 import theme from "./theme";
-import { Outlet, Link } from "react-router-dom";
+import {Link, Outlet} from "react-router-dom";
 import Logo from "../assets/Logo";
-import Container from "@mui/material/Container";
-import Breadcrumbs, { BreadcrumbsItem } from "../components/Breadcrumbs";
-import Grid from "@mui/material/Grid";
-import { TariConnectButton } from "../connect/TariConnectButton.tsx";
+import Breadcrumbs, {BreadcrumbsItem} from "../components/Breadcrumbs";
+import {defaultPermissions, TariConnectButton} from "@tari-project/react-mui-connect-button";
+import useTariProvider from "../store/provider";
+import {TariProvider, TariSigner, WalletDaemonFetchParameters} from "@tari-project/tarijs-all";
+import TariWallet from "../wallet";
 
 const drawerWidth = 300;
 
 interface AppBarProps extends MuiAppBarProps {
-  open?: boolean;
+    open?: boolean;
 }
 
 const AppBar = styled(MuiAppBar, {
-  shouldForwardProp: (prop) => prop !== "open",
-})<AppBarProps>(({ theme, open }) => ({
-  zIndex: theme.zIndex.drawer + 1,
-  transition: theme.transitions.create(["width", "margin"], {
-    easing: theme.transitions.easing.easeOut,
-    duration: theme.transitions.duration.enteringScreen,
-  }),
-  ...(open && {
-    marginLeft: drawerWidth,
-    width: `calc(100% - ${drawerWidth}px)`,
+    shouldForwardProp: (prop) => prop !== "open",
+})<AppBarProps>(({theme, open}) => ({
+    zIndex: theme.zIndex.drawer + 1,
     transition: theme.transitions.create(["width", "margin"], {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.enteringScreen,
+        easing: theme.transitions.easing.easeOut,
+        duration: theme.transitions.duration.enteringScreen,
     }),
-  }),
+    ...(open && {
+        marginLeft: drawerWidth,
+        width: `calc(100% - ${drawerWidth}px)`,
+        transition: theme.transitions.create(["width", "margin"], {
+            easing: theme.transitions.easing.easeOut,
+            duration: theme.transitions.duration.enteringScreen,
+        }),
+    }),
 }));
 
 const Drawer = styled(MuiDrawer, {
-  shouldForwardProp: (prop) => prop !== "open",
-})(({ theme, open }) => ({
-  "& .MuiDrawer-paper": {
-    position: "relative",
-    whiteSpace: "nowrap",
-    borderRight: "1px solid #F5F5F5",
-    boxShadow: "10px 14px 28px rgb(35 11 73 / 5%)",
-    width: drawerWidth,
-    transition: theme.transitions.create("width", {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    boxSizing: "border-box",
-    ...(!open && {
-      overflowX: "hidden",
-      transition: theme.transitions.create("width", {
-        easing: theme.transitions.easing.easeOut,
-        duration: theme.transitions.duration.leavingScreen,
-      }),
-      width: theme.spacing(7),
-      [theme.breakpoints.up("sm")]: {
-        width: theme.spacing(9),
-      },
-    }),
-  },
+    shouldForwardProp: (prop) => prop !== "open",
+})(({theme, open}) => ({
+    "& .MuiDrawer-paper": {
+        position: "relative",
+        whiteSpace: "nowrap",
+        borderRight: "1px solid #F5F5F5",
+        boxShadow: "10px 14px 28px rgb(35 11 73 / 5%)",
+        width: drawerWidth,
+        transition: theme.transitions.create("width", {
+            easing: theme.transitions.easing.easeOut,
+            duration: theme.transitions.duration.enteringScreen,
+        }),
+        boxSizing: "border-box",
+        ...(!open && {
+            overflowX: "hidden",
+            transition: theme.transitions.create("width", {
+                easing: theme.transitions.easing.easeOut,
+                duration: theme.transitions.duration.leavingScreen,
+            }),
+            width: theme.spacing(7),
+            [theme.breakpoints.up("sm")]: {
+                width: theme.spacing(9),
+            },
+        }),
+    },
 }));
 
 interface Props {
-  breadcrumbRoutes: BreadcrumbsItem[];
+    breadcrumbRoutes: BreadcrumbsItem[];
 }
 
-export default function Layout({ breadcrumbRoutes }: Props) {
-  const [open, setOpen] = useState(false);
+export default function Layout({breadcrumbRoutes}: Props) {
+    const [open, setOpen] = useState(false);
 
-  const toggleDrawer = () => {
-    setOpen(!open);
-  };
-  return (
-    <ThemeProvider theme={theme}>
-      <Box sx={{ display: "flex" }}>
-        <CssBaseline />
-        <AppBar
-          position="absolute"
-          open={open}
-          color="secondary"
-          elevation={0}
-          sx={{
-            backgroundColor: "#FFF",
-            boxShadow: "10px 14px 28px rgb(35 11 73 / 5%)",
-          }}
-        >
-          <Toolbar
-            sx={{
-              pr: "24px", // keep right padding when drawer closed
-              justifyContent: "space-between",
-            }}
-          >
-            <IconButton
-              edge="start"
-              color="inherit"
-              aria-label="open drawer"
-              onClick={toggleDrawer}
-              sx={{
-                marginRight: "36px",
-                color: "#757575",
-                ...(open && { display: "none" }),
-              }}
-            >
-              <MenuOutlinedIcon />
-            </IconButton>
-            <Link to="/">
-              <Logo />
-            </Link>
-            <TariConnectButton />
-          </Toolbar>
-        </AppBar>
-        <Drawer variant="permanent" open={open}>
-          <Toolbar
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              px: [1],
-            }}
-          >
-            <IconButton onClick={toggleDrawer}>
-              <MenuOpenOutlinedIcon />
-            </IconButton>
-          </Toolbar>
-          <List component="nav">{mainListItems}</List>
-        </Drawer>
-        <Box
-          component="main"
-          sx={{
-            backgroundColor: (theme) =>
-              theme.palette.mode === "light" ? theme.palette.grey[100] : theme.palette.grey[900],
-            flexGrow: 1,
-            height: "100vh",
-            overflow: "auto",
-          }}
-        >
-          <Toolbar />
-          <Container
-            maxWidth="xl"
-            style={{
-              paddingTop: theme.spacing(3),
-              paddingBottom: theme.spacing(5),
-            }}
-          >
-            <Grid container spacing={3}>
-              <Grid item sm={12} md={12} lg={12}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    borderBottom: `1px solid #EAEAEA`,
-                  }}
+    const {provider, setProvider} = useTariProvider();
+
+    const params = {
+        permissions: defaultPermissions(),
+        serverUrl: import.meta.env.VITE_JSON_RPC_ADDRESS
+    } as WalletDaemonFetchParameters;
+
+    const onConnected = (signer: TariSigner) => {
+        // TODO: sort out the provider and signer impls
+        setProvider(TariWallet.new(signer as unknown as TariProvider, signer));
+    };
+
+    const toggleDrawer = () => {
+        setOpen(!open);
+    };
+    return (
+        <ThemeProvider theme={theme}>
+            <Box sx={{display: "flex"}}>
+                <CssBaseline/>
+                <AppBar
+                    position="absolute"
+                    open={open}
+                    color="secondary"
+                    elevation={0}
+                    sx={{
+                        backgroundColor: "#FFF",
+                        boxShadow: "10px 14px 28px rgb(35 11 73 / 5%)",
+                    }}
                 >
-                  <Breadcrumbs items={breadcrumbRoutes} />
-                </div>
-              </Grid>
-              <Outlet />
-            </Grid>
-          </Container>
-        </Box>
-      </Box>
-    </ThemeProvider>
-  );
+                    <Toolbar
+                        sx={{
+                            pr: "24px", // keep right padding when drawer closed
+                            justifyContent: "space-between",
+                        }}
+                    >
+                        <IconButton
+                            edge="start"
+                            color="inherit"
+                            aria-label="open drawer"
+                            onClick={toggleDrawer}
+                            sx={{
+                                marginRight: "36px",
+                                color: "#757575",
+                                ...(open && {display: "none"}),
+                            }}
+                        >
+                            <MenuOutlinedIcon/>
+                        </IconButton>
+                        <Link to="/">
+                            <Logo/>
+                        </Link>
+                        <TariConnectButton
+                            isConnected={Boolean(provider)}
+                            walletDaemonParams={params}
+                            onConnected={onConnected}
+                        />
+                    </Toolbar>
+                </AppBar>
+                <Drawer variant="permanent" open={open}>
+                    <Toolbar
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            px: [1],
+                        }}
+                    >
+                        <IconButton onClick={toggleDrawer}>
+                            <MenuOpenOutlinedIcon/>
+                        </IconButton>
+                    </Toolbar>
+                    <List component="nav">{mainListItems}</List>
+                </Drawer>
+                <Box
+                    component="main"
+                    sx={{
+                        backgroundColor: (theme) =>
+                            theme.palette.mode === "light" ? theme.palette.grey[100] : theme.palette.grey[900],
+                        flexGrow: 1,
+                        height: "100vh",
+                        overflow: "auto",
+                    }}
+                >
+                    <Toolbar/>
+                    <Container
+                        maxWidth="xl"
+                        style={{
+                            paddingTop: theme.spacing(3),
+                            paddingBottom: theme.spacing(5),
+                        }}
+                    >
+                        <Grid container spacing={3}>
+                            <Grid size={12}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        borderBottom: `1px solid #EAEAEA`,
+                                    }}
+                                >
+                                    <Breadcrumbs items={breadcrumbRoutes}/>
+                                </div>
+                            </Grid>
+                            <Outlet/>
+                        </Grid>
+                    </Container>
+                </Box>
+            </Box>
+        </ThemeProvider>
+    );
 }

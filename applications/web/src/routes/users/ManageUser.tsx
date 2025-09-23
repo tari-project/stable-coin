@@ -21,16 +21,14 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import "./Style.css";
-import Grid from "@mui/material/Grid";
 import * as React from "react";
-import useTariProvider from "../../store/provider.ts";
-import {Alert, Table, TableBody, TableHead, TableRow, TextField} from "@mui/material";
+import useTariProvider from "../../store/provider";
+import {Alert, Grid2 as Grid, Table, TableBody, TableHead, TableRow, TextField} from "@mui/material";
 import Button from "@mui/material/Button";
 import {ComponentAddress, ResourceAddress} from "@tari-project/typescript-bindings";
-import {SimpleTransactionResult,} from "../../types.ts";
-import {DataTableCell} from "../../components/StyledComponents.ts";
+import {DataTableCell} from "../../components/StyledComponents";
 import {useNavigate} from "react-router-dom";
-import {getCborValueByPath} from "@tari-project/tarijs-all";
+import {getCborValueByPath, SimpleTransactionResult} from "@tari-project/tarijs-all";
 
 interface Props {
     issuerId: ComponentAddress;
@@ -82,7 +80,7 @@ function ManageUser(props: Props) {
     const handleOnRevoke = async () => {
         await runQuery(async () => {
             const substate = await provider.getSubstate(userAccount) as any;
-            const vaults = getCborValueByPath(substate.value.Component.body.state, "$.vaults");
+            const vaults = getCborValueByPath(substate.value.Component.body.state, "$.vaults") as Record<string, string>;
             const vaultToRevoke = vaults[userBadgeResource];
             if (!vaultToRevoke) {
                 throw new Error(`User does not have a stable coin user badge ${userBadgeResource}`);
@@ -100,7 +98,7 @@ function ManageUser(props: Props) {
                 return `User permission revoked in transaction ${result.transactionId}`;
             }
 
-            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+            throw new Error(`Transaction failed ${JSON.stringify(result.anyRejectReason.unwrap())}`);
         });
     };
 
@@ -118,7 +116,7 @@ function ManageUser(props: Props) {
                 return `User permission reinstated in transaction ${result.transactionId}`;
             }
 
-            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+            throw new Error(`Transaction failed ${JSON.stringify(result.anyRejectReason.unwrap())}`);
         });
     };
 
@@ -137,25 +135,25 @@ function ManageUser(props: Props) {
                 return `User limit set in transaction ${result.transactionId}`;
             }
 
-            throw new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`);
+            throw new Error(`Transaction failed ${JSON.stringify(result.anyRejectReason.unwrap())}`);
         });
     };
 
     return (
         <Grid container spacing={2} sx={{textAlign: "left"}}>
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <h3>Data</h3>
             </Grid>
             <UserData userData={props.badgeData}/>
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <h3>Mutable Data</h3>
             </Grid>
             <UserData userData={props.badgeMutableData}/>
             <h3>Wrapped Token</h3>
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <form onSubmit={handleOnSave}>
                     <Grid container>
-                        <Grid item xs={4} md={4} lg={4}>
+                        <Grid size={4}>
                             <TextField
                                 name="wrapped_exchange_limit"
                                 placeholder="Limit for wrapped token exchange"
@@ -167,7 +165,7 @@ function ManageUser(props: Props) {
                                 onChange={(e) => setWrappedExchangeLimit(parseInt(e.target.value))}
                             />
                         </Grid>
-                        <Grid item xs={4} md={4} lg={4}>
+                        <Grid size={4}>
                             <Button
                                 variant="contained"
                                 type="submit"
@@ -185,10 +183,10 @@ function ManageUser(props: Props) {
                 </form>
             </Grid>
 
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <h3>Permissions</h3>
             </Grid>
-            <Grid item xs={4} md={4} lg={4}>
+            <Grid size={4}>
                 {props.badgeMutableData &&
                     (props.badgeMutableData.is_blacklisted ? (
                         <Button variant="contained" color="success" onClick={handleOnReinstate} disabled={isBusy}>
@@ -202,12 +200,12 @@ function ManageUser(props: Props) {
             </Grid>
 
             {error && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Alert severity="error">{error.message}</Alert>
                 </Grid>
             )}
             {success && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Alert severity="success">{success}</Alert>
                 </Grid>
             )}

@@ -22,49 +22,49 @@
 
 import "./Style.css";
 import Grid from "@mui/material/Grid";
-import SecondaryHeading from "../../components/SecondaryHeading.tsx";
+import SecondaryHeading from "../../components/SecondaryHeading";
 import * as React from "react";
-import useTariProvider from "../../store/provider.ts";
-import { useNavigate, useParams } from "react-router-dom";
-import { useEffect } from "react";
-import AddUser from "./AddUser.tsx";
-import GetUser from "./GetUser.tsx";
-import { ResourceAddress } from "@tari-project/typescript-bindings";
+import {useEffect} from "react";
+import useTariProvider from "../../store/provider";
+import {useNavigate, useParams} from "react-router-dom";
+import AddUser from "./AddUser";
+import GetUser from "./GetUser";
+import {ResourceAddress} from "@tari-project/typescript-bindings";
 import Button from "@mui/material/Button";
-import useActiveIssuer from "../../store/stableCoinIssuer.ts";
+import useActiveIssuer from "../../store/stableCoinIssuer";
 
 function Users() {
-  const { provider } = useTariProvider();
-  const { activeIssuer } = useActiveIssuer();
-  const navigate = useNavigate();
-  const params = useParams();
-  const [adminAuthBadge, setAdminAuthBadge] = React.useState<ResourceAddress | undefined>(undefined);
+    const {provider} = useTariProvider();
+    const {activeIssuer} = useActiveIssuer();
+    const navigate = useNavigate();
+    const params = useParams();
+    const [adminAuthBadge, setAdminAuthBadge] = React.useState<ResourceAddress | undefined>(undefined);
 
-  if (!provider) {
+    if (!provider) {
+        useEffect(() => {
+            navigate("/");
+        }, []);
+        return <></>;
+    }
+
     useEffect(() => {
-      navigate("/");
-    }, []);
-    return <></>;
-  }
+        setAdminAuthBadge(activeIssuer?.adminAuthResource);
+    }, [activeIssuer]);
 
-  useEffect(() => {
-    setAdminAuthBadge(activeIssuer?.adminAuthResource);
-  }, [activeIssuer]);
-
-  return (
-    <>
-      <Grid item sm={12} md={12} xs={12}>
-        <SecondaryHeading>Users</SecondaryHeading>
-        <Button onClick={() => navigate(`/issuers/${params.issuerId}`)}>Back</Button>
-      </Grid>
-      <Grid item xs={12} md={12} lg={12}>
-        <AddUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!} />
-      </Grid>
-      <Grid item xs={12} md={12} lg={12}>
-        <GetUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!} />
-      </Grid>
-    </>
-  );
+    return (
+        <>
+            <Grid item sm={12} md={12} xs={12}>
+                <SecondaryHeading>Users</SecondaryHeading>
+                <Button onClick={() => navigate(`/issuers/${params.issuerId}`)}>Back</Button>
+            </Grid>
+            <Grid item xs={12} md={12} lg={12}>
+                <AddUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!}/>
+            </Grid>
+            <Grid item xs={12} md={12} lg={12}>
+                <GetUser adminAuthBadge={adminAuthBadge!} issuerId={params.issuerId!}/>
+            </Grid>
+        </>
+    );
 }
 
 export default Users;
