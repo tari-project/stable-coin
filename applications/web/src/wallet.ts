@@ -4,9 +4,9 @@ import {
     SimpleTransactionResult,
     SubmitTransactionRequest,
     Substate as TariJsSubstate,
-    TariProvider,
-    TariSigner,
-    TransactionStatus
+    TransactionStatus,
+    WalletDaemonTariProvider,
+    WalletDaemonTariSigner
 } from "@tari-project/tarijs-all";
 import {NewIssuerParams, splitOnce} from "./types";
 import {
@@ -17,16 +17,17 @@ import {
     ResourceAddress,
     SubstateRequirement,
     SubstateType,
+    UtxoAddress,
     VaultId,
 } from "@tari-project/typescript-bindings";
 
-const NETWORK = Network.Igor;
+const NETWORK = parseInt(import.meta.env.VITE_TARI_NETWORK) as Network || Network.Igor;
 
-export default class TariWallet<TProvider extends TariProvider, TSigner extends TariSigner> {
-    private provider: TProvider;
-    private signer: TSigner;
+export default class TariWallet {
+    private provider: WalletDaemonTariProvider;
+    private signer: WalletDaemonTariSigner;
 
-    constructor(provider: TProvider, signer: TSigner) {
+    constructor(provider: WalletDaemonTariProvider, signer: WalletDaemonTariSigner) {
         this.provider = provider;
         this.signer = signer;
     }
@@ -35,7 +36,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         return this.provider.isConnected();
     }
 
-    public static new<TProvider extends TariProvider, TSigner extends TariSigner>(provider: TProvider, signer: TSigner): TariWallet<TProvider, TSigner> {
+    public static new(provider: WalletDaemonTariProvider, signer: WalletDaemonTariSigner): TariWallet {
         return new TariWallet(provider, signer);
     }
 
@@ -356,13 +357,8 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         return await this.signer.getAccount();
     }
 
-    public async getConfidentialVaultBalance(vaultId: VaultId, min: number | null = null, max: number | null = null) {
-        return await this.signer.getConfidentialVaultBalances({
-            vault_id: vaultId,
-            minimum_expected_value: min,
-            maximum_expected_value: max,
-            view_key_id: 0
-        });
+    public async getUtxoBalance(utxoAddress: UtxoAddress, viewKeyId: number, min: number | null = null, max: number | null = null) {
+        return await this.signer.decryptUtxoValue(utxoAddress, viewKeyId, min, max);
     }
 
     public async exchangeStableForWrappedToken(

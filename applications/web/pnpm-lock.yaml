@@ -27,8 +27,8 @@ importers:
         specifier: ^7.25.0
         version: 7.29.6(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@mui/system@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@tari-project/react-mui-connect-button':
-        specifier: 0.14.2
-        version: 0.14.2(@mui/icons-material@6.4.12(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)
+        specifier: 0.14.3
+        version: 0.14.3(@mui/icons-material@6.4.12(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)
       '@tari-project/tarijs-all':
         specifier: link:../../../js/packages/tarijs
         version: link:../../../js/packages/tarijs
@@ -834,42 +834,48 @@ packages:
   '@swc/types@0.1.25':
     resolution: {integrity: sha512-iAoY/qRhNH8a/hBvm3zKj9qQ4oc2+3w1unPJa2XvTK3XjeLXtzcCingVPw/9e5mn1+0yPqxcBGp9Jf0pkfMb1g==}
 
-  '@tari-project/react-mui-connect-button@0.14.2':
-    resolution: {integrity: sha512-u4gEzZrvVc/NocNPfubVlUmWg61GgFX77eteCbpY00vQpxkY4nd9lCLbyfn5NPPCyezhjL1cKNJcIHUHIrEUqQ==}
+  '@tari-project/react-mui-connect-button@0.14.3':
+    resolution: {integrity: sha512-E0za5wBIXmN3PHasFFioZXRI0+oRbStARfWwJjOmpCljDChIDo0y68FmGclUs0D42hYWQwXAW14m+cWYTqK+8A==}
     peerDependencies:
       '@mui/icons-material': ^7
       '@mui/material': ^7
       react: ^18 || ^19
 
-  '@tari-project/tari-permissions@0.14.2':
-    resolution: {integrity: sha512-aRQcsrwhdqoK3bhPyM1itRY8MM+Jgntq/DIeypFO++kMYb45FfyLG9EGvrkda4bIMFV4esTdIst3+cWwW5fqyA==}
+  '@tari-project/tari-permissions@0.14.3':
+    resolution: {integrity: sha512-6wsqG7XHqixfQr0l6Sjv38CA+SvCZQHoVv6z/sfw5fnRnx34j2s4a1QMmgEUrYWLuMtlMyHu0f4xm/vPK6WbXA==}
 
-  '@tari-project/tari-provider@0.14.2':
-    resolution: {integrity: sha512-shvNdN+YK6ACPNrBdIqN7sS4n5pPpEsUV6pFwJV2AsJczqdbvUlbNbReGQaepo8GoqNFtyK7anzQiZraExTU4Q==}
+  '@tari-project/tari-provider@0.14.3':
+    resolution: {integrity: sha512-irVOtTiqJFHtMsYwyqw5Sw8Dk3cAWVGd0ivlL/LXAuLCR32NwrFoVx/xf7KF+mbYzZNNfZfuNMS8DhGslrj+wA==}
 
-  '@tari-project/tari-signer@0.14.2':
-    resolution: {integrity: sha512-43brXQfyOPHbURthbfw5/lxOFG+BVRh+ZuiTGE/V7RBgRBxCNfPKYst60J0Z3Z8zgZSp6Os0ycLrCw3F9Hd4qg==}
+  '@tari-project/tari-signer@0.14.3':
+    resolution: {integrity: sha512-r5+Sjm12L4uFVJRmh5phNkqRklNHbmpamCvftL80I+SeRR4bO7dt3iyy5DACumSBEtBnZbrY/v0eu6PrKoITyQ==}
 
-  '@tari-project/tari-universe-signer@0.14.2':
-    resolution: {integrity: sha512-h9YaklwE01ZCwOzPWIADtQEU/XxkIe47Td2nM2RG7qAi8dzvhkzBg/jjGT1ulpMJyN1Ulhl1l6cocsD5sZSfcw==}
+  '@tari-project/tari-universe-signer@0.14.3':
+    resolution: {integrity: sha512-YU/ksmJPRO7A2ZPkC2HGL9UUIS/16IjnHLxEl8Zct5N0OlM5m06dMXeNUjpOC8xwghKm7B5Za5gfbX48dxlCnA==}
 
-  '@tari-project/tarijs-builders@0.14.2':
-    resolution: {integrity: sha512-RsCzRS5ex+LSrLdoS47UdLIyPxORLqkNH8s9H7+UVaHjtBdRc9U1HfOZ0TqXiDmVZLdjR/E4/cnJIGxdEE82pw==}
+  '@tari-project/tarijs-builders@0.14.3':
+    resolution: {integrity: sha512-WZESAs3bOxMAVmBDaLuTW81IzZ0j886hrKLVhHBIzPJ0lKdN0drsNs9KthnjRMLfLV77v/Y2ope9QuQkR7dH5Q==}
 
-  '@tari-project/tarijs-types@0.14.2':
-    resolution: {integrity: sha512-l0X/0Hn2Xb+f8NckGvrKzBlPf5uKir7w5FOubIGgR49f/mDZi5qtM1dTascYubRoFLiv0yBvfQtmLaULIveNKg==}
+  '@tari-project/tarijs-types@0.14.3':
+    resolution: {integrity: sha512-s3VYCrTLrnZ9fpGk9d6XlMjpTajvK+y3YJ4QTWsUxPjIxZtijshERz5s6rPvt89KRN43ScXF8lc3OylsqzXZ6A==}
 
   '@tari-project/typescript-bindings@1.17.0':
     resolution: {integrity: sha512-VvV6fBsIglHMIhOzbN4fWKy5le/KjT3vrqFEITOMfDhJ2Igsp/r1lOINx0QexARO5nJkEo16pMYDRaMrehNasQ==}
 
-  '@tari-project/wallet-connect-signer@0.14.2':
-    resolution: {integrity: sha512-6wisaQulwTuKGHPM18XcWZpTgoQo/hcy2ivbnNMxp9djvUIZ9Q+8bue7WIKdH1P1TX6ExT8saaPG9E7R5GTQEw==}
+  '@tari-project/typescript-bindings@1.17.2':
+    resolution: {integrity: sha512-gDiI1Rl9p2cJMwNdq8E5J/D1BjRVA2UlIGlclGzJbcGd8tonxGxBBDvyJzAh0Qer2wpCx7owUhgMIXtwE9Y2Rw==}
 
-  '@tari-project/wallet-daemon-signer@0.14.2':
-    resolution: {integrity: sha512-lRcw3iZTK9o0Fhs8O4wxQtHPb1MPMILBh47RNmMx1OyEwl7iSqJ0LkgJ9OTIH6Ory/eKzOX1Y+txTKBWHnHfQA==}
+  '@tari-project/wallet-connect-signer@0.14.3':
+    resolution: {integrity: sha512-exCyd7lMxSflO0KWGGpRPCOojqPOTEN/nEzqVbZPEhMO5i1Ndyo8UNgOUdOWud/YWNtzILLIXA0G3jLFgFBtiA==}
+
+  '@tari-project/wallet-daemon-signer@0.14.3':
+    resolution: {integrity: sha512-3jYsObu4aAKOwJDQri96nXWWSewR2IL3x8h/7E00N+ge+DS/IcDcJqnlwh7JopndN6GoPQ+AiNyeZZGqZwJscw==}
 
   '@tari-project/wallet_jrpc_client@1.9.0':
     resolution: {integrity: sha512-SV1vcMgoNu9AuHHV0NcMCWNc1SNim6bRENUA4VevNFTVAizHRPv4usqqffmRPpmpmdhjNF5DOuyv/uYRWaVyAA==}
+
+  '@tari-project/wallet_jrpc_client@1.9.2':
+    resolution: {integrity: sha512-kZaBsPa7mAb+XEqIMAu5ie/3OA8iw+AMcWtYGkknNYZJOzhc79YdKtCnRLjtH4pttQpEurQ3vf9GMp3t+OlZpg==}
 
   '@thames/monads@0.7.0':
     resolution: {integrity: sha512-D9gK5uUdKJEfUESAJPwTdnhgd1odkxiVvcTlQmYeYhgDMlW4w8KcOyqEJ+m2fzxgIga9mk8IbFsy4xXrM5ssrA==}
@@ -3066,16 +3072,16 @@ snapshots:
     dependencies:
       '@swc/counter': 0.1.3
 
-  '@tari-project/react-mui-connect-button@0.14.2(@mui/icons-material@6.4.12(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)':
+  '@tari-project/react-mui-connect-button@0.14.3(@mui/icons-material@6.4.12(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)':
     dependencies:
       '@mui/icons-material': 6.4.12(@mui/material@6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(@types/react@19.1.8)(react@19.1.0)
       '@mui/material': 6.4.12(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react@19.1.0))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@tari-project/tari-permissions': 0.14.2
-      '@tari-project/tari-provider': 0.14.2
-      '@tari-project/tari-signer': 0.14.2
-      '@tari-project/tari-universe-signer': 0.14.2
-      '@tari-project/wallet-connect-signer': 0.14.2(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)
-      '@tari-project/wallet-daemon-signer': 0.14.2
+      '@tari-project/tari-permissions': 0.14.3
+      '@tari-project/tari-provider': 0.14.3
+      '@tari-project/tari-signer': 0.14.3
+      '@tari-project/tari-universe-signer': 0.14.3
+      '@tari-project/wallet-connect-signer': 0.14.3(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)
+      '@tari-project/wallet-daemon-signer': 0.14.3
       react: 19.1.0
     transitivePeerDependencies:
       - '@azure/app-configuration'
@@ -3104,50 +3110,54 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@tari-project/tari-permissions@0.14.2': {}
+  '@tari-project/tari-permissions@0.14.3': {}
 
-  '@tari-project/tari-provider@0.14.2':
+  '@tari-project/tari-provider@0.14.3':
     dependencies:
-      '@tari-project/tarijs-types': 0.14.2
-      '@tari-project/typescript-bindings': 1.17.0
+      '@tari-project/tarijs-types': 0.14.3
+      '@tari-project/typescript-bindings': 1.17.2
 
-  '@tari-project/tari-signer@0.14.2':
+  '@tari-project/tari-signer@0.14.3':
     dependencies:
-      '@tari-project/tarijs-types': 0.14.2
-      '@tari-project/typescript-bindings': 1.17.0
+      '@tari-project/tarijs-types': 0.14.3
+      '@tari-project/typescript-bindings': 1.17.2
 
-  '@tari-project/tari-universe-signer@0.14.2':
+  '@tari-project/tari-universe-signer@0.14.3':
     dependencies:
-      '@tari-project/tari-permissions': 0.14.2
-      '@tari-project/tari-signer': 0.14.2
-      '@tari-project/tarijs-types': 0.14.2
-      '@tari-project/typescript-bindings': 1.17.0
-      '@tari-project/wallet_jrpc_client': 1.9.0
+      '@tari-project/tari-permissions': 0.14.3
+      '@tari-project/tari-signer': 0.14.3
+      '@tari-project/tarijs-types': 0.14.3
+      '@tari-project/typescript-bindings': 1.17.2
+      '@tari-project/wallet_jrpc_client': 1.9.2
 
-  '@tari-project/tarijs-builders@0.14.2':
+  '@tari-project/tarijs-builders@0.14.3':
     dependencies:
-      '@tari-project/tari-signer': 0.14.2
-      '@tari-project/tari-universe-signer': 0.14.2
-      '@tari-project/tarijs-types': 0.14.2
-      '@tari-project/typescript-bindings': 1.17.0
+      '@tari-project/tari-signer': 0.14.3
+      '@tari-project/tari-universe-signer': 0.14.3
+      '@tari-project/tarijs-types': 0.14.3
+      '@tari-project/typescript-bindings': 1.17.2
 
-  '@tari-project/tarijs-types@0.14.2':
+  '@tari-project/tarijs-types@0.14.3':
     dependencies:
-      '@tari-project/typescript-bindings': 1.17.0
+      '@tari-project/typescript-bindings': 1.17.2
       '@thames/monads': 0.7.0
 
   '@tari-project/typescript-bindings@1.17.0':
     dependencies:
       bech32: 2.0.0
 
-  '@tari-project/wallet-connect-signer@0.14.2(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)':
+  '@tari-project/typescript-bindings@1.17.2':
+    dependencies:
+      bech32: 2.0.0
+
+  '@tari-project/wallet-connect-signer@0.14.3(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)':
     dependencies:
       '@reown/appkit': 1.7.15(@types/react@19.1.8)(react@19.1.0)(typescript@5.8.3)(zod@3.22.4)
-      '@tari-project/tari-permissions': 0.14.2
-      '@tari-project/tari-signer': 0.14.2
-      '@tari-project/tarijs-builders': 0.14.2
-      '@tari-project/tarijs-types': 0.14.2
-      '@tari-project/typescript-bindings': 1.17.0
+      '@tari-project/tari-permissions': 0.14.3
+      '@tari-project/tari-signer': 0.14.3
+      '@tari-project/tarijs-builders': 0.14.3
+      '@tari-project/tarijs-types': 0.14.3
+      '@tari-project/typescript-bindings': 1.17.2
       '@walletconnect/universal-provider': 2.21.3(typescript@5.8.3)(zod@3.22.4)
     transitivePeerDependencies:
       - '@azure/app-configuration'
@@ -3177,18 +3187,22 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@tari-project/wallet-daemon-signer@0.14.2':
+  '@tari-project/wallet-daemon-signer@0.14.3':
     dependencies:
-      '@tari-project/tari-permissions': 0.14.2
-      '@tari-project/tari-provider': 0.14.2
-      '@tari-project/tari-signer': 0.14.2
-      '@tari-project/tarijs-types': 0.14.2
-      '@tari-project/typescript-bindings': 1.17.0
-      '@tari-project/wallet_jrpc_client': 1.9.0
+      '@tari-project/tari-permissions': 0.14.3
+      '@tari-project/tari-provider': 0.14.3
+      '@tari-project/tari-signer': 0.14.3
+      '@tari-project/tarijs-types': 0.14.3
+      '@tari-project/typescript-bindings': 1.17.2
+      '@tari-project/wallet_jrpc_client': 1.9.2
 
   '@tari-project/wallet_jrpc_client@1.9.0':
     dependencies:
       '@tari-project/typescript-bindings': 1.17.0
+
+  '@tari-project/wallet_jrpc_client@1.9.2':
+    dependencies:
+      '@tari-project/typescript-bindings': 1.17.2
 
   '@thames/monads@0.7.0': {}
 

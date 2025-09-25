@@ -57,7 +57,7 @@ function UserVault(props: Props) {
     useEffect(() => {
         setLoading(true);
         provider
-            .getConfidentialVaultBalance(props.vaultId)
+            .getSubstate(props.vaultId)
             .then((balances) => {
                 setBalances(balances);
 

@@ -33,8 +33,8 @@ mod template {
     use super::*;
     use crate::config::FeeSpec;
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
-    use std::collections::BTreeSet;
-    use tari_template_lib::{args::LogLevel, engine};
+    use tari_template_lib::engine;
+    use tari_template_lib::prelude::crypto::StealthValueProof;
 
     pub struct TariStableCoin {
         config: StableCoinConfig,
@@ -127,8 +127,8 @@ mod template {
                     "exchange_wrapped_for_stable_tokens",
                     require_user_or_admin.clone(),
                 )
-                // authorize_user_deposit is an auth hook, so needs to be callable by any user/admin
-                .add_method_rule("authorize_user_deposit", require_user_or_admin)
+                // authorize_user_deposit is an auth hook, so needs to be callable by any user/admin (TODO: currently needs allow_all)
+                .add_method_rule("authorize_user_deposit", rule!(allow_all))
                 .default(require_admin);
 
             // Create component
@@ -160,12 +160,9 @@ mod template {
                     let Some(component_state) = caller.component_state() else {
                         panic!("deposit not permitted from static template function")
                     };
-                    engine().emit_log(
-                        LogLevel::Info,
-                        format!(
-                            "Authorizing deposit for user with component {}",
-                            caller.component().unwrap()
-                        ),
+                    info!(
+                        "Authorizing deposit for user with component {}",
+                        caller.component().unwrap()
                     );
                     let user_account = Account::from_value(component_state)
                         .expect("Deposit must be to an account");
@@ -186,8 +183,7 @@ mod template {
 
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
-            let proof = ConfidentialOutputStatement::mint_revealed(amount);
-            let new_tokens = self.token_vault_manager().mint_confidential(proof);
+            let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
 
             if let Some(ref mut wrapped_token) = self.wrapped_token {
@@ -201,9 +197,7 @@ mod template {
 
         /// Decrease token supply by amount.
         pub fn decrease_supply(&mut self, amount: Amount) {
-            let proof = ConfidentialWithdrawProof::revealed_withdraw(amount);
-
-            let tokens = self.token_vault.withdraw_confidential(proof);
+            let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
 
             if let Some(ref mut wrapped_token) = self.wrapped_token {
@@ -222,8 +216,7 @@ mod template {
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
-            let proof = ConfidentialWithdrawProof::revealed_withdraw(amount);
-            let bucket = self.token_vault.withdraw_confidential(proof);
+            let bucket = self.token_vault.withdraw(amount);
             emit_event(
                 "withdraw",
                 metadata!("amount_withdrawn" => bucket.amount().to_string()),
@@ -241,23 +234,16 @@ mod template {
         pub fn exchange_stable_for_wrapped_tokens(
             &mut self,
             proof: Proof,
-            confidential_bucket: Bucket,
+            bucket: Bucket,
         ) -> Bucket {
             assert_eq!(
-                confidential_bucket.resource_address(),
+                bucket.resource_address(),
                 self.token_vault.resource_address(),
                 "The bucket must contain the same resource as the token vault"
             );
 
-            // Check the bucket does not contain any non-revealed confidential tokens
-            assert_eq!(
-                confidential_bucket.count_confidential_commitments(),
-                0,
-                "No confidential outputs allowed when exchanging for wrapped tokens"
-            );
-
             assert!(
-                !confidential_bucket.amount().is_zero(),
+                bucket.amount().is_positive(),
                 "The bucket must contain some tokens"
             );
 
@@ -269,7 +255,7 @@ mod template {
             let user = badge.get_data::<UserData>();
             let user_data = badge.get_mutable_data::<UserMutableData>();
 
-            let amount = confidential_bucket.amount();
+            let amount = bucket.amount();
             assert!(
                 amount <= user_data.wrapped_exchange_limit,
                 "Exchange limit exceeded"
@@ -285,7 +271,7 @@ mod template {
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
 
-            self.token_vault.deposit(confidential_bucket);
+            self.token_vault.deposit(bucket);
 
             let wrapped_tokens = self.wrapped_token_mut().vault_mut().withdraw(new_amount);
 
@@ -344,12 +330,7 @@ mod template {
             tokens
         }
 
-        pub fn recall_tokens(
-            &mut self,
-            user_id: UserId,
-            commitments: BTreeSet<PedersenCommitmentBytes>,
-            amount: Amount,
-        ) {
+        pub fn recall_revealed_tokens(&mut self, user_id: UserId, amount: Amount) {
             // Fetch the user badge
             let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let user = badge.get_data::<UserData>();
@@ -361,11 +342,10 @@ mod template {
                 .get_vault_by_resource(&self.token_vault.resource_address())
                 .expect("The user's account does not have a vault for the stable coin resource");
             let vault_id = vault.vault_id();
-            let num_commitments = commitments.len();
 
-            let bucket =
-                self.token_vault_manager()
-                    .recall_confidential(vault_id, commitments, amount);
+            let bucket = self
+                .token_vault_manager()
+                .recall_fungible_amount(vault_id, amount);
             self.token_vault.deposit(bucket);
 
             emit_event(
@@ -373,7 +353,18 @@ mod template {
                 metadata!(
                         "user_id" => user_id.to_string(),
                         "revealed_amount" => amount.to_string(),
-                        "num_commitments" => num_commitments.to_string(),
+                ),
+            );
+        }
+
+        pub fn burn_utxos(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
+            self.token_vault_manager()
+                .burn_utxo(utxo, Some(value_proof));
+            emit_event(
+                "burn_utxos",
+                metadata!(
+                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
+                    "utxo_id" => utxo.to_string()
                 ),
             );
         }
@@ -527,7 +518,7 @@ mod template {
 
         pub fn pause(&mut self, proof: Proof) {
             proof.assert_resource(self.admin_auth_manager.resource_address());
-            // Could also add an additional check for a specific admin badge ID if desired
+            // Could also add an check for a specific admin badge ID if desired
             let badge = proof
                 .get_non_fungibles()
                 .first()

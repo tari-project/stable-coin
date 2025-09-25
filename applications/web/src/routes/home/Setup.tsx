@@ -151,7 +151,6 @@ function IssuerComponents() {
             .getPublicKey("elgamal_encryption_view_key", 0)
             .then((viewKey) => provider!.createNewIssuer(settings.template!, {...data, viewKey}))
             .then(async (result) => {
-                // TODO: improve error formatting
                 if (result.rejected.isSome()) {
                     throw new Error(`Transaction rejected: ${JSON.stringify(result.rejected.unwrap())}`);
                 }
@@ -298,8 +297,8 @@ export async function convertToIssuer<T extends TariProvider, S extends TariSign
     const {value: component, address} = issuer;
     const structMap = component.body.state as CborValue;
     const vaultId = getCborValueByPath(structMap, "$.token_vault") as string;
-    const adminAuthResource = getCborValueByPath(structMap, "$.admin_auth_resource");
-    const userAuthResource = getCborValueByPath(structMap, "$.user_auth_resource");
+    const adminAuthResource = getCborValueByPath(structMap, "$.admin_auth_manager");
+    const userAuthResource = getCborValueByPath(structMap, "$.user_auth_manager");
     const {value: vault} = await provider!.getSubstate(vaultId);
     console.log({vaultId, vault});
     if (!vault || !("Vault" in vault)) {

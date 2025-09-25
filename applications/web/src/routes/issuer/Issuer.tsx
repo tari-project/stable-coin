@@ -101,9 +101,6 @@ function Issuer() {
 
 
     function load() {
-        if (!activeIssuer) {
-            return;
-        }
         const decoded = decodeOotleAddress(account!.wallet_address);
         const issuers = getIssuers(decoded.accountPublicKey);
         if (!issuers) {
@@ -115,7 +112,7 @@ function Issuer() {
         }))))
             .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider!, s))))
             .then((issuers) => {
-                if (activeIssuer.id !== params.issuerId && !error) {
+                if (activeIssuer?.id !== params.issuerId && !error) {
                     setIssuers(decoded.accountPublicKey, issuers);
                     const issuer = (issuers || [])
                         .find((i: StableCoinIssuer) => i.id == params.issuerId!);
