@@ -21,12 +21,10 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import "./Style.css";
-import Grid from "@mui/material/Grid";
-import {StyledPaper} from "../../components/StyledComponents.ts";
+import {StyledPaper} from "../../components/StyledComponents";
 import * as React from "react";
-import useTariProvider from "../../store/provider.ts";
-import {Alert, TextField} from "@mui/material";
-import Button from "@mui/material/Button";
+import useTariProvider from "../../store/provider";
+import {Alert, Button, Grid2 as Grid, TextField} from "@mui/material";
 import {ComponentAddress, ResourceAddress} from "@tari-project/typescript-bindings";
 
 interface Props {
@@ -69,15 +67,15 @@ function AddUser(props: Props) {
         try {
             const result = await provider!.createUser(
                 props.issuerId, props.adminAuthBadge, values.userId, values.userAccount);
-            if (result.rejectReason) {
-                setError(new Error(`Transaction failed ${JSON.stringify(result.rejectReason)}`));
+            if (result.anyRejectReason.isSome()) {
+                setError(new Error(`Transaction failed ${JSON.stringify(result.anyRejectReason.unwrap())}`));
                 return;
             }
-            console.log(result.accept?.up_substates);
-            const [_t, id, _v, _val] = result.accept?.up_substates
-                ?.filter(([type, _id, _v, _val]) => type === "NonFungible")
-                .find(([_type, id, _v, _val]) => id.endsWith(`_u64_${values.userId}`))!;
-            setSuccess(`User created in transaction ${result.transactionId}. User badge: ${JSON.stringify(id)}`);
+            console.log(result.accept?.unwrap().upSubstates());
+            const up = result.accept?.unwrap().upSubstates()
+                ?.filter((up) => up.type === "NonFungible")
+                .find((up) => up.id.endsWith(`_u64_${values.userId}`))!;
+            setSuccess(`User created in transaction ${result.transactionId}. User badge: ${JSON.stringify(up.id)}`);
             setFormValues({});
         } catch (e) {
             setError(e as Error);
@@ -92,40 +90,40 @@ function AddUser(props: Props) {
                 {error && <Alert severity="error">{error.message}</Alert>}
                 {success && <Alert severity="success">{success}</Alert>}
                 <Grid container spacing={2}>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <h2>Add User</h2>
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <form
                             onSubmit={async (e) => {
                                 e.preventDefault();
                                 await createUser(formValues);
                             }}
                         >
-                            <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
+                            <Grid size={12} paddingBottom={4}>
                                 <Alert severity="info">Admin Badge: {props.adminAuthBadge}</Alert>
                             </Grid>
-                            <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
+                            <Grid size={12} paddingBottom={4}>
                                 <TextField
                                     name="userId"
                                     placeholder="12345"
                                     label="User ID (must be unique per user)"
                                     fullWidth
                                     required
-                                    inputProps={{pattern: "^[0-9]*$"}}
+                                    slotProps={{htmlInput: {pattern: "^[0-9]*$"}}}
                                     onChange={set}
                                     onBlur={validate}
                                     value={formValues.userId || ""}
                                 />
                                 {validity.userId === false && <Alert severity="error">User ID must be a number</Alert>}
                             </Grid>
-                            <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
+                            <Grid size={12} paddingBottom={4}>
                                 <TextField
                                     name="userAccount"
                                     placeholder="component_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                     label="User Account Component"
                                     fullWidth
-                                    slotProps={{input: {pattern: "^component_[0-9a-fA-F]{64}$"}}}
+                                    slotProps={{htmlInput: {pattern: "^component_[0-9a-fA-F]{64}$"}}}
                                     required
                                     onChange={set}
                                     onBlur={validate}
@@ -133,11 +131,11 @@ function AddUser(props: Props) {
                                 />
                             </Grid>
                             {validity.userAccount === false && (
-                                <Grid item xs={12} md={12} lg={12}>
+                                <Grid size={12}>
                                     <Alert severity="error">User account must be a component ID</Alert>
                                 </Grid>
                             )}
-                            <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
+                            <Grid size={12} sx={{textAlign: "left"}}>
                                 <Button type="submit" disabled={isBusy || !isValid} variant="contained">
                                     Create
                                 </Button>

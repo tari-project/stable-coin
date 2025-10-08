@@ -1,20 +1,18 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-import Grid from "@mui/material/Grid";
+import {Alert, Button, CircularProgress, Grid2 as Grid, TextField} from "@mui/material";
 import * as React from "react";
-import {StyledPaper} from "../../components/StyledComponents.ts";
-import {Alert, CircularProgress, TextField} from "@mui/material";
-import Button from "@mui/material/Button";
-import useTariProvider from "../../store/provider.ts";
+import {StyledPaper} from "../../components/StyledComponents";
+import useTariProvider from "../../store/provider";
 import {useNavigate} from "react-router-dom";
-import {StableCoinIssuer} from "../../store/stableCoinIssuer.ts";
-import {SimpleTransactionResult} from "../../types.ts";
+import {StableCoinIssuer} from "../../store/stableCoinIssuer";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import {RefreshOutlined} from "@mui/icons-material";
-import {AccountDetails} from "../../components/AccountDetails.tsx";
-import useActiveAccount from "../../store/account.ts";
+import {AccountDetails} from "../../components/AccountDetails";
+import useActiveAccount from "../../store/account";
+import {SimpleTransactionResult} from "@tari-project/tarijs-all";
 
 interface Props {
     issuer: StableCoinIssuer;
@@ -58,17 +56,18 @@ function WrappedToken({issuer}: Props) {
         try {
             setIsBusy(true);
             const result = await provider.exchangeStableForWrappedToken(
-                `component_${issuer.id}`,
-                account!.address,
+                issuer.id,
+                account!.component_address,
                 issuer.vault.resourceAddress,
                 issuer.userAuthResource,
                 Number(formValues.userId.trim()),
                 Number(formValues.exchangeAmount.trim()),
             );
-            if (result.accept) {
+            if (result.accept.isSome()) {
                 setExchangeResult(result);
             } else {
-                setError(new Error(JSON.stringify(result.rejectReason)));
+                const reason = result.anyRejectReason.unwrap();
+                setError(new Error(JSON.stringify(reason)));
             }
 
             loadAccount();
@@ -85,8 +84,8 @@ function WrappedToken({issuer}: Props) {
         try {
             setIsBusy(true);
             const result = await provider.exchangeWrappedForStable(
-                `component_${issuer.id}`,
-                account!.address,
+                issuer.id,
+                account!.component_address,
                 issuer.wrappedToken!.resource,
                 issuer.userAuthResource,
                 Number(formValues.userId.trim()),
@@ -95,7 +94,8 @@ function WrappedToken({issuer}: Props) {
             if (result.accept) {
                 setExchangeResult(result);
             } else {
-                setError(new Error(JSON.stringify(result.rejectReason)));
+                const reason = result.anyRejectReason.unwrap();
+                setError(new Error(JSON.stringify(reason)));
             }
 
             loadAccount();
@@ -139,13 +139,13 @@ function WrappedToken({issuer}: Props) {
             </Box>
             <Grid container spacing={2}>
                 <Grid container spacing={2} sx={{paddingBottom: 2}}>
-                    <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
+                    <Grid size={12} sx={{textAlign: "left"}}>
                         <IconButton onClick={loadAccount}>
                             <RefreshOutlined/>
                         </IconButton>
                         {account ? <AccountDetails account={account}/> : <CircularProgress size={24}/>}
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
+                    <Grid size={12} sx={{textAlign: "left"}}>
                         <TextField
                             label="User Id"
                             value={formValues.userId || ""}
@@ -155,7 +155,7 @@ function WrappedToken({issuer}: Props) {
                             onBlur={onValidate("userId")}
                         />
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
+                    <Grid size={12} sx={{textAlign: "left"}}>
                         <TextField
                             label="Exchange Amount"
                             value={formValues.exchangeAmount || ""}
@@ -167,7 +167,7 @@ function WrappedToken({issuer}: Props) {
                     </Grid>
                 </Grid>
                 <Grid container spacing={2}>
-                    <Grid item xs={6} md={6} lg={6} sx={{textAlign: "left"}}>
+                    <Grid size={6} sx={{textAlign: "left"}}>
                         <Button
                             variant="contained"
                             color="primary"
@@ -177,7 +177,7 @@ function WrappedToken({issuer}: Props) {
                             {isBusy ? <CircularProgress size={24}/> : <span>Exchange Stable -&gt; Wrapped</span>}
                         </Button>
                     </Grid>
-                    <Grid item xs={6} md={6} lg={6} sx={{textAlign: "left"}}>
+                    <Grid size={6} sx={{textAlign: "left"}}>
                         <Button
                             variant="contained"
                             color="primary"
@@ -188,7 +188,7 @@ function WrappedToken({issuer}: Props) {
                         </Button>
                     </Grid>
                     {invalid.exchangeAmount && (
-                        <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
+                        <Grid size={12} sx={{textAlign: "left"}}>
                             <Alert severity="error">{invalid.exchangeAmount}</Alert>
                         </Grid>
                     )}

@@ -21,34 +21,34 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import "./Home.css";
-import InitialSetup from "./Setup.tsx";
-import useTariProvider from "../../store/provider.ts";
+import InitialSetup from "./Setup";
+import useTariProvider from "../../store/provider";
 import Grid from "@mui/material/Grid";
-import SecondaryHeading from "../../components/SecondaryHeading.tsx";
-import { StyledPaper } from "../../components/StyledComponents.ts";
-import { BsUsbPlug } from "react-icons/bs";
+import SecondaryHeading from "../../components/SecondaryHeading";
+import {StyledPaper} from "../../components/StyledComponents";
+import {BsUsbPlug} from "react-icons/bs";
 
 
 function Home() {
-  const { provider } = useTariProvider();
+    const {provider} = useTariProvider();
 
-  if (!provider) {
-    return (
-      <>
-        <Grid item xs={12} md={12} lg={12}>
-          <StyledPaper>
-            <SecondaryHeading>
-              {" "}
-              <BsUsbPlug />
-              Please connect your wallet
-            </SecondaryHeading>
-          </StyledPaper>
-        </Grid>
-      </>
-    );
-  }
+    if (!provider) {
+        return (
+            <>
+                <Grid item xs={12} md={12} lg={12}>
+                    <StyledPaper>
+                        <SecondaryHeading>
+                            {" "}
+                            <BsUsbPlug/>
+                            Please connect your wallet
+                        </SecondaryHeading>
+                    </StyledPaper>
+                </Grid>
+            </>
+        );
+    }
 
-  return <InitialSetup />;
+    return <InitialSetup/>;
 }
 
 export default Home;

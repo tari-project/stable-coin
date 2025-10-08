@@ -20,48 +20,48 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import React from "react";
-import { Link as RouterLink } from "react-router-dom";
-import { Breadcrumbs, Link } from "@mui/material";
-import useBreadcrumbs from "use-react-router-breadcrumbs";
+import {Link as RouterLink} from "react-router-dom";
+import {Breadcrumbs, Link} from "@mui/material";
+import useBreadcrumbs, {BreadcrumbsRoute} from "use-react-router-breadcrumbs";
+import {FC} from "react";
 
 export interface BreadcrumbsItem {
-  label: string;
-  path: string;
-  dynamic: boolean;
+    label: string;
+    path: string;
+    dynamic: boolean;
 }
 
 interface BreadcrumbsProps {
-  items: BreadcrumbsItem[];
+    items: BreadcrumbsItem[];
 }
 
-const BreadcrumbsComponent: React.FC<BreadcrumbsProps> = ({ items }) => {
-  const breadcrumbs = useBreadcrumbs(items);
+const BreadcrumbsComponent: FC<BreadcrumbsProps> = ({items}: { items: BreadcrumbsRoute[] }) => {
+    const breadcrumbs = useBreadcrumbs(items);
 
-  const links = breadcrumbs.map(({ match, breadcrumb }: any, i) => {
-    const breadcrumbLabel = breadcrumb.props.children;
-    const { label, path, dynamic } = match.route;
+    const links = breadcrumbs.map(({match, breadcrumb}: any, i) => {
+        const breadcrumbLabel = breadcrumb.props.children;
+        const {label, path, dynamic} = match.route;
+        return (
+            <Link key={i} component={RouterLink} to={path} underline="none" color="inherit">
+                {dynamic ? breadcrumbLabel : label}
+            </Link>
+        );
+    });
+
     return (
-      <Link key={i} component={RouterLink} to={path} underline="none" color="inherit">
-        {dynamic ? breadcrumbLabel : label}
-      </Link>
+        <>
+            <Breadcrumbs
+                aria-label="breadcrumb"
+                separator="›"
+                style={{
+                    fontSize: "0.8rem",
+                    paddingBottom: "1rem",
+                }}
+            >
+                {links}
+            </Breadcrumbs>
+        </>
     );
-  });
-
-  return (
-    <>
-      <Breadcrumbs
-        aria-label="breadcrumb"
-        separator="›"
-        style={{
-          fontSize: "0.8rem",
-          paddingBottom: "1rem",
-        }}
-      >
-        {links}
-      </Breadcrumbs>
-    </>
-  );
 };
 
 export default BreadcrumbsComponent;

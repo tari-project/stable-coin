@@ -22,29 +22,33 @@
 
 import "./Home.css";
 import Button from "@mui/material/Button";
-import {CircularProgress, TableHead, TextField} from "@mui/material";
+import {
+    CircularProgress,
+    Grid2 as Grid,
+    Table,
+    TableBody,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField
+} from "@mui/material";
 import {useEffect, useState} from "react";
-import Grid from "@mui/material/Grid";
-import useSettings from "../../store/settings.ts";
-import SecondaryHeading from "../../components/SecondaryHeading.tsx";
-import {StyledPaper} from "../../components/StyledComponents.ts";
-import NewIssuerDialog from "./NewIssuerDialog.tsx";
-import useTariProvider from "../../store/provider.ts";
-import {NewIssuerParams} from "../../types.ts";
+import useSettings from "../../store/settings";
+import SecondaryHeading from "../../components/SecondaryHeading";
+import {DataTableCell, StyledPaper} from "../../components/StyledComponents";
+import NewIssuerDialog from "./NewIssuerDialog";
+import useTariProvider from "../../store/provider";
+import {NewIssuerParams} from "../../types";
 import {Link, useNavigate} from "react-router-dom";
-import {TableContainer, Table, TableRow, TableBody} from "@mui/material";
-import {DataTableCell} from "../../components/StyledComponents";
-import useIssuers from "../../store/issuers.ts";
-import {CborValue} from "../../cbor.ts";
-import * as cbor from "../../cbor.ts";
-import {StableCoinIssuer} from "../../store/stableCoinIssuer.ts";
-import useActiveAccount from "../../store/account.ts";
+import useIssuers from "../../store/issuers";
+import {StableCoinIssuer} from "../../store/stableCoinIssuer";
+import useActiveAccount from "../../store/account";
 import IconButton from "@mui/material/IconButton";
 import {RefreshOutlined} from "@mui/icons-material";
-import {AccountDetails} from "../../components/AccountDetails.tsx";
-import {getCborValueByPath, Substate, TariProvider, TariSigner} from "@tari-project/tarijs-all";
-import TariWallet from "../../wallet.ts";
-import {substateIdToString} from "@tari-project/typescript-bindings";
+import {AccountDetails} from "../../components/AccountDetails";
+import {CborValue, getCborValueByPath, Substate, TariProvider, TariSigner} from "@tari-project/tarijs-all";
+import TariWallet from "../../wallet";
+import {ComponentHeader, decodeOotleAddress, substateIdToString, VaultId} from "@tari-project/typescript-bindings";
 
 function SetTemplateForm() {
     const {settings, setTemplate} = useSettings();
@@ -61,7 +65,7 @@ function SetTemplateForm() {
                     }
                 }}
             >
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <p>1. Set the template ID of the issuer template on the current network</p>
                     <TextField
                         name="template ID"
@@ -76,7 +80,7 @@ function SetTemplateForm() {
                         value={currentSettings.template || ""}
                     />
                 </Grid>
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <Button type="submit" disabled={settings.template === currentSettings.template}>
                         Set Template
                     </Button>
@@ -99,6 +103,13 @@ function IssuerComponents() {
     const [issuerComponents, setIssuerComponents] = useState<object[] | null>(null);
     const {account} = useActiveAccount();
 
+    if (!account) {
+        navigate("/");
+        return <></>;
+    }
+
+    const decodedAccountAddress = decodeOotleAddress(account!.wallet_address);
+
 
     if (provider === null) {
         useEffect(() => {
@@ -117,7 +128,9 @@ function IssuerComponents() {
                     value: substate.value.Component,
                 })))))
             .then((substates) => Promise.all(substates.map((s) => convertToIssuer(provider, s))))
-            .then((issuers) => setIssuers(account!.public_key, issuers))
+            .then((issuers) => {
+                setIssuers(decodedAccountAddress.accountPublicKey, issuers)
+            })
             .catch((e: Error) => setError(e))
             .finally(() => setIsBusy(false));
     }, []);
@@ -125,8 +138,8 @@ function IssuerComponents() {
     useEffect(() => {
         if (!isBusy && settings.template && !error) {
             setIssuerComponents(
-                (getIssuers(account!.public_key) || []).map((issuer) => ({
-                    substate_id: {Component: issuer.id},
+                (getIssuers(decodedAccountAddress.accountPublicKey) || []).map((issuer) => ({
+                    substate_id: issuer.id,
                     version: issuer.version,
                 })));
         }
@@ -135,29 +148,31 @@ function IssuerComponents() {
     function handleOnCreate(data: NewIssuerParams) {
         setIsBusy(true);
         provider!
-            .getPublicKey("view_key", 0)
+            .getPublicKey("elgamal_encryption_view_key", 0)
             .then((viewKey) => provider!.createNewIssuer(settings.template!, {...data, viewKey}))
             .then(async (result) => {
-                // TODO: improve error formatting
-                if (result.rejected) {
-                    throw new Error(`Transaction rejected: ${JSON.stringify(result.rejected)}`);
+                if (result.rejected.isSome()) {
+                    throw new Error(`Transaction rejected: ${JSON.stringify(result.rejected.unwrap())}`);
                 }
-                if (result.onlyFeeAccepted) {
-                    let [_diff, reason] = result.onlyFeeAccepted;
+                if (result.onlyFeeAccepted.isSome()) {
+                    let [_diff, reason] = result.onlyFeeAccepted.unwrap();
                     throw new Error(`Transaction rejected (fees charged): ${JSON.stringify(reason)}`);
                 }
-                // Strict null checking
-                if (!result.accept) {
+
+                if (result.accept.isNone()) {
                     throw new Error(`Invariant error: result must be accepted if it is not rejected: ${JSON.stringify(result)}`);
                 }
 
-                const diff = result.accept;
-                const [_type, id, version, val] = diff.up_substates
-                    .find(([type, _id, _version, val]) => type == "Component" && val?.template_address === settings.template)!;
+                const diff = result.accept.unwrap();
+                const up = diff.upSubstates()
+                    .find((up) => up.type == "Component" && (up.substate as ComponentHeader).template_address === settings.template)!;
 
-                let issuer = await convertToIssuer(provider!, {address: {substate_id: id, version}, value: val});
-                addIssuer(account!.public_key, issuer);
-                navigate(`/issuers/component_${id}`);
+                let issuer = await convertToIssuer(provider!, {
+                    address: {substate_id: up.id, version: up.version},
+                    value: up.substate
+                });
+                addIssuer(decodedAccountAddress.accountPublicKey, issuer);
+                navigate(`/issuers/${up.id}`);
             })
             .catch((e) => {
                 console.log(e);
@@ -175,7 +190,7 @@ function IssuerComponents() {
                 isBusy={isBusy}
                 error={error}
             />
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <p>2. Create a new issuer component, or select an existing one</p>
                 <Button onClick={() => setDialogOpen(true)}>Create New Issuer</Button>
                 <br/>
@@ -248,23 +263,23 @@ function InitialSetup() {
 
     return (
         <>
-            <Grid item sm={12} md={12} xs={12}>
+            <Grid size={12}>
                 <SecondaryHeading>Setup</SecondaryHeading>
             </Grid>
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <StyledPaper>
                     <SetTemplateForm/>
                 </StyledPaper>
             </Grid>
 
             {settings.template && (
-                <Grid item xs={12} md={12} lg={12}>
+                <Grid size={12}>
                     <StyledPaper>
                         <IssuerComponents/>
                     </StyledPaper>
                 </Grid>
             )}
-            <Grid item xs={12} md={12} lg={12}>
+            <Grid size={12}>
                 <StyledPaper>
                     <IconButton onClick={loadAccount}>
                         <RefreshOutlined/>
@@ -281,20 +296,20 @@ function InitialSetup() {
 export async function convertToIssuer<T extends TariProvider, S extends TariSigner>(provider: TariWallet<T, S>, issuer: Substate): Promise<StableCoinIssuer> {
     const {value: component, address} = issuer;
     const structMap = component.body.state as CborValue;
-    const vaultId = getCborValueByPath(structMap, "$.token_vault");
-    const adminAuthResource = getCborValueByPath(structMap, "$.admin_auth_resource");
-    const userAuthResource = getCborValueByPath(structMap, "$.user_auth_resource");
+    const vaultId = getCborValueByPath(structMap, "$.token_vault") as string;
+    const adminAuthResource = getCborValueByPath(structMap, "$.admin_auth_manager");
+    const userAuthResource = getCborValueByPath(structMap, "$.user_auth_manager");
     const {value: vault} = await provider!.getSubstate(vaultId);
     console.log({vaultId, vault});
     if (!vault || !("Vault" in vault)) {
         throw new Error(`${vaultId} is not a vault`);
     }
     const container = vault.Vault.resource_container;
-    if (!("Confidential" in container)) {
-        throw new Error("Vault is not confidential");
+    if (!("Stealth" in container)) {
+        throw new Error("Vault is not stealth");
     }
 
-    const wrappedTokenComponent = getCborValueByPath(structMap, "$.wrapped_token");
+    const wrappedTokenComponent = getCborValueByPath(structMap, "$.wrapped_token") as { vault: VaultId };
     const wrappedVault = wrappedTokenComponent ? await provider!.getSubstate(wrappedTokenComponent.vault) : null;
     const wrappedContainer = (wrappedVault?.value as any)?.Vault.resource_container.Fungible;
 
@@ -309,8 +324,8 @@ export async function convertToIssuer<T extends TariProvider, S extends TariSign
         version: address.version,
         vault: {
             id: vaultId,
-            resourceAddress: container.Confidential.address,
-            revealedAmount: container.Confidential.revealed_amount,
+            resourceAddress: container.Stealth.address,
+            revealedAmount: container.Stealth.revealed_amount,
         },
         adminAuthResource,
         userAuthResource,

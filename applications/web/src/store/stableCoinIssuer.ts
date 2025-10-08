@@ -80,7 +80,7 @@ export class StableCoinIssuer {
     }
 
     get issuerComponentAddress(): ComponentAddress {
-        return `component_${this.id}`;
+        return this.id as ComponentAddress;
     }
 }
 

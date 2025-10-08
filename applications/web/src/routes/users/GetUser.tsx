@@ -21,22 +21,19 @@
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import "./Style.css";
-import Grid from "@mui/material/Grid";
-import {StyledPaper} from "../../components/StyledComponents.ts";
+import {StyledPaper} from "../../components/StyledComponents";
 import * as React from "react";
-import useTariProvider from "../../store/provider.ts";
-import {Alert, TextField} from "@mui/material";
-import Button from "@mui/material/Button";
 import {useEffect} from "react";
-import * as cbor from "../../cbor";
-import ManageUser from "./ManageUser.tsx";
+import useTariProvider from "../../store/provider";
+import {Alert, Button, Grid2 as Grid, TextField} from "@mui/material";
+import ManageUser from "./ManageUser";
 import {ComponentAddress, ResourceAddress, Vault, VaultId} from "@tari-project/typescript-bindings";
-import RecallTokens from "./RecallTokens.tsx";
-import Transfers from "./Transfers.tsx";
-import useActiveIssuer from "../../store/stableCoinIssuer.ts";
-import UserVault from "./UserVault.tsx";
+import RecallTokens from "./RecallTokens";
+import Transfers from "./Transfers";
+import useActiveIssuer from "../../store/stableCoinIssuer";
+import UserVault from "./UserVault";
 import {useNavigate} from "react-router-dom";
-import {splitOnce} from "../../types.ts";
+import {splitOnce} from "../../types";
 import {getCborValueByPath, parseCbor} from "@tari-project/tarijs-all";
 
 interface Props {
@@ -94,7 +91,7 @@ function GetUser(props: Props) {
             if (!("NonFungible" in substate.value)) {
                 throw new Error(`User badge is not a non-fungible token`);
             }
-            const userAccountId = getCborValueByPath(substate.value.NonFungible?.data, "$.user_account");
+            const userAccountId = getCborValueByPath(substate.value.NonFungible?.data, "$.user_account") as ComponentAddress;
             setUserData(substate as object);
 
             const stableCoinResource = activeIssuer?.vault?.resourceAddress;
@@ -108,7 +105,7 @@ function GetUser(props: Props) {
             const vaultId = getCborValueByPath(
                 userAccount.value.Component.body.state,
                 `$.vaults.${stableCoinResource}`,
-            );
+            ) as VaultId | undefined;
             if (!vaultId) {
                 setUserVault(null);
                 return;
@@ -128,31 +125,31 @@ function GetUser(props: Props) {
         <>
             <StyledPaper sx={{padding: 6}}>
                 <Grid container spacing={2}>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <h2>User</h2>
                     </Grid>
-                    <Grid item xs={12} md={12} lg={12}>
+                    <Grid size={12}>
                         <form
                             onSubmit={async (e) => {
                                 e.preventDefault();
                                 await getUser(formValues.userId);
                             }}
                         >
-                            <Grid item xs={12} md={12} lg={12} paddingBottom={4}>
+                            <Grid size={12} paddingBottom={4}>
                                 <TextField
                                     name="userId"
                                     placeholder="12345"
                                     label="User ID (must be unique per user)"
                                     fullWidth
                                     required
-                                    inputProps={{pattern: "^[0-9]*$"}}
+                                    slotProps={{htmlInput: {pattern: "^[0-9]*$"}}}
                                     onChange={set}
                                     onBlur={validate}
                                     value={formValues.userId || ""}
                                 />
                                 {validity.userId === false && <Alert severity="error">User ID must be a number</Alert>}
                             </Grid>
-                            <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left", paddingBottom: 4}}>
+                            <Grid size={12} sx={{textAlign: "left", paddingBottom: 4}}>
                                 <Button type="submit" disabled={isBusy || !isValid} variant="contained">
                                     Load
                                 </Button>
@@ -161,7 +158,7 @@ function GetUser(props: Props) {
                         </form>
                     </Grid>
                 </Grid>
-                <Grid item xs={12} md={12} lg={12} sx={{textAlign: "left"}}>
+                <Grid size={12} sx={{textAlign: "left"}}>
                     {userVault ? (
                         <>
                             <h2>{userVault.vaultId}</h2>
@@ -171,7 +168,7 @@ function GetUser(props: Props) {
                         <Alert severity="info">No vault</Alert>
                     )}
                 </Grid>
-                <Grid item xs={12} md={12} lg={12} sx={{marginY: 5}}>
+                <Grid size={12} sx={{marginY: 5}}>
                     {userData && (
                         <>
                             <ManageUser
@@ -188,13 +185,13 @@ function GetUser(props: Props) {
                                 adminAuthBadge={props.adminAuthBadge}
                                 userBadge={userData.address.substate_id}
                                 userId={formValues.userId}
-                                badgeData={parseCbor(userData.value.NonFungible.data)}
-                                badgeMutableData={parseCbor(userData.value.NonFungible.mutable_data)}
+                                badgeData={parseCbor(userData.value.NonFungible.data) as object}
+                                badgeMutableData={parseCbor(userData.value.NonFungible.mutable_data) as object}
                                 onChange={() => getUser(formValues.userId)}
                             />
                             <Transfers
                                 issuer={activeIssuer!}
-                                userAccount={getCborValueByPath(userData.value.NonFungible.data, "$.user_account")!}
+                                userAccount={getCborValueByPath(userData.value.NonFungible.data, "$.user_account")! as ComponentAddress}
                                 onTransactionResult={() => getUser(formValues.userId)}
                             />
                         </>

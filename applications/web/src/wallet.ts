@@ -1,31 +1,33 @@
 import {
-    TariProvider,
-    TariSigner,
     AccountData,
-    Network
-} from "@tari-project/tarijs-all";
-import {
+    Network,
+    SimpleTransactionResult,
     SubmitTransactionRequest,
-    TransactionStatus,
     Substate as TariJsSubstate,
+    TransactionStatus,
+    WalletDaemonTariProvider,
+    WalletDaemonTariSigner
 } from "@tari-project/tarijs-all";
-import {NewIssuerParams, SimpleTransactionResult, splitOnce} from "./types.ts";
+import {NewIssuerParams, splitOnce} from "./types";
 import {
+    Amount,
     ComponentAddress,
     Instruction,
-    ResourceAddress,
-    VaultId,
-    Amount,
-    SubstateType,
     KeyBranch,
+    ResourceAddress,
     SubstateRequirement,
+    SubstateType,
+    UtxoAddress,
+    VaultId,
 } from "@tari-project/typescript-bindings";
 
-export default class TariWallet<TProvider extends TariProvider, TSigner extends TariSigner> {
-    private provider: TProvider;
-    private signer: TSigner;
+const NETWORK = parseInt(import.meta.env.VITE_TARI_NETWORK) as Network || Network.Igor;
 
-    constructor(provider: TProvider, signer: TSigner) {
+export default class TariWallet {
+    private provider: WalletDaemonTariProvider;
+    private signer: WalletDaemonTariSigner;
+
+    constructor(provider: WalletDaemonTariProvider, signer: WalletDaemonTariSigner) {
         this.provider = provider;
         this.signer = signer;
     }
@@ -34,7 +36,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         return this.provider.isConnected();
     }
 
-    public static new<TProvider extends TariProvider, TSigner extends TariSigner>(provider: TProvider, signer: TSigner): TariWallet<TProvider, TSigner> {
+    public static new(provider: WalletDaemonTariProvider, signer: WalletDaemonTariSigner): TariWallet {
         return new TariWallet(provider, signer);
     }
 
@@ -56,7 +58,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
     }
 
     public async getSubstate(substateId: string): Promise<TariJsSubstate> {
-        return await this.provider.getSubstate({substate_address: substateId, version: null});
+        return await this.signer.getSubstate(substateId);
     }
 
     public async submitTransactionAndWait(request: SubmitTransactionRequest) {
@@ -75,7 +77,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
                 TransactionStatus.DryRun,
             ];
 
-            if (resp.status == TransactionStatus.Rejected) {
+            if (resp.status == TransactionStatus.Rejected || resp.status == TransactionStatus.InvalidTransaction) {
                 throw new Error(`Transaction rejected: ${JSON.stringify(resp.result)}`);
             }
 
@@ -96,7 +98,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const fee_instructions = [
             {
                 CallMethod: {
-                    call: {Address: account.address},
+                    call: {Address: account.component_address},
                     method: "pay_fee",
                     args: [`Amount(${fee})`],
                 },
@@ -122,7 +124,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
             {PutLastInstructionOutputOnWorkspace: {key: 0}},
             {
                 CallMethod: {
-                    call: {Address: account.address},
+                    call: {Address: account.component_address},
                     method: "deposit",
                     args: [{Workspace: {id: 0, offset: null}}],
                 },
@@ -130,12 +132,12 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
             "DropAllProofsInWorkspace",
         ] as Instruction[];
 
-        const inputs = [{substate_id: account.address, version: null}] as SubstateRequirement[];
+        const inputs = [{substate_id: account.component_address, version: null}] as SubstateRequirement[];
 
         const request = {
             account_id: account.account_id,
             transaction: {
-                network: Network.LocalNet,
+                network: NETWORK,
                 fee_instructions,
                 instructions,
                 inputs,
@@ -148,16 +150,16 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         } as SubmitTransactionRequest;
 
         const result = await this.submitTransactionAndWait(request);
-        return SimpleTransactionResult.from(result);
+        return SimpleTransactionResult.fromResponse(result);
     }
 
-    public increaseSupply(
+    public async increaseSupply(
         component_address: ComponentAddress,
         badge_resource: ResourceAddress,
         amount: number,
         fee: number = 2000,
-    ): SimpleTransactionResult {
-        return this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, [], fee);
+    ): Promise<SimpleTransactionResult> {
+        return await this.callRestrictedMethod(component_address, badge_resource, "increase_supply", [amount], empty, [], fee);
     }
 
     public decreaseSupply(
@@ -355,13 +357,8 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         return await this.signer.getAccount();
     }
 
-    public async getConfidentialVaultBalance(vaultId: VaultId, min: number | null = null, max: number | null = null) {
-        return await this.signer.getConfidentialVaultBalances({
-            vault_id: vaultId,
-            minimum_expected_value: min,
-            maximum_expected_value: max,
-            view_key_id: 0
-        });
+    public async getUtxoBalance(utxoAddress: UtxoAddress, viewKeyId: number, min: number | null = null, max: number | null = null) {
+        return await this.signer.decryptUtxoValue(utxoAddress, viewKeyId, min, max);
     }
 
     public async exchangeStableForWrappedToken(
@@ -499,7 +496,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         extraInstructions: (account: AccountData) => Array<Instruction>,
         extraInputs: Array<SubstateRequirement>,
         fee: number = 2000,
-    ): SimpleTransactionResult {
+    ): Promise<SimpleTransactionResult> {
         const account = await this.signer.getAccount();
 
         const extra = extraInstructions(account);
@@ -507,7 +504,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const instructions = [
             {
                 CallMethod: {
-                    call: {Address: account.address},
+                    call: {Address: account.component_address},
                     method: "create_proof_for_resource",
                     args: [admin_badge_resx],
                 },
@@ -527,7 +524,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         ] as Instruction[];
 
         const required_substates = [
-            {substate_id: account.address, version: null},
+            {substate_id: account.component_address, version: null},
             {substate_id: component_address, version: null},
             {substate_id: admin_badge_resx, version: null},
             ...extraInputs,
@@ -545,7 +542,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const fee_instructions = [
             {
                 CallMethod: {
-                    call: {Address: account.address},
+                    call: {Address: account.component_address},
                     method: "pay_fee",
                     args: [`Amount(${fee})`],
                 },
@@ -555,7 +552,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         const request = {
             account_id: account.account_id,
             transaction: {
-                network: Network.LocalNet,
+                network: NETWORK,
                 fee_instructions,
                 instructions,
                 inputs,
@@ -568,7 +565,7 @@ export default class TariWallet<TProvider extends TariProvider, TSigner extends 
         } as SubmitTransactionRequest;
 
         const result = await this.submitTransactionAndWait(request);
-        return SimpleTransactionResult.from(result);
+        return SimpleTransactionResult.fromResponse(result);
     }
 }
 

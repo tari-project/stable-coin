@@ -2,23 +2,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import * as React from "react";
-import {StyledPaper} from "../../components/StyledComponents.ts";
-import {
-    Alert,
-    IconButton,
-    Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
-    Typography
-} from "@mui/material";
-import useTariProvider from "../../store/provider.ts";
-import {useNavigate} from "react-router-dom";
-import {StableCoinIssuer} from "../../store/stableCoinIssuer.ts";
-import Box from "@mui/material/Box";
 import {useEffect} from "react";
+import {StyledPaper} from "../../components/StyledComponents";
+import {Alert, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography} from "@mui/material";
+import useTariProvider from "../../store/provider";
+import {useNavigate} from "react-router-dom";
+import {StableCoinIssuer} from "../../store/stableCoinIssuer";
+import Box from "@mui/material/Box";
 import {toHexString} from "@tari-project/tarijs-all";
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
