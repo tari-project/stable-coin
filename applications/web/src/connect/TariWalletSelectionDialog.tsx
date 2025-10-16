@@ -11,8 +11,6 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import {
     TariPermissions,
-    TariProvider,
-    TariSigner,
     WalletDaemonFetchParameters,
     WalletDaemonTariProvider,
     WalletDaemonTariSigner,
@@ -22,6 +20,7 @@ import TariWallet from "../wallet";
 
 // const WALLET_CONNECT_PROJECT_ID = import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID || null;
 // const WALLET_DAEMON_ENABLED = import.meta.env.VITE_WALLET_DAEMON_ENABLED || false;
+const WALLET_SERVER_URL = import.meta.env.VITE_JSON_RPC_ADDRESS;
 
 // Minimal permissions for the example site
 // But each application will have different permission needs
@@ -39,7 +38,7 @@ const walletDaemonOptionalPermissions = new TariPermissions();
 
 export interface WalletSelectionProps {
     open: boolean;
-    onConnected: (wallet: TariWallet<TariProvider, TariSigner>) => void;
+    onConnected: (wallet: TariWallet) => void;
     onClose: () => void;
 }
 
@@ -54,7 +53,7 @@ export function TariWalletSelectionDialog(props: WalletSelectionProps) {
         const params: WalletDaemonFetchParameters = {
             permissions: walletDaemonPermissions,
             optionalPermissions: walletDaemonOptionalPermissions,
-            serverUrl: "http://127.0.0.1:12019/json_rpc",
+            serverUrl: WALLET_SERVER_URL
         };
         const provider = await WalletDaemonTariProvider.buildFetch(params);
         const signer = await WalletDaemonTariSigner.buildFetchSigner(params);
