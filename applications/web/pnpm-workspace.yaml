@@ -3,3 +3,4 @@ ignoredBuiltDependencies:
 
 overrides:
   '@tari-project/tarijs-all': link:../../../js/packages/tarijs
+  '@tari-project/react-mui-connect-button': link:../../../js/packages/react-mui-connect-button

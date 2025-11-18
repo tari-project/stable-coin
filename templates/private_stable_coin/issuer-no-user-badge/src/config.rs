@@ -31,10 +31,7 @@ impl FeeSpec {
     pub fn calculate_fee(&self, amount: Amount) -> Amount {
         match self {
             Self::Fixed(fee) => *fee,
-            Self::Percentage(percentage) => {
-                let inv_perc = 100 / *percentage;
-                div_rounded(amount, inv_perc as u64)
-            }
+            Self::Percentage(percentage) => perc_rounded(amount, *percentage),
         }
     }
 }
@@ -48,9 +45,10 @@ impl fmt::Display for FeeSpec {
     }
 }
 
-fn div_rounded<A: Into<Amount>>(v: A, p: u64) -> Amount {
+fn perc_rounded<A: Into<Amount>>(v: A, percentage: u8) -> Amount {
     let v = v.into();
-    let p = Amount::from(p);
+    let p = Amount::from(percentage);
+
     // f and b are the division to 3 decimals
     let f = (v * Amount::ONE_THOUSAND) * p / Amount::ONE_HUNDRED;
     let b = v * p / Amount::ONE_HUNDRED;
@@ -69,11 +67,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_div_rounded() {
-        assert_eq!(div_rounded(0, 5), 0);
-        assert_eq!(div_rounded(100, 0), 0);
-        assert_eq!(div_rounded(100, 5), 5);
-        assert_eq!(div_rounded(123, 5), 6);
-        assert_eq!(div_rounded(130, 5), 7);
+    fn it_works() {
+        assert_eq!(perc_rounded(0, 5), 0);
+        assert_eq!(perc_rounded(100, 0), 0);
+        assert_eq!(perc_rounded(100, 5), 5);
+        assert_eq!(perc_rounded(123, 5), 6);
+        assert_eq!(perc_rounded(130, 5), 7);
+        assert_eq!(perc_rounded(120, 10), 12);
+        assert_eq!(perc_rounded(1234560000000u64, 11), 135801600000u64);
     }
 }

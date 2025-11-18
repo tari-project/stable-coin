@@ -5,8 +5,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-#tari_template_lib = { git = "https://github.com/tari-project/tari-ootle.git", branch = "development" }
-tari_template_lib = { path = "../../../../dan/crates/template_lib" }
+#tari_template_lib = { git = "https://github.com/tari-project/tari-ootle.git", branch = "development", default-features = false, features = ["macro"] }
+tari_template_lib = { path = "../../../../dan/crates/template_lib", default-features = false, features = ["macro"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
