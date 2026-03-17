@@ -22,24 +22,35 @@
 
 #![no_std]
 
+extern crate alloc;
+
 mod config;
 mod user_data;
 mod wrapped_exchange_token;
-use tari_template_lib::template_dependencies::rust::format;
-use tari_template_lib::template_dependencies::rust::string::String;
-use tari_template_lib::template_dependencies::rust::string::ToString;
-use tari_template_lib::template_dependencies::rust::vec::Vec;
-use user_data::{UserData, UserId, UserMutableData};
-
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
+
+#[cfg(target_family = "wasm")]
+#[global_allocator]
+static ALLOCATOR: talc::Talck<talc::locking::AssumeUnlockable, talc::ClaimOnOom> = {
+    // 512Kb = 8 pages
+    static mut MEMORY: [u8; 0x80000] = [0; 0x80000];
+    let span = talc::Span::from_array(core::ptr::addr_of!(MEMORY).cast_mut());
+    talc::Talc::new(unsafe { talc::ClaimOnOom::new(span) }).lock()
+};
 
 #[template]
 mod template {
+    use crate::user_data::{UserData, UserId, UserMutableData};
+    use tari_template_lib::component::ComponentManager;
+    use tari_template_lib::types::crypto::StealthValueProof;
+
     use super::*;
     use crate::config::FeeSpec;
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
-    use tari_template_lib::engine;
-    use tari_template_lib::prelude::crypto::StealthValueProof;
 
     pub struct TariStableCoin {
         config: StableCoinConfig,
@@ -52,24 +63,28 @@ mod template {
     }
 
     impl TariStableCoin {
-        /// Instantiates a new stable coin component, returning the component and a bucket containing an admin badge
+        /// Instantiates a new stable coin component, returning a bucket containing an admin badge
         pub fn instantiate(
             initial_token_supply: Amount,
-            token_symbol: String,
+            token_symbol: MaxString<8>,
             token_metadata: Metadata,
+            divisibility: u8,
             view_key: RistrettoPublicKeyBytes,
             enable_wrapped_token: bool,
         ) -> Bucket {
-            let provider_name = token_metadata
-                .get("provider_name")
-                .filter(|v| !v.trim().is_empty())
-                .expect("provider_name metadata entry is required");
+            let provider_name = token_metadata.get("provider_name").unwrap_or_default();
 
             let config = StableCoinConfig::default();
 
             // Create admin badge resource
-            let admin_badge =
-                ResourceBuilder::non_fungible().initial_supply(Some(NonFungibleId::from_u64(0)));
+            let admin_badge = ResourceBuilder::non_fungible()
+                .with_metadata(metadata!(
+                    "name" => "Stable Coin Admin Badge",
+                    "provider_name" => provider_name,
+                    "description" => format!("Admin badge for the {provider_name} stable coin"),
+                    "admin_badge" => "true",
+                ))
+                .initial_supply(Some(NonFungibleId::from_u64(0)));
 
             // Create admin access rules
             let admin_resource = admin_badge.resource_address();
@@ -77,7 +92,11 @@ mod template {
 
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
-                .add_metadata("provider_name", provider_name.trim())
+                .with_metadata(metadata!(
+                    "name" => "Stable Coin User Badge",
+                    "provider_name" => provider_name,
+                    "description" => format!("User authentication badge for the {provider_name} stable coin")
+                ))
                 .depositable(require_admin.clone())
                 .recallable(require_admin.clone())
                 .update_non_fungible_data(require_admin.clone())
@@ -93,7 +112,7 @@ mod template {
             // Create tokens resource with initial supply
             let initial_tokens = ResourceBuilder::stealth()
                 .with_metadata(token_metadata.clone())
-                .with_token_symbol(&token_symbol)
+                .with_token_symbol(token_symbol.as_ref())
                 // Access rules
                 .mintable(require_admin.clone())
                 .burnable(require_admin.clone())
@@ -102,9 +121,10 @@ mod template {
                 .recallable(require_admin.clone())
                 .with_authorization_hook(component_alloc.get_address(), "authorize_user_deposit")
                 .with_view_key(view_key)
+                .with_divisibility(divisibility)
                 .initial_supply(initial_token_supply);
 
-            // Create tokens resource with initial supply
+            // Create wrapped token resource (no initial supply - minted on demand)
             let wrapped_token = if enable_wrapped_token {
                 let wrapped_resource = ResourceBuilder::public_fungible()
                     .with_metadata(token_metadata)
@@ -112,18 +132,15 @@ mod template {
                     // Access rules
                     .mintable(require_admin.clone())
                     .burnable(require_admin.clone())
-                    .initial_supply(initial_token_supply);
+                    .build();
 
-                Some(WrappedExchangeToken {
-                    vault: Vault::from_bucket(wrapped_resource),
-                })
+                Some(WrappedExchangeToken::new(wrapped_resource))
             } else {
                 None
             };
 
             // Create component access rules
             let component_access_rules = AccessRules::new()
-                .add_method_rule("total_supply", AccessRule::AllowAll)
                 .add_method_rule(
                     "exchange_stable_for_wrapped_tokens",
                     require_user_or_admin.clone(),
@@ -191,12 +208,6 @@ mod template {
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
 
-            if let Some(ref mut wrapped_token) = self.wrapped_token {
-                let new_tokens =
-                    ResourceManager::get(wrapped_token.resource_address()).mint_fungible(amount);
-                wrapped_token.vault_mut().deposit(new_tokens);
-            }
-
             emit_event("increase_supply", metadata!("amount" => amount.to_string()));
         }
 
@@ -205,19 +216,10 @@ mod template {
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
 
-            if let Some(ref mut wrapped_token) = self.wrapped_token {
-                let wrapped_tokens = wrapped_token.vault_mut().withdraw(amount);
-                wrapped_tokens.burn();
-            }
-
             emit_event(
                 "decrease_supply",
                 metadata!("revealed_burn_amount" => amount.to_string()),
             );
-        }
-
-        pub fn total_supply(&self) -> Amount {
-            self.token_vault_manager().total_supply()
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
@@ -239,7 +241,7 @@ mod template {
         pub fn exchange_stable_for_wrapped_tokens(
             &mut self,
             proof: Proof,
-            bucket: Bucket,
+            mut bucket: Bucket,
         ) -> Bucket {
             assert_eq!(
                 bucket.resource_address(),
@@ -275,17 +277,19 @@ mod template {
             let new_amount = amount
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
+            let fee_bucket = bucket.take(fee);
+            bucket.burn();
 
-            self.token_vault.deposit(bucket);
+            self.token_vault.deposit(fee_bucket);
 
-            let wrapped_tokens = self.wrapped_token_mut().vault_mut().withdraw(new_amount);
+            let wrapped_tokens = self.wrapped_token().manager().mint_fungible(new_amount);
 
             emit_event(
                 "exchange_stable_for_wrapped_tokens",
                 metadata!(
-                        "user_id" => user.user_id.to_string(),
-                        "amount" => amount.to_string(),
-                        "fee" => fee.to_string(),
+                    "user_id" => user.user_id.to_string(),
+                    "amount" => amount.to_string(),
+                    "fee" => fee.to_string(),
                 ),
             );
 
@@ -298,17 +302,17 @@ mod template {
             proof: Proof,
             wrapped_bucket: Bucket,
         ) -> Bucket {
+            assert!(
+                !wrapped_bucket.amount().is_zero(),
+                "The bucket must contain some tokens"
+            );
+
             proof.assert_resource(self.user_auth_manager.resource_address());
 
             assert_eq!(
                 wrapped_bucket.resource_address(),
-                self.wrapped_token_mut().vault().resource_address(),
+                self.wrapped_token().resource_address(),
                 "The bucket must contain the same resource as the wrapped token vault"
-            );
-
-            assert!(
-                !wrapped_bucket.amount().is_zero(),
-                "The bucket must contain some tokens"
             );
 
             let badges = proof.get_non_fungibles();
@@ -319,9 +323,11 @@ mod template {
 
             let amount = wrapped_bucket.amount();
 
-            self.wrapped_token_mut().vault_mut().deposit(wrapped_bucket);
+            // Burn the wrapped tokens
+            wrapped_bucket.burn();
 
-            let tokens = self.token_vault.withdraw(amount);
+            // Mint stable tokens
+            let tokens = self.token_vault.get_resource_manager().mint_stealth(amount);
 
             emit_event(
                 "exchange_wrapped_for_stable_tokens",
@@ -340,8 +346,7 @@ mod template {
             let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let user = badge.get_data::<UserData>();
 
-            let component_manager = engine().component_manager(user.user_account);
-            let account = component_manager.get_state::<Account>();
+            let account = user.user_account.get_state::<Account>();
 
             let vault = account
                 .get_vault_by_resource(&self.token_vault.resource_address())
@@ -362,11 +367,11 @@ mod template {
             );
         }
 
-        pub fn burn_utxos(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
+        pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
             self.token_vault_manager()
                 .burn_utxo(utxo, Some(value_proof));
             emit_event(
-                "burn_utxos",
+                "burn_utxo",
                 metadata!(
                     "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
                     "utxo_id" => utxo.to_string()
@@ -379,10 +384,8 @@ mod template {
             emit_event("create_new_admin", metadata!("admin_id" => id.to_string()));
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", employee_id);
-            let badge = self
-                .admin_auth_manager
-                .mint_non_fungible(id, &metadata, &());
-            badge
+            self.admin_auth_manager
+                .mint_non_fungible(id, &metadata, &())
         }
 
         pub fn create_new_user(
@@ -395,7 +398,7 @@ mod template {
                 user_id.into(),
                 &UserData {
                     user_id,
-                    user_account,
+                    user_account: ComponentManager::get(user_account),
                     created_at_epoch: epoch,
                 },
                 &UserMutableData {
@@ -474,11 +477,6 @@ mod template {
             );
             emit_event("remove_from_blacklist", [("user_id", user_id.to_string())]);
             user_badge_bucket
-        }
-
-        pub fn get_user_data(&self, user_id: UserId) -> UserData {
-            let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
-            badge.get_data()
         }
 
         pub fn set_user_wrapped_exchange_limit(&mut self, user_id: UserId, new_limit: Amount) {
@@ -562,12 +560,12 @@ mod template {
         }
 
         fn token_vault_manager(&self) -> ResourceManager {
-            ResourceManager::get(self.token_vault.resource_address())
+            self.token_vault.get_resource_manager()
         }
 
-        fn wrapped_token_mut(&mut self) -> &mut WrappedExchangeToken {
+        fn wrapped_token(&self) -> &WrappedExchangeToken {
             self.wrapped_token
-                .as_mut()
+                .as_ref()
                 .expect("Wrapped token is not enabled")
         }
     }

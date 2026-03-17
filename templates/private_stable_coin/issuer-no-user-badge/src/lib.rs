@@ -22,24 +22,35 @@
 
 #![no_std]
 
+extern crate alloc;
+
 mod config;
 mod user_data;
 mod wrapped_exchange_token;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
+
+#[cfg(target_family = "wasm")]
+#[global_allocator]
+static ALLOCATOR: talc::Talck<talc::locking::AssumeUnlockable, talc::ClaimOnOom> = {
+    // 512Kb = 8 pages
+    static mut MEMORY: [u8; 0x80000] = [0; 0x80000];
+    let span = talc::Span::from_array(core::ptr::addr_of!(MEMORY).cast_mut());
+    talc::Talc::new(unsafe { talc::ClaimOnOom::new(span) }).lock()
+};
 
 #[template]
 mod template {
     use crate::user_data::{UserData, UserId, UserMutableData};
-    use tari_template_lib::engine;
-    use tari_template_lib::template_dependencies::rust::format;
-    use tari_template_lib::template_dependencies::rust::string::String;
-    use tari_template_lib::template_dependencies::rust::string::ToString;
-    use tari_template_lib::template_dependencies::rust::vec::Vec;
+    use tari_template_lib::component::ComponentManager;
+    use tari_template_lib::types::crypto::StealthValueProof;
 
     use super::*;
     use crate::config::FeeSpec;
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
-    use tari_template_lib::prelude::crypto::StealthValueProof;
 
     pub struct TariStableCoin {
         config: StableCoinConfig,
@@ -54,8 +65,9 @@ mod template {
     impl TariStableCoin {
         /// Instantiates a new stable coin component, returning a bucket containing an admin badge
         pub fn instantiate(
+            address_alloc: ComponentAddressAllocation,
             initial_token_supply: Amount,
-            token_symbol: String,
+            token_symbol: MaxString<8>,
             token_metadata: Metadata,
             divisibility: u8,
             view_key: RistrettoPublicKeyBytes,
@@ -66,15 +78,14 @@ mod template {
             let config = StableCoinConfig::default();
 
             // Create admin badge resource
-            let admin_badge =
-                ResourceBuilder::non_fungible()
-                    .with_metadata(metadata!(
-                        "name" => "Stable Coin Admin Badge",
-                        "provider_name" => provider_name,
-                        "description" => format!("Admin authentication badge for the {provider_name} stable coin"),
-                        "admin_badge" => "true",
-                    ))
-                    .initial_supply(Some(NonFungibleId::from_u64(0)));
+            let admin_badge = ResourceBuilder::non_fungible()
+                .with_metadata(metadata!(
+                    "name" => "Stable Coin Admin Badge",
+                    "provider_name" => provider_name,
+                    "description" => format!("Admin badge for the {provider_name} stable coin"),
+                    "admin_badge" => "true",
+                ))
+                .initial_supply(Some(NonFungibleId::from_u64(0)));
 
             // Create admin access rules
             let admin_resource = admin_badge.resource_address();
@@ -92,11 +103,10 @@ mod template {
                 .update_non_fungible_data(require_admin.clone())
                 .build();
 
-            let component_alloc = CallerContext::allocate_component_address(None);
             // Create tokens resource with initial supply
             let initial_tokens = ResourceBuilder::stealth()
                 .with_metadata(token_metadata.clone())
-                .with_token_symbol(&token_symbol)
+                .with_token_symbol(token_symbol.as_ref())
                 // Access rules
                 .mintable(require_admin.clone())
                 .burnable(require_admin.clone())
@@ -113,11 +123,9 @@ mod template {
                     // Access rules
                     .mintable(require_admin.clone())
                     .burnable(require_admin.clone())
-                    .initial_supply(initial_token_supply);
+                    .build();
 
-                Some(WrappedExchangeToken::new(
-                    wrapped_resource.resource_address(),
-                ))
+                Some(WrappedExchangeToken::new(wrapped_resource))
             } else {
                 None
             };
@@ -135,7 +143,7 @@ mod template {
                 wrapped_token,
                 is_paused: false,
             })
-            .with_address_allocation(component_alloc)
+            .with_address_allocation(address_alloc)
             .with_access_rules(component_access_rules)
             // Access is controlled by anyone with an admin badge
             .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
@@ -182,7 +190,7 @@ mod template {
         pub fn exchange_stable_for_wrapped_tokens(
             &mut self,
             proof: Proof,
-            bucket: Bucket,
+            mut bucket: Bucket,
         ) -> Bucket {
             assert_eq!(
                 bucket.resource_address(),
@@ -218,8 +226,10 @@ mod template {
             let new_amount = amount
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
+            let fee_bucket = bucket.take(fee);
+            bucket.burn();
 
-            self.token_vault.deposit(bucket);
+            self.token_vault.deposit(fee_bucket);
 
             let wrapped_tokens = self.wrapped_token().manager().mint_fungible(new_amount);
 
@@ -265,7 +275,8 @@ mod template {
             // Burn the wrapped tokens
             wrapped_bucket.burn();
 
-            let tokens = self.token_vault.withdraw(amount);
+            // Mint tokens
+            let tokens = self.token_vault.get_resource_manager().mint_stealth(amount);
 
             emit_event(
                 "exchange_wrapped_for_stable_tokens",
@@ -284,8 +295,7 @@ mod template {
             let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let user = badge.get_data::<UserData>();
 
-            let component_manager = engine().component_manager(user.user_account);
-            let account = component_manager.get_state::<Account>();
+            let account = user.user_account.get_state::<Account>();
 
             let vault = account
                 .get_vault_by_resource(&self.token_vault.resource_address())
@@ -306,11 +316,11 @@ mod template {
             );
         }
 
-        pub fn burn_utxos(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
+        pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
             self.token_vault_manager()
                 .burn_utxo(utxo, Some(value_proof));
             emit_event(
-                "burn_utxos",
+                "burn_utxo",
                 metadata!(
                     "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
                     "utxo_id" => utxo.to_string()
@@ -337,7 +347,7 @@ mod template {
                 user_id.into(),
                 &UserData {
                     user_id,
-                    user_account,
+                    user_account: ComponentManager::get(user_account),
                     created_at_epoch: epoch,
                 },
                 &UserMutableData {
@@ -499,7 +509,7 @@ mod template {
         }
 
         fn token_vault_manager(&self) -> ResourceManager {
-            self.token_vault.to_resource_manager()
+            self.token_vault.get_resource_manager()
         }
 
         fn wrapped_token(&self) -> &WrappedExchangeToken {

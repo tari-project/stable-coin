@@ -1,11 +1,9 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::template_dependencies::rust::fmt;
-use tari_template_lib::{
-    models::{ComponentAddress, NonFungibleId},
-    types::Amount,
-};
+use core::fmt;
+use tari_template_lib::component::ComponentManager;
+use tari_template_lib::{types::Amount, types::NonFungibleId};
 
 #[derive(Clone, Debug, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
@@ -23,14 +21,14 @@ impl fmt::Display for UserId {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct UserData {
     pub user_id: UserId,
-    pub user_account: ComponentAddress,
+    pub user_account: ComponentManager,
     pub created_at_epoch: u64,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct UserMutableData {
     pub is_blacklisted: bool,
     pub wrapped_exchange_limit: Amount,
@@ -47,7 +45,7 @@ impl Default for UserMutableData {
     fn default() -> Self {
         Self {
             is_blacklisted: false,
-            wrapped_exchange_limit: 1000.into(),
+            wrapped_exchange_limit: 1000u64.into(),
         }
     }
 }
