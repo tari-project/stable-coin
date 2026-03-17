@@ -1,18 +1,18 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::models::ResourceAddress;
 use tari_template_lib::resource::ResourceManager;
+use tari_template_lib::types::ResourceAddress;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct WrappedExchangeToken {
-    pub manager: ResourceManager,
+    manager: ResourceManager,
 }
 
 impl WrappedExchangeToken {
-    pub fn new(resource_address: ResourceAddress) -> Self {
+    pub fn new<T: Into<ResourceManager>>(resource: T) -> Self {
         Self {
-            manager: ResourceManager::get(resource_address),
+            manager: resource.into(),
         }
     }
 

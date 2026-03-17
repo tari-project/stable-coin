@@ -1,7 +1,7 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::template_dependencies::rust::fmt;
+use core::fmt;
 use tari_template_lib::types::Amount;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -15,8 +15,8 @@ impl Default for StableCoinConfig {
     fn default() -> Self {
         Self {
             wrapped_exchange_fee: FeeSpec::Percentage(1),
-            transfer_fee: FeeSpec::Fixed(1.into()),
-            default_exchange_limit: 1000.into(),
+            transfer_fee: FeeSpec::Fixed(1u64.into()),
+            default_exchange_limit: 1000u64.into(),
         }
     }
 }
@@ -67,13 +67,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        assert_eq!(perc_rounded(0, 5), 0);
-        assert_eq!(perc_rounded(100, 0), 0);
-        assert_eq!(perc_rounded(100, 5), 5);
-        assert_eq!(perc_rounded(123, 5), 6);
-        assert_eq!(perc_rounded(130, 5), 7);
-        assert_eq!(perc_rounded(120, 10), 12);
+    fn test_perc_round() {
+        assert_eq!(perc_rounded(0u64, 5), 0);
+        assert_eq!(perc_rounded(100u64, 0), 0);
+        assert_eq!(perc_rounded(100u64, 5), 5);
+        assert_eq!(perc_rounded(123u64, 5), 6);
+        assert_eq!(perc_rounded(130u64, 5), 7);
+        assert_eq!(perc_rounded(120u64, 10), 12);
         assert_eq!(perc_rounded(1234560000000u64, 11), 135801600000u64);
     }
 }

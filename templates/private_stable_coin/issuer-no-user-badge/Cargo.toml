@@ -2,22 +2,23 @@
 [package]
 name = "tari-stable-coin-nobadge"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-tari_template_lib = { git = "https://github.com/tari-project/tari-ootle.git", branch = "development", default-features = false, features = ["macro"] }
+tari_template_lib = { version = "0.20.1", default-features = false, features = ["macro", "alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
+talc = { version = "4.4.3", default-features = false, features = ["lock_api"] }
 
 [dev-dependencies]
-tari_template_test_tooling = { git = "https://github.com/tari-project/tari-ootle.git", branch = "development" }
-tari_transaction = { git = "https://github.com/tari-project/tari-ootle.git", branch = "development" }
+tari_template_test_tooling = "0.25.8"
+ootle_byte_type = "0.2.1"
 
 [profile.release]
 opt-level = 's'     # Optimize for size.
 lto = true          # Enable Link Time Optimization.
 codegen-units = 1   # Reduce number of codegen units to increase optimizations.
 panic = 'abort'     # Abort on panic.
-strip = 'debuginfo'
+strip = true
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib"]

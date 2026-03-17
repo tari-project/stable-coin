@@ -1,23 +1,26 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::models::{ResourceAddress, Vault};
+use tari_template_lib::resource::ResourceManager;
+use tari_template_lib::types::ResourceAddress;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct WrappedExchangeToken {
-    pub vault: Vault,
+    manager: ResourceManager,
 }
 
 impl WrappedExchangeToken {
-    pub(crate) fn resource_address(&self) -> ResourceAddress {
-        self.vault.resource_address()
+    pub fn new<T: Into<ResourceManager>>(resource: T) -> Self {
+        Self {
+            manager: resource.into(),
+        }
     }
 
-    pub fn vault(&self) -> &Vault {
-        &self.vault
+    pub fn resource_address(&self) -> ResourceAddress {
+        self.manager.resource_address()
     }
 
-    pub fn vault_mut(&mut self) -> &mut Vault {
-        &mut self.vault
+    pub fn manager(&self) -> &ResourceManager {
+        &self.manager
     }
 }
