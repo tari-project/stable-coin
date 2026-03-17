@@ -186,11 +186,7 @@ fn it_prevents_deposit_without_user_badge() {
             .put_last_instruction_output_on_workspace("proof")
             .call_method(stable_coin_component, "withdraw", args![100])
             .put_last_instruction_output_on_workspace("funds")
-            .call_method(
-                unauthorized_account,
-                "deposit",
-                args![Workspace("funds")],
-            )
+            .call_method(unauthorized_account, "deposit", args![Workspace("funds")])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
         vec![admin_proof],
@@ -344,10 +340,7 @@ fn it_blacklists_and_removes_from_blacklist() {
         .read_only_state_store()
         .get_vaults_for_account(alice_account)
         .unwrap();
-    assert_eq!(
-        alice_vaults.get(&user_badge_resource).unwrap().balance(),
-        0
-    );
+    assert_eq!(alice_vaults.get(&user_badge_resource).unwrap().balance(), 0);
 
     // Alice can no longer deposit tokens (no user badge)
     // This tests that the auth hook rejects deposits for blacklisted users
@@ -370,11 +363,7 @@ fn it_blacklists_and_removes_from_blacklist() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
-            .call_method(
-                stable_coin_component,
-                "remove_from_blacklist",
-                args![1u64],
-            )
+            .call_method(stable_coin_component, "remove_from_blacklist", args![1u64])
             .put_last_instruction_output_on_workspace("alice_badge")
             .call_method(alice_account, "deposit", args![Workspace("alice_badge")])
             .drop_all_proofs_in_workspace()
@@ -387,10 +376,7 @@ fn it_blacklists_and_removes_from_blacklist() {
         .read_only_state_store()
         .get_vaults_for_account(alice_account)
         .unwrap();
-    assert_eq!(
-        alice_vaults.get(&user_badge_resource).unwrap().balance(),
-        1
-    );
+    assert_eq!(alice_vaults.get(&user_badge_resource).unwrap().balance(), 1);
 }
 
 #[test]
@@ -661,7 +647,7 @@ fn it_exchanges_stable_for_wrapped_tokens() {
         ..
     } = setup();
 
-    let (alice_account, alice_proof, alice_key) = test.create_empty_account();
+    let (alice_account, alice_proof, _alice_key) = test.create_empty_account();
 
     // Setup: create user and fund Alice with 1000 tokens
     test.execute_expect_success(
@@ -700,11 +686,7 @@ fn it_exchanges_stable_for_wrapped_tokens() {
                 args![Workspace("user_proof"), Workspace("stable_tokens")],
             )
             .put_last_instruction_output_on_workspace("wrapped_tokens")
-            .call_method(
-                alice_account,
-                "deposit",
-                args![Workspace("wrapped_tokens")],
-            )
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
         vec![admin_proof, alice_proof],
@@ -721,7 +703,9 @@ fn it_exchanges_stable_for_wrapped_tokens() {
     // Find the wrapped token resource (it's a new resource, not the stable token)
     let wrapped_resource = alice_vaults
         .iter()
-        .find(|(addr, vault)| **addr != token_resource && **addr != user_badge_resource && vault.balance() > 0)
+        .find(|(addr, vault)| {
+            **addr != token_resource && **addr != user_badge_resource && vault.balance() > 0
+        })
         .map(|(addr, _)| *addr)
         .expect("Alice should have wrapped tokens");
 
@@ -742,7 +726,7 @@ fn it_exchanges_wrapped_for_stable_tokens() {
         ..
     } = setup();
 
-    let (alice_account, alice_proof, alice_key) = test.create_empty_account();
+    let (alice_account, alice_proof, _alice_key) = test.create_empty_account();
 
     // Setup: create user and fund Alice
     test.execute_expect_success(
@@ -779,11 +763,7 @@ fn it_exchanges_wrapped_for_stable_tokens() {
                 args![Workspace("user_proof"), Workspace("stable_tokens")],
             )
             .put_last_instruction_output_on_workspace("wrapped_tokens")
-            .call_method(
-                alice_account,
-                "deposit",
-                args![Workspace("wrapped_tokens")],
-            )
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
         vec![admin_proof.clone(), alice_proof.clone()],
@@ -796,7 +776,9 @@ fn it_exchanges_wrapped_for_stable_tokens() {
         .unwrap();
     let wrapped_resource = alice_vaults
         .iter()
-        .find(|(addr, vault)| **addr != token_resource && **addr != user_badge_resource && vault.balance() > 0)
+        .find(|(addr, vault)| {
+            **addr != token_resource && **addr != user_badge_resource && vault.balance() > 0
+        })
         .map(|(addr, _)| *addr)
         .expect("Alice should have wrapped tokens");
     let wrapped_balance = alice_vaults.get(&wrapped_resource).unwrap().balance();
@@ -820,11 +802,7 @@ fn it_exchanges_wrapped_for_stable_tokens() {
                 args![Workspace("user_proof"), Workspace("wrapped_tokens")],
             )
             .put_last_instruction_output_on_workspace("stable_tokens")
-            .call_method(
-                alice_account,
-                "deposit",
-                args![Workspace("stable_tokens")],
-            )
+            .call_method(alice_account, "deposit", args![Workspace("stable_tokens")])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
         vec![admin_proof, alice_proof],
@@ -855,7 +833,7 @@ fn it_enforces_exchange_limit() {
         ..
     } = setup();
 
-    let (alice_account, alice_proof, alice_key) = test.create_empty_account();
+    let (alice_account, alice_proof, _alice_key) = test.create_empty_account();
 
     // Setup: create user and fund Alice with more than the default exchange limit (1000)
     test.execute_expect_success(
@@ -892,11 +870,7 @@ fn it_enforces_exchange_limit() {
                 args![Workspace("user_proof"), Workspace("stable_tokens")],
             )
             .put_last_instruction_output_on_workspace("wrapped_tokens")
-            .call_method(
-                alice_account,
-                "deposit",
-                args![Workspace("wrapped_tokens")],
-            )
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
         vec![admin_proof, alice_proof],
@@ -919,7 +893,7 @@ fn it_sets_user_exchange_limit() {
         ..
     } = setup();
 
-    let (alice_account, alice_proof, alice_key) = test.create_empty_account();
+    let (alice_account, alice_proof, _alice_key) = test.create_empty_account();
 
     // Setup: create user and fund Alice
     test.execute_expect_success(
@@ -972,11 +946,7 @@ fn it_sets_user_exchange_limit() {
                 args![Workspace("user_proof"), Workspace("stable_tokens")],
             )
             .put_last_instruction_output_on_workspace("wrapped_tokens")
-            .call_method(
-                alice_account,
-                "deposit",
-                args![Workspace("wrapped_tokens")],
-            )
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
         vec![admin_proof, alice_proof],
@@ -987,10 +957,7 @@ fn it_sets_user_exchange_limit() {
         .read_only_state_store()
         .get_vaults_for_account(alice_account)
         .unwrap();
-    assert_eq!(
-        alice_vaults.get(&token_resource).unwrap().balance(),
-        3000
-    );
+    assert_eq!(alice_vaults.get(&token_resource).unwrap().balance(), 3000);
 }
 
 struct TestSetup {
