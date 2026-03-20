@@ -33,7 +33,6 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
 
-#[cfg(target_family = "wasm")]
 #[global_allocator]
 static ALLOCATOR: talc::Talck<talc::locking::AssumeUnlockable, talc::ClaimOnOom> = {
     // 512Kb = 8 pages
