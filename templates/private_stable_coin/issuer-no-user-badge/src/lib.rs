@@ -33,13 +33,13 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(not(target_feature = "atomics"), target_family = "wasm"))]
 #[global_allocator]
-static ALLOCATOR: talc::Talck<talc::locking::AssumeUnlockable, talc::ClaimOnOom> = {
-    // 512Kb = 8 pages
-    static mut MEMORY: [u8; 0x80000] = [0; 0x80000];
-    let span = talc::Span::from_array(core::ptr::addr_of!(MEMORY).cast_mut());
-    talc::Talc::new(unsafe { talc::ClaimOnOom::new(span) }).lock()
+static TALC: talc::wasm::WasmArenaTalc = {
+    use core::mem::MaybeUninit;
+    static mut MEMORY: [MaybeUninit<u8>; 0x80000] = [MaybeUninit::uninit(); 0x80000];
+    // SAFETY: the memory for MEMORY is never modified externally. It's the allocator's.
+    unsafe { talc::wasm::new_wasm_arena_allocator(&raw mut MEMORY) }
 };
 
 #[template]
