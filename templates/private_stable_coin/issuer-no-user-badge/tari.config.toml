@@ -1,0 +1,2 @@
+[network]
+wallet-daemon-jrpc-address = "http://localhost:12008/json-rpc"

@@ -4,14 +4,20 @@ name = "tari-stable-coin-nobadge"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.tari-template]
+tags = ["token", "fungible", "defi", "stablecoin"]
+category = "token"
+documentation = "https://github.com/tari-project/stable-coin"
+homepage = "https://github.com/tari-project/stable-coin"
+
 [dependencies]
-tari_template_lib = { version = "0.20.1", default-features = false, features = ["macro", "alloc"] }
+tari_template_lib = { version = "0.23", default-features = false, features = ["macro", "alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-talc = { version = "4.4.3", default-features = false, features = ["lock_api"] }
+talc = { version = "5.0", default-features = false }
 
 [dev-dependencies]
-tari_template_test_tooling = "0.25.8"
-ootle_byte_type = "0.2.1"
+tari_template_test_tooling = "0.28"
+ootle_byte_type = "0.5"
 
 [profile.release]
 opt-level = 's'     # Optimize for size.
@@ -22,3 +28,6 @@ strip = true
 
 [lib]
 crate-type = ["cdylib"]
+
+[build-dependencies]
+tari_ootle_template_build = "0.4"
