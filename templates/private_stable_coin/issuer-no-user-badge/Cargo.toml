@@ -3,6 +3,7 @@
 name = "tari-stable-coin-nobadge"
 version = "0.1.0"
 edition = "2024"
+description = "Stealth stable coin"
 
 [package.metadata.tari-template]
 tags = ["token", "fungible", "defi", "stablecoin"]

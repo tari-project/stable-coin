@@ -4,12 +4,14 @@ fn main() {
     let sc = var!["sc"];
     let resx = var!["resx"];
     let user = var!["user"];
+    let account = var!["account"];
 
     let proof = account.create_proof_by_amount(Address(resx), 1);
-    let badge = sc.create_new_user(1, user);
-    user.deposit(badge);
+    let user_acc = create_account!(user);
+    let badge = sc.create_new_user(1, user_acc);
+    user_acc.deposit(badge);
     let funds = sc.withdraw(1000000);
-    user.deposit(funds);
+    user_acc.deposit(funds);
 
-    drop_all_proofs!();
+    drop_all_proofs!()
 }
