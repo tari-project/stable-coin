@@ -15,7 +15,7 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 talc = { version = "5.0", default-features = false }
 
 [dev-dependencies]
-tari_template_test_tooling = "0.29"
+tari_template_test_tooling = "0.30"
 ootle_byte_type = "0.6"
 
 [profile.release]
