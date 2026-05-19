@@ -99,7 +99,8 @@ mod template {
                 ))
                 .depositable(require_admin.clone(), OWNER)
                 .recallable(require_admin.clone(), OWNER)
-                .update_non_fungible_data(require_admin.clone(), require_admin.clone())
+                .update_non_fungible_data(require_admin.clone(), OWNER)
+                .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .build();
 
             // Create user access rules
@@ -122,6 +123,7 @@ mod template {
                 .with_authorization_hook(component_alloc.get_address(), "authorize_user_deposit")
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
+                .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .initial_supply(initial_token_supply);
 
             // Create wrapped token resource (no initial supply - minted on demand)
@@ -132,6 +134,7 @@ mod template {
                     // Access rules
                     .mintable(require_admin.clone(), OWNER)
                     .burnable(require_admin.clone(), OWNER)
+                    .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                     .build();
 
                 Some(WrappedExchangeToken::new(wrapped_resource))

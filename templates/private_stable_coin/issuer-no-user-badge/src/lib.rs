@@ -101,6 +101,7 @@ mod template {
                 .depositable(require_admin.clone(), OWNER)
                 .recallable(require_admin.clone(), LOCKED)
                 .update_non_fungible_data(require_admin.clone(), OWNER)
+                .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .build();
 
             // Create tokens resource with initial supply
@@ -113,6 +114,7 @@ mod template {
                 .recallable(require_admin.clone(), LOCKED)
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
+                .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .initial_supply(initial_token_supply);
 
             // Create tokens resource with initial supply
@@ -123,6 +125,7 @@ mod template {
                     // Access rules
                     .mintable(require_admin.clone(), OWNER)
                     .burnable(require_admin.clone(), OWNER)
+                    .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                     .build();
 
                 Some(WrappedExchangeToken::new(wrapped_resource))
