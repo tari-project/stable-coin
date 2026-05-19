@@ -98,9 +98,9 @@ mod template {
                     "provider_name" => provider_name,
                     "description" => format!("User authentication badge for the {provider_name} stable coin")
                 ))
-                .depositable(require_admin.clone())
-                .recallable(require_admin.clone())
-                .update_non_fungible_data(require_admin.clone())
+                .depositable(require_admin.clone(), OWNER)
+                .recallable(require_admin.clone(), LOCKED)
+                .update_non_fungible_data(require_admin.clone(), OWNER)
                 .build();
 
             // Create tokens resource with initial supply
@@ -108,9 +108,9 @@ mod template {
                 .with_metadata(token_metadata.clone())
                 .with_token_symbol(token_symbol.as_ref())
                 // Access rules
-                .mintable(require_admin.clone())
-                .burnable(require_admin.clone())
-                .recallable(require_admin.clone())
+                .mintable(require_admin.clone(), OWNER)
+                .burnable(require_admin.clone(), OWNER)
+                .recallable(require_admin.clone(), LOCKED)
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
                 .initial_supply(initial_token_supply);
@@ -121,8 +121,8 @@ mod template {
                     .with_metadata(token_metadata)
                     .with_token_symbol(format!("w{token_symbol}"))
                     // Access rules
-                    .mintable(require_admin.clone())
-                    .burnable(require_admin.clone())
+                    .mintable(require_admin.clone(), OWNER)
+                    .burnable(require_admin.clone(), OWNER)
                     .build();
 
                 Some(WrappedExchangeToken::new(wrapped_resource))

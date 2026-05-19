@@ -4,10 +4,13 @@
 use core::fmt;
 use tari_template_lib::types::Amount;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct StableCoinConfig {
+    #[n(0)]
     pub transfer_fee: FeeSpec,
+    #[n(1)]
     pub wrapped_exchange_fee: FeeSpec,
+    #[n(2)]
     pub default_exchange_limit: Amount,
 }
 
@@ -21,10 +24,12 @@ impl Default for StableCoinConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub enum FeeSpec {
-    Fixed(Amount),
-    Percentage(u8),
+    #[n(0)]
+    Fixed(#[n(0)] Amount),
+    #[n(1)]
+    Percentage(#[n(0)] u8),
 }
 
 impl FeeSpec {

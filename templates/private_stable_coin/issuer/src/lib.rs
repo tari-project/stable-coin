@@ -97,9 +97,9 @@ mod template {
                     "provider_name" => provider_name,
                     "description" => format!("User authentication badge for the {provider_name} stable coin")
                 ))
-                .depositable(require_admin.clone())
-                .recallable(require_admin.clone())
-                .update_non_fungible_data(require_admin.clone())
+                .depositable(require_admin.clone(), OWNER)
+                .recallable(require_admin.clone(), OWNER)
+                .update_non_fungible_data(require_admin.clone(), require_admin.clone())
                 .build();
 
             // Create user access rules
@@ -114,11 +114,11 @@ mod template {
                 .with_metadata(token_metadata.clone())
                 .with_token_symbol(token_symbol.as_ref())
                 // Access rules
-                .mintable(require_admin.clone())
-                .burnable(require_admin.clone())
-                .depositable(require_user_or_admin.clone())
-                .withdrawable(require_user_or_admin.clone())
-                .recallable(require_admin.clone())
+                .mintable(require_admin.clone(), OWNER)
+                .burnable(require_admin.clone(), OWNER)
+                .depositable(require_user_or_admin.clone(), LOCKED)
+                .withdrawable(require_user_or_admin.clone(), LOCKED)
+                .recallable(require_admin.clone(), LOCKED)
                 .with_authorization_hook(component_alloc.get_address(), "authorize_user_deposit")
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
@@ -130,8 +130,8 @@ mod template {
                     .with_metadata(token_metadata)
                     .with_token_symbol(format!("w{token_symbol}"))
                     // Access rules
-                    .mintable(require_admin.clone())
-                    .burnable(require_admin.clone())
+                    .mintable(require_admin.clone(), OWNER)
+                    .burnable(require_admin.clone(), OWNER)
                     .build();
 
                 Some(WrappedExchangeToken::new(wrapped_resource))
