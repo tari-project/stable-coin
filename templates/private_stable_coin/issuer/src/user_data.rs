@@ -5,9 +5,9 @@ use core::fmt;
 use tari_template_lib::component::ComponentManager;
 use tari_template_lib::{types::Amount, types::NonFungibleId};
 
-#[derive(Clone, Debug, Copy, serde::Serialize, serde::Deserialize)]
-#[serde(transparent)]
-pub struct UserId(u64);
+#[derive(Clone, Copy, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+#[cbor(transparent)]
+pub struct UserId(#[n(0)] u64);
 
 impl From<UserId> for NonFungibleId {
     fn from(value: UserId) -> Self {
@@ -21,16 +21,21 @@ impl fmt::Display for UserId {
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct UserData {
+    #[n(0)]
     pub user_id: UserId,
+    #[n(1)]
     pub user_account: ComponentManager,
+    #[n(2)]
     pub created_at_epoch: u64,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct UserMutableData {
+    #[n(0)]
     pub is_blacklisted: bool,
+    #[n(1)]
     pub wrapped_exchange_limit: Amount,
 }
 

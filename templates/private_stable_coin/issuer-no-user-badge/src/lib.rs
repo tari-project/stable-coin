@@ -98,9 +98,10 @@ mod template {
                     "provider_name" => provider_name,
                     "description" => format!("User authentication badge for the {provider_name} stable coin")
                 ))
-                .depositable(require_admin.clone())
-                .recallable(require_admin.clone())
-                .update_non_fungible_data(require_admin.clone())
+                .depositable(require_admin.clone(), OWNER)
+                .recallable(require_admin.clone(), LOCKED)
+                .update_non_fungible_data(require_admin.clone(), OWNER)
+                .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .build();
 
             // Create tokens resource with initial supply
@@ -108,11 +109,12 @@ mod template {
                 .with_metadata(token_metadata.clone())
                 .with_token_symbol(token_symbol.as_ref())
                 // Access rules
-                .mintable(require_admin.clone())
-                .burnable(require_admin.clone())
-                .recallable(require_admin.clone())
+                .mintable(require_admin.clone(), OWNER)
+                .burnable(require_admin.clone(), OWNER)
+                .recallable(require_admin.clone(), LOCKED)
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
+                .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .initial_supply(initial_token_supply);
 
             // Create tokens resource with initial supply
@@ -121,8 +123,9 @@ mod template {
                     .with_metadata(token_metadata)
                     .with_token_symbol(format!("w{token_symbol}"))
                     // Access rules
-                    .mintable(require_admin.clone())
-                    .burnable(require_admin.clone())
+                    .mintable(require_admin.clone(), OWNER)
+                    .burnable(require_admin.clone(), OWNER)
+                    .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                     .build();
 
                 Some(WrappedExchangeToken::new(wrapped_resource))
@@ -133,8 +136,13 @@ mod template {
             // Create component access rules
             let component_access_rules = AccessRules::new().default(require_admin);
 
-            // Create component
-            let _component = Component::new(Self {
+            // Vault deposits below are gated on the admin owner rule of their resources, so we
+            // hold a proof of the freshly-minted admin badge for the duration of component
+            // construction. Creating a proof on a bucket implicitly adds it to the auth scope;
+            // dropping it removes the auth and releases the bucket lock so the badge can be
+            // returned to the caller.
+            let admin_proof = admin_badge.create_proof();
+            Component::new(Self {
                 config,
                 token_vault: Vault::from_bucket(initial_tokens),
                 user_auth_manager: user_auth_resource.into(),
@@ -148,6 +156,7 @@ mod template {
             // Access is controlled by anyone with an admin badge
             .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
             .create();
+            admin_proof.drop();
 
             admin_badge
         }

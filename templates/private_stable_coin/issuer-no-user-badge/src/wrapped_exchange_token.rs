@@ -4,8 +4,9 @@
 use tari_template_lib::resource::ResourceManager;
 use tari_template_lib::types::ResourceAddress;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct WrappedExchangeToken {
+    #[n(0)]
     manager: ResourceManager,
 }
 

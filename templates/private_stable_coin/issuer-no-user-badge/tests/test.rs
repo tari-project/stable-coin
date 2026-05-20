@@ -5,7 +5,7 @@ use tari_template_test_tooling::crypto::{PublicKey, RistrettoPublicKey, Ristrett
 use tari_template_test_tooling::support::assert_error::assert_reject_reason;
 use tari_template_test_tooling::transaction::args;
 
-const INITIAL_SUPPLY: u128 = 1_000_000_000_000_000u128;
+const INITIAL_SUPPLY: u64 = 1_000_000_000_000_000u64;
 
 #[test]
 fn it_increases_and_decreases_supply() {
@@ -824,7 +824,7 @@ fn setup() -> TestSetup {
         .up_iter()
         .find(|(id, s)| {
             id.is_component()
-                && s.substate_value().component().unwrap().template_address == template
+                && *s.substate_value().component().unwrap().template_address() == template
         })
         .map(|(id, _)| id.as_component_address().unwrap())
         .unwrap();
@@ -834,16 +834,18 @@ fn setup() -> TestSetup {
         .inspect_component(stable_coin_component)
         .unwrap();
 
+    // Component state is encoded with minicbor as a positional array, so look up fields by
+    // their #[n(N)] index rather than by name.
     let token_vault = indexed
-        .get_value("$.token_vault")
+        .get_value("$.1")
         .unwrap()
         .expect("token_vault not found");
     let user_badge_resource = indexed
-        .get_value("$.user_auth_manager")
+        .get_value("$.2")
         .unwrap()
         .expect("user_auth_manager not found");
     let admin_badge_resource = indexed
-        .get_value("$.admin_auth_manager")
+        .get_value("$.3")
         .unwrap()
         .expect("admin_auth_manager not found");
 
