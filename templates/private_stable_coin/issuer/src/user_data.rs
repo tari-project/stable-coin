@@ -6,6 +6,7 @@ use tari_template_lib::component::ComponentManager;
 use tari_template_lib::{types::Amount, types::NonFungibleId};
 
 #[derive(Clone, Copy, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+#[cbor(transparent)]
 pub struct UserId(#[n(0)] u64);
 
 impl From<UserId> for NonFungibleId {
