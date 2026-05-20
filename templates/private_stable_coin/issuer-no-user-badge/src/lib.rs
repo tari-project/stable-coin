@@ -136,8 +136,13 @@ mod template {
             // Create component access rules
             let component_access_rules = AccessRules::new().default(require_admin);
 
-            // Create component
-            let _component = Component::new(Self {
+            // Vault deposits below are gated on the admin owner rule of their resources, so we
+            // hold a proof of the freshly-minted admin badge for the duration of component
+            // construction. Creating a proof on a bucket implicitly adds it to the auth scope;
+            // dropping it removes the auth and releases the bucket lock so the badge can be
+            // returned to the caller.
+            let admin_proof = admin_badge.create_proof();
+            Component::new(Self {
                 config,
                 token_vault: Vault::from_bucket(initial_tokens),
                 user_auth_manager: user_auth_resource.into(),
@@ -151,6 +156,7 @@ mod template {
             // Access is controlled by anyone with an admin badge
             .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
             .create();
+            admin_proof.drop();
 
             admin_badge
         }
