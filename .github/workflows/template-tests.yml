@@ -35,4 +35,4 @@ jobs:
 
       - name: Run tests
         working-directory: ${{ matrix.template }}
-        run: cargo test --locked --all-features
+        run: cargo test --all-features
