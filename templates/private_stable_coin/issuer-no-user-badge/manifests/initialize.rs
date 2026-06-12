@@ -1,4 +1,4 @@
-use template_xxx as StableCoin;
+use StableCoin;
 
 pub fn main() {
     let addr = new_component_addr!();
