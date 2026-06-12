@@ -17,7 +17,7 @@ See [`../issuer`](../issuer/README.md) for the variant that restricts holding to
 | Admin badge | Non-fungible | Gates all privileged operations; returned to the caller of `instantiate`. |
 | User badge | Non-fungible | An **optional registry entry**, not an access requirement. Minted by admins via `create_new_user` for known/KYC'd users; stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). Used to look up a user's account for recalls and to track exchange limits. |
 | Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint/burn/recall require an admin badge — **deposit and withdraw are unrestricted**. |
-| Wrapped token (optional) | Public fungible | A transparent twin of the coin (`w<SYMBOL>`), exchangeable 1:1 (minus a configurable fee) for use where confidential resources aren't supported. |
+| Wrapped token (optional) | Public fungible | A transparent twin of the coin (`w<SYMBOL>`), exchangeable 1:1 (minus a configurable fee). See [Wrapped exchange token](#wrapped-exchange-token). |
 
 Because the coin resource has no deposit/withdraw rules and no authorization hook, transfers are ordinary
 peer-to-peer stealth transfers between any accounts (see the
@@ -42,6 +42,27 @@ All methods require an admin badge:
   [`issuer`](../issuer/README.md) variant there is no resource-level enforcement point, so pausing does not block
   transfers on-chain.
 - `set_user_exchange_limit`, `set_config_transfer_fee_fixed`, `set_config_transfer_fee_percentage`
+
+## Wrapped exchange token
+
+If `enable_wrapped_token` is set at instantiation, the component creates a public fungible resource `w<SYMBOL>` with
+no initial supply — it is minted and burned only through the two exchange methods. Stable coins are swapped for
+wrapped tokens 1:1 via `exchange_stable_for_wrapped_tokens` (the stable coins are burned, a configurable fee is
+taken into the issuer vault, and the swap is capped by the user's admin-set `wrapped_exchange_limit`) and back via
+`exchange_wrapped_for_stable_tokens` (no fee). In this variant both methods are admin-gated, so exchanges are
+performed through the issuer.
+
+Exchanging into the wrapped token takes the value **outside the controlled stable coin**. The wrapped resource has
+no recall permission, no UTXO freeze, and no deposit gating — once wrapped tokens sit in a user's vault, the issuer
+cannot recall or freeze them; admin authority over the wrapped resource is limited to minting and burning through
+the exchange methods. The per-user exchange limit is therefore the issuer's control point: it caps how much value
+each user can move out of the controlled system. The flip side for the user is that the wrapped token is fully
+transparent — amounts and transfers are public, with none of the stealth resource's confidentiality.
+
+The feature is optional at two levels: per instance, by passing `enable_wrapped_token = false` to `instantiate`
+(no wrapped resource is created and the exchange methods panic); or at the template level, by deleting the
+wrapped-token code entirely (`wrapped_exchange_token.rs`, the exchange methods, and the exchange-limit
+management) — mainly to reduce the compiled WASM template size.
 
 ## Privacy tradeoff: no badge vs. user badge
 
