@@ -69,6 +69,7 @@ mod template {
             // Create admin badge resource
             let admin_badge = ResourceBuilder::non_fungible()
                 .with_metadata(metadata!("name" => "Admin"))
+                .with_token_symbol("ADM")
                 .recallable(rule![deny_all], OWNER)
                 .initial_supply(Some(NonFungibleId::from_u64(0)));
 

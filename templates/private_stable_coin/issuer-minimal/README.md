@@ -12,12 +12,12 @@ See [`../issuer`](../issuer/README.md) for the variant that restricts holding to
 
 `instantiate` creates four resources and one component:
 
-| Resource | Type | Purpose |
-|---|---|---|
-| Admin badge | Non-fungible | Gates all privileged operations; returned to the caller of `instantiate`. |
-| User badge | Non-fungible | An **optional registry entry**, not an access requirement. Minted by admins via `create_new_user` for known/KYC'd users; stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). Used to look up a user's account for recalls and to track exchange limits. |
-| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint/burn/recall require an admin badge — **deposit and withdraw are unrestricted**. |
-| Wrapped token (optional) | Public fungible | A transparent twin of the coin (`w<SYMBOL>`), exchangeable 1:1 (minus a configurable fee). See [Wrapped exchange token](#wrapped-exchange-token). |
+| Resource                 | Type                   | Purpose                                                                                                                                                                                                                                                                                                                 |
+|--------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Admin badge              | Non-fungible           | Gates all privileged operations; returned to the caller of `instantiate`.                                                                                                                                                                                                                                               |
+| User badge               | Non-fungible           | An **optional registry entry**, not an access requirement. Minted by admins via `create_new_user` for known/KYC'd users; stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). Used to look up a user's account for recalls and to track exchange limits. |
+| Stable coin              | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint/burn/recall require an admin badge — **deposit and withdraw are unrestricted**.                                                                                                                               |
+| Wrapped token (optional) | Public fungible        | A transparent twin of the coin (`w<SYMBOL>`), exchangeable 1:1 (minus a configurable fee). See [Wrapped exchange token](#wrapped-exchange-token).                                                                                                                                                                       |
 
 Because the coin resource has no deposit/withdraw rules and no authorization hook, transfers are ordinary
 peer-to-peer stealth transfers between any accounts (see the
@@ -107,5 +107,5 @@ cargo test
 
 - [`manifests/initialize.rs`](manifests/initialize.rs) — instantiates the component (initial supply, symbol,
   metadata, divisibility, view key, wrapped-token flag) and deposits the admin badge.
-- [`manifests/create_user_and_transfer.rs`](manifests/create_user_and_transfer.rs) — registers a new user (minting
+- [`manifests/create_user_and_transfer.rs`](manifests/transfer.rs) — registers a new user (minting
   their badge) and transfers them funds in one transaction.
