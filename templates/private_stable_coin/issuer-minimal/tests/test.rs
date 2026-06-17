@@ -93,7 +93,7 @@ fn it_allows_users_to_transact() {
         vec![admin_proof.clone()],
     );
 
-    // Alice to Bob should fail (Bob is not allowed to transact)
+    // Alice to Bob should succeed (anyone can receive tokens without a badge)
     test.execute_expect_success(
         test.transaction()
             .call_method(alice_account, "withdraw", args![token_resource, 456])

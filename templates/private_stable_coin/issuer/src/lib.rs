@@ -214,6 +214,7 @@ mod template {
 
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
+            assert!(amount.is_positive(), "Amount must be positive");
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
 
@@ -222,6 +223,7 @@ mod template {
 
         /// Decrease token supply by amount.
         pub fn decrease_supply(&mut self, amount: Amount) {
+            assert!(amount.is_positive(), "Amount must be positive");
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
 
@@ -232,6 +234,7 @@ mod template {
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
+            assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
             emit_event(
                 "withdraw",
@@ -351,6 +354,7 @@ mod template {
         }
 
         pub fn recall_revealed_tokens(&mut self, user_id: UserId, amount: Amount) {
+            assert!(amount.is_positive(), "Amount must be positive");
             // Fetch the user badge
             let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let user = badge.get_data::<UserData>();
@@ -539,6 +543,23 @@ mod template {
             self.is_paused = true;
             emit_event(
                 "admin.paused",
+                metadata!(
+                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
+                    "admin_badge" => badge
+                ),
+            );
+        }
+
+        pub fn unpause(&mut self, proof: Proof) {
+            proof.assert_resource(self.admin_auth_manager.resource_address());
+            let badge = proof
+                .get_non_fungibles()
+                .first()
+                .expect("Proof must contain an admin badge")
+                .to_string();
+            self.is_paused = false;
+            emit_event(
+                "admin.unpaused",
                 metadata!(
                     "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
                     "admin_badge" => badge

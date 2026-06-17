@@ -121,6 +121,8 @@ mod template {
 
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
+            self.assert_not_paused();
+            assert!(amount.is_positive(), "Amount must be positive");
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
             emit_event("increase_supply", metadata!("amount" => amount.to_string()));
@@ -128,6 +130,8 @@ mod template {
 
         /// Decrease token supply by amount.
         pub fn decrease_supply(&mut self, amount: Amount) {
+            self.assert_not_paused();
+            assert!(amount.is_positive(), "Amount must be positive");
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
             emit_event(
@@ -137,6 +141,8 @@ mod template {
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
+            self.assert_not_paused();
+            assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
             emit_event(
                 "withdraw",
@@ -146,12 +152,14 @@ mod template {
         }
 
         pub fn deposit(&mut self, bucket: Bucket) {
+            self.assert_not_paused();
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
             emit_event("deposit", metadata!("amount" => amount.to_string()));
         }
 
         pub fn recall_revealed_tokens(&mut self, vault_id: VaultId, amount: Amount) {
+            assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self
                 .token_vault_manager()
                 .recall_fungible_amount(vault_id, amount);
@@ -227,6 +235,19 @@ mod template {
             );
         }
 
+        pub fn unpause(&mut self, proof: Proof) {
+            proof.assert_resource(self.admin_auth_manager.resource_address());
+            let badges = proof.get_non_fungibles();
+            self.is_paused = false;
+            emit_event(
+                "admin.unpaused",
+                metadata!(
+                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
+                    "admin" => badges.first().expect("Proof must contain an admin badge").to_string()
+                ),
+            );
+        }
+
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
             emit_event(
                 "admin.freeze_utxos",
@@ -251,6 +272,10 @@ mod template {
 
         fn token_vault_manager(&self) -> ResourceManager {
             self.token_vault.get_resource_manager()
+        }
+
+        fn assert_not_paused(&self) {
+            assert!(!self.is_paused, "Component is paused");
         }
     }
 }

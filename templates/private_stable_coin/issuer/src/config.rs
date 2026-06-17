@@ -54,16 +54,18 @@ fn perc_rounded<A: Into<Amount>>(v: A, percentage: u8) -> Amount {
     let v = v.into();
     let p = Amount::from(percentage);
 
-    // f and b are the division to 3 decimals
-    let f = (v * Amount::ONE_THOUSAND) * p / Amount::ONE_HUNDRED;
-    let b = v * p / Amount::ONE_HUNDRED;
-    let c = f - (b * Amount::ONE_THOUSAND);
+    // Compute `v * p / 100` rounding half up, working directly with the integer
+    // quotient and remainder. The previous version scaled by 1000 first
+    // (`v * 1000 * p`), which overflows `Amount` for large supplies.
+    let scaled = v * p;
+    let whole = scaled / Amount::ONE_HUNDRED;
+    let remainder = scaled - (whole * Amount::ONE_HUNDRED);
 
-    // If the decimal is greater or equal to 0.5, we round up
-    if c >= 500 {
-        (f / Amount::ONE_THOUSAND) + Amount::ONE
+    // If the fractional part is >= 0.5 (remainder >= 50), round up.
+    if remainder >= 50 {
+        whole + Amount::ONE
     } else {
-        b
+        whole
     }
 }
 
