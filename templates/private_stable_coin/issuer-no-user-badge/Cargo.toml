@@ -17,7 +17,7 @@ minicbor = { version = "2.2.2", default-features = false, features = ["derive", 
 talc = { version = "5.0", default-features = false }
 
 [dev-dependencies]
-tari_template_test_tooling = "0.31"
+tari_template_test_tooling = "0.34"
 ootle_byte_type = "0.8"
 
 [profile.release]
@@ -33,3 +33,15 @@ crate-type = ["cdylib"]
 [build-dependencies]
 tari_ootle_template_build = "0.7"
 
+[profile.dev.package.wasmer]
+opt-level = 2
+[profile.dev.package.wasmer-compiler]
+opt-level = 2
+[profile.dev.package.wasmer-compiler-cranelift]
+opt-level = 2
+[profile.dev.package.cranelift-codegen]
+opt-level = 2
+[profile.dev.package.cranelift-frontend]
+opt-level = 2
+[profile.dev.package.cranelift-entity]
+opt-level = 2

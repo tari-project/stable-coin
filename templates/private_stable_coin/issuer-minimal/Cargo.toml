@@ -1,21 +1,23 @@
 [workspace]
 [package]
-name = "tari-stable-coin"
+name = "tari-stablecoin-minimal"
 version = "0.1.0"
 edition = "2024"
-description = "Private stable coin with user badge"
+description = "Stealth stable coin"
 
 [package.metadata.tari-template]
-tags = ["token", "stablecoin", "stable-coin", "defi", "fungible", "privacy"]
-category = "stable-coin"
+tags = ["token", "fungible", "defi", "stablecoin"]
+category = "token"
+documentation = "https://github.com/tari-project/stable-coin"
+homepage = "https://github.com/tari-project/stable-coin"
 
 [dependencies]
 tari_template_lib = { version = "0.27", default-features = false, features = ["macro", "alloc"] }
-minicbor = { version = "2.2.2", default-features = false, features = ["derive", "alloc"] }
+minicbor = { version = "2.2", default-features = false, features = ["derive", "alloc"] }
 talc = { version = "5.0", default-features = false }
 
 [dev-dependencies]
-tari_template_test_tooling = "0.34"
+tari_template_test_tooling = "0.34.1"
 ootle_byte_type = "0.8"
 
 [profile.release]

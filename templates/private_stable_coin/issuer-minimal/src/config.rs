@@ -8,23 +8,17 @@ use tari_template_lib::types::Amount;
 pub struct StableCoinConfig {
     #[n(0)]
     pub transfer_fee: FeeSpec,
-    #[n(1)]
-    pub wrapped_exchange_fee: FeeSpec,
-    #[n(2)]
-    pub default_exchange_limit: Amount,
 }
 
 impl Default for StableCoinConfig {
     fn default() -> Self {
         Self {
-            wrapped_exchange_fee: FeeSpec::Percentage(1),
             transfer_fee: FeeSpec::Fixed(1u64.into()),
-            default_exchange_limit: 1000u64.into(),
         }
     }
 }
 
-#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+#[derive(Clone, Copy, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub enum FeeSpec {
     #[n(0)]
     Fixed(#[n(0)] Amount),
