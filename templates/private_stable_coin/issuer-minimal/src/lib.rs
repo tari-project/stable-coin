@@ -64,8 +64,9 @@ mod template {
             token_metadata: Metadata,
             divisibility: u8,
             view_key: RistrettoPublicKeyBytes,
-            config: StableCoinConfig,
+            config: Option<StableCoinConfig>,
         ) -> Bucket {
+            let config = config.unwrap_or_default();
             // Create admin badge resource
             let admin_badge = ResourceBuilder::non_fungible()
                 .with_metadata(metadata!("name" => "Admin"))
