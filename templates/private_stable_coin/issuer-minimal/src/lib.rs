@@ -25,7 +25,6 @@
 extern crate alloc;
 
 pub mod config;
-use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -77,7 +76,6 @@ mod template {
 
             // Create admin badge resource
             let admin_badge = ResourceBuilder::non_fungible()
-                .with_metadata(metadata!("name" => "Admin"))
                 .with_token_symbol("ADM")
                 .recallable(rule![deny_all], OWNER)
                 .initial_supply(Some(NonFungibleId::from_u64(0)));
@@ -131,7 +129,7 @@ mod template {
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
             self.assert_not_paused();
-            assert!(amount.is_positive(), "Amount must be positive");
+            assert!(!amount.is_zero());
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
             emit_event("increase_supply", metadata!("amount" => amount.to_string()));
@@ -140,12 +138,12 @@ mod template {
         /// Decrease token supply by amount.
         pub fn decrease_supply(&mut self, amount: Amount) {
             self.assert_not_paused();
-            assert!(amount.is_positive(), "Amount must be positive");
+            assert!(!amount.is_zero());
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
             emit_event(
                 "decrease_supply",
-                metadata!("revealed_burn_amount" => amount.to_string()),
+                metadata!("amt" => amount.to_string()),
             );
         }
 
@@ -155,7 +153,7 @@ mod template {
             let bucket = self.token_vault.withdraw(amount);
             emit_event(
                 "withdraw",
-                metadata!("amount_withdrawn" => bucket.amount().to_string()),
+                metadata!("amt" => bucket.amount().to_string()),
             );
             bucket
         }
@@ -164,11 +162,11 @@ mod template {
             self.assert_not_paused();
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
-            emit_event("deposit", metadata!("amount" => amount.to_string()));
+            emit_event("deposit", metadata!("amt" => amount.to_string()));
         }
 
         pub fn recall_revealed_tokens(&mut self, vault_id: VaultId, amount: Amount) {
-            assert!(amount.is_positive(), "Amount must be positive");
+            assert!(!amount.is_zero());
             let bucket = self
                 .token_vault_manager()
                 .recall_fungible_amount(vault_id, amount);
@@ -177,8 +175,8 @@ mod template {
             emit_event(
                 "recall_tokens",
                 metadata!(
-                        "vault_id" => vault_id.to_string(),
-                        "revealed_amount" => amount.to_string(),
+                    "vault_id" => vault_id.to_string(),
+                    "amt" => amount.to_string(),
                 ),
             );
         }
@@ -208,8 +206,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_fixed",
                 metadata!(
-                    "old_transfer_fee" => self.config.transfer_fee.to_string(),
-                    "new_transfer_fee" => new_fee.to_string(),
+                    "prev" => self.config.transfer_fee.to_string(),
+                    "new" => new_fee.to_string(),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Fixed(new_fee);
@@ -223,8 +221,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_percentage",
                 metadata!(
-                        "old_transfer_fee" => self.config.transfer_fee.to_string(),
-                        "new_transfer_fee" => format!("{new_fee_perc}%"),
+                    "prev" => self.config.transfer_fee.to_string(),
+                    "new" => new_fee_perc.to_string()
                 ),
             );
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
@@ -234,12 +232,13 @@ mod template {
             proof.assert_resource(self.admin_auth_manager.resource_address());
             // Could also add a check for a specific admin badge ID if desired
             let badges = proof.get_non_fungibles();
+            let admin_badge = badges.first().expect("No admin badge");
             self.is_paused = true;
             emit_event(
                 "admin.paused",
                 metadata!(
                     "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "admin" => badges.first().expect("Proof must contain an admin badge").to_string()
+                    "admin" => admin_badge.to_string()
                 ),
             );
         }
@@ -247,12 +246,13 @@ mod template {
         pub fn unpause(&mut self, proof: Proof) {
             proof.assert_resource(self.admin_auth_manager.resource_address());
             let badges = proof.get_non_fungibles();
+            let admin_badge = badges.first().expect("No admin badge");
             self.is_paused = false;
             emit_event(
                 "admin.unpaused",
                 metadata!(
                     "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "admin" => badges.first().expect("Proof must contain an admin badge").to_string()
+                    "admin" => admin_badge.to_string()
                 ),
             );
         }
@@ -284,7 +284,7 @@ mod template {
         }
 
         fn assert_not_paused(&self) {
-            assert!(!self.is_paused, "Component is paused");
+            assert!(!self.is_paused, "Stable coin is paused");
         }
     }
 }
