@@ -42,7 +42,7 @@ static TALC: talc::wasm::WasmArenaTalc = {
 
 #[template]
 mod template {
-    use tari_template_lib::types::crypto::StealthValueProof;
+    use tari_template_lib::types::crypto::CommitmentValueProof;
 
     use super::*;
     use crate::config::FeeSpec;
@@ -67,6 +67,14 @@ mod template {
             config: Option<StableCoinConfig>,
         ) -> Bucket {
             let config = config.unwrap_or_default();
+            // Minting, burning, recalling and freezing the coin are reserved for this component.
+            // A proof handed to a component at a call boundary is revoked once the callee's own
+            // access rule has been checked, so a badge proof is never in scope inside a method
+            // body and cannot satisfy a `resource(..)` rule there. The admin badge remains the
+            // single entry point: every component method requires it.
+            let component_address = address_alloc.get_address();
+            let require_component = rule!(component(component_address));
+
             // Create admin badge resource
             let admin_badge = ResourceBuilder::non_fungible()
                 .with_metadata(metadata!("name" => "Admin"))
@@ -86,10 +94,10 @@ mod template {
                 .with_metadata(token_metadata)
                 .with_token_symbol(token_symbol.as_ref())
                 // Access rules
-                .mintable(require_admin.clone(), OWNER)
-                .burnable(require_admin.clone(), OWNER)
-                .recallable(require_admin.clone(), LOCKED)
-                .freezable(require_admin.clone(), LOCKED)
+                .mintable(require_component.clone(), OWNER)
+                .burnable(require_component.clone(), OWNER)
+                .recallable(require_component.clone(), LOCKED)
+                .freezable(require_component, LOCKED)
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
                 .with_owner_rule(OwnerRule::ByAccessRule(require_admin.clone()))
@@ -175,7 +183,7 @@ mod template {
             );
         }
 
-        pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
+        pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.token_vault_manager()
                 .burn_utxo(utxo, Some(value_proof));
             emit_event(
