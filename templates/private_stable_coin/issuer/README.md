@@ -14,14 +14,17 @@ the [privacy tradeoff](#privacy-tradeoff-of-the-user-badge) section below for ho
 | Resource | Type | Purpose |
 |---|---|---|
 | Admin badge | Non-fungible | Gates all privileged operations; returned to the caller of `instantiate`. |
-| User badge | Non-fungible | Per-user authentication token. Minted by admins via `create_new_user`, recallable by admins. Stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). |
-| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint/burn/recall require an admin badge. |
+| User badge | Non-fungible | Per-user authentication token. Minted via `create_new_user` and recalled via `blacklist_user`, both admin-gated component methods. Stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). |
+| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint, burn, recall and freeze are performed only by the component, whose methods all require an admin badge. |
 | Wrapped token (optional) | Public fungible | A transparent twin of the coin (`w<SYMBOL>`), exchangeable 1:1 (minus a configurable fee). See [Wrapped exchange token](#wrapped-exchange-token). |
 
-The stable coin resource is built with `depositable`/`withdrawable` rules requiring a user or admin badge, **plus an
-authorization hook** (`authorize_user_deposit`) that runs on every deposit. The hook inspects the receiving account
-and panics unless that account holds a user badge in a vault — so tokens can only ever land in registered accounts.
-The hook also rejects all deposits while the coin is paused.
+Who may hold the coin is enforced by an **authorization hook** (`authorize_user_deposit`) that runs on every
+deposit. The hook inspects the receiving account and panics unless that account holds a user badge in a vault — so
+tokens can only ever land in registered accounts. The hook also rejects all deposits while the coin is paused.
+
+The hook, rather than a `depositable`/`withdrawable` access rule, is what does the gating: a deposit is authorized
+inside the receiving account's call frame, where no proof is in scope, so a rule requiring a badge proof could
+never be satisfied there. The hook runs in that frame and reads the account's vaults instead.
 
 ### Method summary
 

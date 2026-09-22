@@ -22,7 +22,7 @@ best starting point for a custom issuer.
 | Resource    | Type                   | Purpose                                                                                                                                                                             |
 |-------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Admin badge | Non-fungible (`ADM`)   | Gates every component method. One badge is minted and returned to the caller of `instantiate`; more can be minted with `create_new_admin`. Admins can recall each other's badges. |
-| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint, burn, recall and freeze require an admin badge — **deposit and withdraw on the resource are unrestricted**. |
+| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint, burn, recall and freeze are performed only by the component, whose methods all require an admin badge — **deposit and withdraw on the resource are unrestricted**. |
 
 The component holds the issuer's `token_vault` (seeded with `initial_token_supply`), a reference to the admin
 badge resource, a paused flag, and a `StableCoinConfig`.

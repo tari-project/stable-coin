@@ -10,13 +10,13 @@ tags = ["token", "stablecoin", "stable-coin", "defi", "fungible", "privacy"]
 category = "stable-coin"
 
 [dependencies]
-tari_template_lib = { version = "0.27", default-features = false, features = ["macro", "alloc"] }
-minicbor = { version = "2.2.2", default-features = false, features = ["derive", "alloc"] }
-talc = { version = "5.0", default-features = false }
+tari_template_lib = { version = "0.32", default-features = false, features = ["macro", "alloc"] }
+minicbor = { version = "2.3", default-features = false, features = ["derive", "alloc"] }
+talc = { version = "5.1", default-features = false }
 
 [dev-dependencies]
-tari_template_test_tooling = "0.34"
-ootle_byte_type = "0.8"
+tari_template_test_tooling = "0.41.1"
+ootle_byte_type = "0.13"
 
 [profile.release]
 opt-level = 's'     # Optimize for size.
@@ -29,7 +29,7 @@ strip = true
 crate-type = ["cdylib"]
 
 [build-dependencies]
-tari_ootle_template_build = "0.7"
+tari_ootle_template_build = "0.12"
 
 [profile.dev.package.wasmer]
 opt-level = 2

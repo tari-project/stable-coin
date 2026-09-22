@@ -46,7 +46,7 @@ static TALC: talc::wasm::WasmArenaTalc = {
 mod template {
     use crate::user_data::{UserData, UserId, UserMutableData};
     use tari_template_lib::component::ComponentManager;
-    use tari_template_lib::types::crypto::StealthValueProof;
+    use tari_template_lib::types::crypto::CommitmentValueProof;
 
     use super::*;
     use crate::config::FeeSpec;
@@ -90,6 +90,15 @@ mod template {
             let admin_resource = admin_badge.resource_address();
             let require_admin = rule!(resource(admin_resource));
 
+            let component_alloc = CallerContext::allocate_component_address(None);
+            let component_address = component_alloc.get_address();
+            // Privileged resource actions are reserved for this component. A proof handed to a
+            // component at a call boundary is revoked once the callee's own access rule has been
+            // checked, so a badge proof is never in scope inside a method body and cannot satisfy
+            // a `resource(..)` rule there. The admin badge remains the single entry point: every
+            // method that performs one of these actions requires it.
+            let require_component = rule!(component(component_address));
+
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
                 .with_metadata(metadata!(
@@ -97,9 +106,14 @@ mod template {
                     "provider_name" => provider_name,
                     "description" => format!("User authentication badge for the {provider_name} stable coin")
                 ))
-                .depositable(require_admin.clone(), OWNER)
-                .recallable(require_admin.clone(), OWNER)
-                .update_non_fungible_data(require_admin.clone(), OWNER)
+                .mintable(require_component.clone(), OWNER)
+                // A deposit is authorized inside the recipient account's call frame, where no
+                // proof is in scope, so a badge-gated deposit rule could never be satisfied. Who
+                // may hold the coin is enforced by the `authorize_user_deposit` hook below; badges
+                // themselves are freely depositable and the issuer controls them through recall.
+                .depositable(rule!(allow_all), OWNER)
+                .recallable(require_component.clone(), OWNER)
+                .update_non_fungible_data(require_component.clone(), OWNER)
                 .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                 .build();
 
@@ -109,18 +123,21 @@ mod template {
                 resource(user_auth_resource)
             ));
 
-            let component_alloc = CallerContext::allocate_component_address(None);
             // Create tokens resource with initial supply
             let initial_tokens = ResourceBuilder::stealth()
                 .with_metadata(token_metadata.clone())
                 .with_token_symbol(token_symbol.as_ref())
                 // Access rules
-                .mintable(require_admin.clone(), OWNER)
-                .burnable(require_admin.clone(), OWNER)
-                .depositable(require_user_or_admin.clone(), LOCKED)
-                .withdrawable(require_user_or_admin.clone(), LOCKED)
-                .recallable(require_admin.clone(), LOCKED)
-                .with_authorization_hook(component_alloc.get_address(), "authorize_user_deposit")
+                .mintable(require_component.clone(), OWNER)
+                .burnable(require_component.clone(), OWNER)
+                // Holding the coin is gated by the authorization hook, which runs in the acting
+                // frame and inspects the receiving account, rather than by a rule requiring a
+                // badge proof that account frames never carry.
+                .depositable(rule!(allow_all), LOCKED)
+                .withdrawable(rule!(allow_all), LOCKED)
+                .recallable(require_component.clone(), LOCKED)
+                .freezable(require_component.clone(), LOCKED)
+                .with_authorization_hook(component_address, "authorize_user_deposit")
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
                 .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
@@ -132,8 +149,8 @@ mod template {
                     .with_metadata(token_metadata)
                     .with_token_symbol(format!("w{token_symbol}"))
                     // Access rules
-                    .mintable(require_admin.clone(), OWNER)
-                    .burnable(require_admin.clone(), OWNER)
+                    .mintable(require_component.clone(), OWNER)
+                    .burnable(require_component.clone(), OWNER)
                     .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
                     .build();
 
@@ -380,7 +397,7 @@ mod template {
             );
         }
 
-        pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: StealthValueProof) {
+        pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.token_vault_manager()
                 .burn_utxo(utxo, Some(value_proof));
             emit_event(
