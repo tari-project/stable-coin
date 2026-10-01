@@ -1,7 +1,6 @@
 // Copyright 2026 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use core::fmt;
 use tari_template_lib::prelude::*;
 
 /// A privileged capability of the stable coin component.
@@ -34,25 +33,12 @@ pub enum Role {
     Pauser,
 }
 
-impl fmt::Display for Role {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = match self {
-            Self::Governor => "governor",
-            Self::Minter => "minter",
-            Self::Burner => "burner",
-            Self::Treasurer => "treasurer",
-            Self::Compliance => "compliance",
-            Self::Pauser => "pauser",
-        };
-        f.write_str(name)
-    }
-}
-
-/// The access rule for each role, chosen at instantiation. A role left as `None` is held by any admin badge holder.
+/// The access rule for each role, chosen at instantiation. A role left as `None` is held by any admin badge holder;
+/// the governor must be set if any other role is.
 ///
 /// A rule may name public keys (satisfied by the transaction's signers), specific admin badges
 /// (`non_fungible(..)`) or a threshold of either (`m_of_n(..)`).
-#[derive(Debug, Clone, Default, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+#[derive(Clone, Default, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct RoleConfig {
     #[n(0)]
     pub governor: Option<AccessRule>,
@@ -69,7 +55,7 @@ pub struct RoleConfig {
 }
 
 /// The access rule currently held by each role.
-#[derive(Debug, Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct Roles {
     #[n(0)]
     governor: AccessRule,
@@ -88,6 +74,17 @@ pub struct Roles {
 impl Roles {
     /// Resolves `config`, giving every unset role to `default_rule`.
     pub fn from_config(config: RoleConfig, default_rule: AccessRule) -> Self {
+        // With the default rule, every admin badge would satisfy the governor rule and so
+        // own the component, which overrides any narrower rule given to the other roles.
+        let assigns_a_role = config.minter.is_some()
+            || config.burner.is_some()
+            || config.treasurer.is_some()
+            || config.compliance.is_some()
+            || config.pauser.is_some();
+        assert!(
+            config.governor.is_some() || !assigns_a_role,
+            "The governor must be set when any other role is"
+        );
         let roles = Self {
             governor: config.governor.unwrap_or_else(|| default_rule.clone()),
             minter: config.minter.unwrap_or_else(|| default_rule.clone()),
@@ -143,7 +140,7 @@ impl Role {
 fn assert_valid_role_rule(role: Role, rule: &AccessRule) {
     assert!(
         !matches!(rule, AccessRule::AllowAll),
-        "The {role} role cannot be open to everyone"
+        "A role cannot be open to everyone"
     );
     assert!(
         role != Role::Governor || !matches!(rule, AccessRule::DenyAll),

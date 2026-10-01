@@ -27,7 +27,6 @@ extern crate alloc;
 pub mod config;
 mod roles;
 use alloc::string::String;
-use alloc::string::ToString;
 use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
 
@@ -154,7 +153,7 @@ mod template {
             assert!(!amount.is_zero());
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
-            emit_event("increase_supply", metadata!("amount" => amount.to_string()));
+            emit_event("increase_supply", metadata!("amount" => amount));
         }
 
         /// Decrease token supply by amount.
@@ -163,14 +162,14 @@ mod template {
             assert!(!amount.is_zero());
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
-            emit_event("decrease_supply", metadata!("amt" => amount.to_string()));
+            emit_event("decrease_supply", metadata!("amt" => amount));
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
             self.assert_not_paused();
             assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
-            emit_event("withdraw", metadata!("amt" => bucket.amount().to_string()));
+            emit_event("withdraw", metadata!("amt" => bucket.amount()));
             bucket
         }
 
@@ -178,7 +177,7 @@ mod template {
             self.assert_not_paused();
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
-            emit_event("deposit", metadata!("amt" => amount.to_string()));
+            emit_event("deposit", metadata!("amt" => amount));
         }
 
         pub fn recall_revealed_tokens(&mut self, vault_id: VaultId, amount: Amount) {
@@ -191,8 +190,8 @@ mod template {
             emit_event(
                 "recall_tokens",
                 metadata!(
-                    "vault_id" => vault_id.to_string(),
-                    "amt" => amount.to_string(),
+                    "vault_id" => vault_id,
+                    "amt" => amount,
                 ),
             );
         }
@@ -204,15 +203,15 @@ mod template {
             emit_event(
                 "burn_utxo",
                 metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "utxo_id" => utxo.to_string()
+                    "tx_signer" => CallerContext::transaction_signer_public_key(),
+                    "utxo_id" => utxo
                 ),
             );
         }
 
         pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
             let id = NonFungibleId::random();
-            emit_event("create_new_admin", metadata!("admin_id" => id.to_string()));
+            emit_event("create_new_admin", metadata!("admin_id" => id));
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", &employee_id);
             self.admin_auth_manager
@@ -228,10 +227,7 @@ mod template {
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
             badge.burn();
-            emit_event(
-                "revoke_admin",
-                metadata!("admin_id" => badge_id.to_string()),
-            );
+            emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 
         /// Gives `role` to whoever satisfies `rule`, for a governor that the transaction's signers satisfy.
@@ -256,8 +252,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_fixed",
                 metadata!(
-                    "prev" => self.config.transfer_fee.to_string(),
-                    "new" => new_fee.to_string(),
+                    "prev" => self.config.transfer_fee,
+                    "new" => FeeSpec::Fixed(new_fee),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Fixed(new_fee);
@@ -271,8 +267,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_percentage",
                 metadata!(
-                    "prev" => self.config.transfer_fee.to_string(),
-                    "new" => new_fee_perc.to_string()
+                    "prev" => self.config.transfer_fee,
+                    "new" => FeeSpec::Percentage(new_fee_perc)
                 ),
             );
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
@@ -282,7 +278,7 @@ mod template {
             self.is_paused = true;
             emit_event(
                 "admin.paused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key().to_string()),
+                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
             );
         }
 
@@ -290,7 +286,7 @@ mod template {
             self.is_paused = false;
             emit_event(
                 "admin.unpaused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key().to_string()),
+                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
             );
         }
 
@@ -298,8 +294,8 @@ mod template {
             emit_event(
                 "admin.freeze_utxos",
                 metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "num_utxos" => utxos.len().to_string(),
+                    "tx_signer" => CallerContext::transaction_signer_public_key(),
+                    "num_utxos" => utxos.len(),
                 ),
             );
             self.token_vault_manager().freeze_utxos(utxos);
@@ -309,8 +305,8 @@ mod template {
             emit_event(
                 "admin.unfreeze_utxos",
                 metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "num_utxos" => utxos.len().to_string(),
+                    "tx_signer" => CallerContext::transaction_signer_public_key(),
+                    "num_utxos" => utxos.len(),
                 ),
             );
             self.token_vault_manager().unfreeze_utxos(utxos);
@@ -329,11 +325,11 @@ mod template {
             self.roles.set(role, rule.clone());
             let component = ComponentManager::current();
             component.set_access_rules(Self::component_access_rules(&self.roles));
+            emit_event("set_role", metadata!("role" => role, "rule" => rule));
             // Ownership is checked against the current governor, so the owner rule changes last.
             if role == Role::Governor {
                 component.set_owner_rule(SubstateOwnerRule::ByAccessRule(rule));
             }
-            emit_event("set_role", metadata!("role" => role.to_string()));
         }
 
         fn token_vault_manager(&self) -> ResourceManager {

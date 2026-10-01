@@ -17,7 +17,7 @@ use tari_template_lib::types::{
 use tari_template_test_tooling::TemplateTest;
 use tari_template_test_tooling::crypto::{PublicKey, RistrettoPublicKey, RistrettoSecretKey};
 use tari_template_test_tooling::support::assert_error::assert_reject_reason;
-use tari_template_test_tooling::transaction::args;
+use tari_template_test_tooling::transaction::{Transaction, args};
 
 const INITIAL_SUPPLY: u64 = 1_000_000_000_000_000u64;
 
@@ -361,26 +361,26 @@ fn it_restricts_each_role_to_its_own_methods() {
     let TestSetup {
         mut test,
         stable_coin_component,
-        admin_proof,
-        admin_key,
-        admin_account,
-        admin_badge_resource,
         token_resource,
         ..
     } = setup_with_roles(|test| {
+        let (_, governor_proof, governor_key) = test.create_empty_account();
         let (_, minter_proof, minter_key) = test.create_empty_account();
         let (_, pauser_proof, pauser_key) = test.create_empty_account();
         let roles = RoleConfig {
+            governor: Some(signer_rule(&governor_key)),
             minter: Some(signer_rule(&minter_key)),
             pauser: Some(signer_rule(&pauser_key)),
             ..Default::default()
         };
+        keys.push((governor_proof, governor_key));
         keys.push((minter_proof, minter_key));
         keys.push((pauser_proof, pauser_key));
         Some(roles)
     });
     let (pauser_proof, pauser_key) = keys.pop().unwrap();
     let (minter_proof, minter_key) = keys.pop().unwrap();
+    let (governor_proof, governor_key) = keys.pop().unwrap();
 
     // The minter mints without any badge
     test.execute_expect_success(
@@ -438,12 +438,9 @@ fn it_restricts_each_role_to_its_own_methods() {
     assert_reject_reason(&reason, "Access Denied");
     test.execute_expect_success(
         test.transaction()
-            .create_proof(admin_account, admin_badge_resource)
-            .put_last_instruction_output_on_workspace("proof")
             .call_method(stable_coin_component, "unpause", args![])
-            .drop_all_proofs_in_workspace()
-            .build_and_seal(&admin_key),
-        vec![admin_proof],
+            .build_and_seal(&governor_key),
+        vec![governor_proof],
     );
     test.execute_expect_success(
         test.transaction()
@@ -451,6 +448,23 @@ fn it_restricts_each_role_to_its_own_methods() {
             .build_and_seal(&minter_key),
         vec![minter_proof],
     );
+}
+
+#[test]
+fn it_requires_a_governor_when_other_roles_are_set() {
+    let mut test = TemplateTest::my_crate();
+    let (_, _, minter_key) = test.create_empty_account();
+    let (admin_account, admin_proof, admin_key) = test.create_funded_account();
+    let roles = RoleConfig {
+        minter: Some(signer_rule(&minter_key)),
+        ..Default::default()
+    };
+
+    let reason = test.execute_expect_failure(
+        instantiate_transaction(&test, admin_account, &admin_key, Some(roles)),
+        vec![admin_proof],
+    );
+    assert_reject_reason(&reason, "The governor must be set");
 }
 
 #[test]
@@ -689,6 +703,42 @@ fn signer_rule(key: &RistrettoSecretKey) -> AccessRule {
     ))
 }
 
+fn instantiate_transaction(
+    test: &TemplateTest,
+    admin_account: ComponentAddress,
+    admin_key: &RistrettoSecretKey,
+    roles: Option<RoleConfig>,
+) -> Transaction {
+    let template = test.get_template_address("TariStableCoin");
+    let mut metadata = Metadata::new();
+    metadata
+        .insert("provider_name", "Stable coinz 4 U")
+        .insert("collateralized_by", "Z$")
+        .insert("issuing_authority", "Bank of Silly Walks")
+        .insert("issued_at", "2023-01-01");
+
+    let view_key = RistrettoPublicKey::from_secret_key(admin_key).to_byte_type();
+    test.transaction()
+        .allocate_component_address("stable_coin_addr")
+        .call_function(
+            template,
+            "instantiate",
+            args![
+                Workspace("stable_coin_addr"),
+                INITIAL_SUPPLY,
+                "SC4U",
+                metadata,
+                8,
+                view_key,
+                StableCoinConfig::default(),
+                roles
+            ],
+        )
+        .put_last_instruction_output_on_workspace("admin_badge")
+        .call_method(admin_account, "deposit", args![Workspace("admin_badge")])
+        .build_and_seal(admin_key)
+}
+
 fn setup() -> TestSetup {
     setup_with_roles(|_| None)
 }
@@ -699,34 +749,8 @@ fn setup_with_roles(roles: impl FnOnce(&mut TemplateTest) -> Option<RoleConfig>)
     let roles = roles(&mut test);
     let (admin_account, admin_proof, admin_key) = test.create_funded_account();
     let template = test.get_template_address("TariStableCoin");
-    let mut metadata = Metadata::new();
-    metadata
-        .insert("provider_name", "Stable coinz 4 U")
-        .insert("collateralized_by", "Z$")
-        .insert("issuing_authority", "Bank of Silly Walks")
-        .insert("issued_at", "2023-01-01");
-
-    let view_key = RistrettoPublicKey::from_secret_key(&admin_key).to_byte_type();
     let result = test.execute_expect_success(
-        test.transaction()
-            .allocate_component_address("stable_coin_addr")
-            .call_function(
-                template,
-                "instantiate",
-                args![
-                    Workspace("stable_coin_addr"),
-                    INITIAL_SUPPLY,
-                    "SC4U",
-                    metadata,
-                    8,
-                    view_key,
-                    StableCoinConfig::default(),
-                    roles
-                ],
-            )
-            .put_last_instruction_output_on_workspace("admin_badge")
-            .call_method(admin_account, "deposit", args![Workspace("admin_badge")])
-            .build_and_seal(&admin_key),
+        instantiate_transaction(&test, admin_account, &admin_key, roles),
         vec![admin_proof.clone()],
     );
 

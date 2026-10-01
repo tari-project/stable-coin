@@ -37,7 +37,7 @@ Every privileged action therefore goes through a component method, where the rol
 | Governor | `set_role`, `set_role_with_proof`, `create_new_admin`, `revoke_admin`, `unpause`, `set_config_*` — and every other method, since the governor owns the component |
 | Minter | `increase_supply` |
 | Burner | `decrease_supply`, `burn_utxo` |
-| Treasurer | `withdraw`, `deposit`; may also call the exchange methods on a user's behalf |
+| Treasurer | `withdraw`, `deposit`; may also call the exchange methods, which still require the user's badge proof |
 | Compliance | `recall_revealed_tokens`, `blacklist_user`, `remove_from_blacklist`, `freeze_utxos`, `unfreeze_utxos` |
 | UserManager | `create_new_user`, `set_user_exchange_limit`, `set_user_wrapped_exchange_limit` |
 | Pauser | `pause` |
@@ -48,17 +48,24 @@ Users call the exchange methods with their user badge proof:
 - `exchange_wrapped_for_stable_tokens` — burn wrapped tokens, mint stable coins
 
 Each role is an access rule. `instantiate` takes an optional `RoleConfig` with one optional rule per role; a role
-left unset is held by any admin badge, so passing `None` keeps a single-admin setup. A rule can name signer keys
+left unset is held by any admin badge, so passing `None` keeps a single-admin setup. The governor must be set
+whenever another role is: left at the default, every admin badge would govern, and the governor can call every
+method. A rule can name signer keys
 (`public_key(..)`), specific admin badges (`non_fungible(..)`), or a threshold of either (`m_of_n(..)`), e.g. a
 2-of-3 governor.
 
 - **Rotation.** The governor reassigns a role with `set_role(role, rule)` when its rule is satisfied by the
   transaction's signers, or `set_role_with_proof(role, rule, proof)` when it requires a badge: the method body needs
   the governor's authority, and a badge is only in scope there if its proof is passed as an argument. Reassigning
-  the governor also hands over ownership of the component.
+  the governor also hands over ownership of the component. A badge threshold governor must present all of its
+  badges in that one proof, so they must sit in one account; a threshold across several parties is better
+  expressed over their signer keys.
 - **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
   and burns a lost badge.
-- **Guards.** No role may be open to everyone, and the governor role cannot be set to `deny_all`.
+- **Guards.** No role may be open to everyone, and the governor role cannot be set to `deny_all`. These guards
+  do not stop the governor making itself unreachable in other ways, such as revoking the last admin badge that
+  satisfies its rule or naming a key nobody holds. If that happens no role can change again, and a paused
+  component stays paused.
 - **Pause.** The pauser can pause; only the governor can unpause. While paused, the hook rejects every deposit of the
   coin, and minting, burning, treasury movements, exchanges and user registration are blocked; compliance and
   governance stay available so an incident can be contained.

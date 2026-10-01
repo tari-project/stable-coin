@@ -58,17 +58,24 @@ component method, where the role rules and pause apply. The governor owns the co
 other method.
 
 Each role is an access rule. `instantiate` takes an optional `RoleConfig` with one optional rule per role; a role
-left unset is held by any admin badge, so passing `None` keeps a single-admin setup. A rule can name signer keys
+left unset is held by any admin badge, so passing `None` keeps a single-admin setup. The governor must be set
+whenever another role is: left at the default, every admin badge would govern, and the governor can call every
+method. A rule can name signer keys
 (`public_key(..)`), specific admin badges (`non_fungible(..)`), or a threshold of either (`m_of_n(..)`), e.g. a
 2-of-3 governor.
 
 - **Rotation.** The governor reassigns a role with `set_role(role, rule)` when its rule is satisfied by the
   transaction's signers, or `set_role_with_proof(role, rule, proof)` when it requires a badge: the method body needs
   the governor's authority, and a badge is only in scope there if its proof is passed as an argument. Reassigning
-  the governor also hands over ownership of the component.
+  the governor also hands over ownership of the component. A badge threshold governor must present all of its
+  badges in that one proof, so they must sit in one account; a threshold across several parties is better
+  expressed over their signer keys.
 - **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
   and burns a lost badge.
-- **Guards.** No role may be open to everyone, and the governor role cannot be set to `deny_all`.
+- **Guards.** No role may be open to everyone, and the governor role cannot be set to `deny_all`. These guards
+  do not stop the governor making itself unreachable in other ways, such as revoking the last admin badge that
+  satisfies its rule or naming a key nobody holds. If that happens no role can change again, and a paused
+  component stays paused.
 
 The resource view key is fixed at instantiation and cannot be rotated. Use a key dedicated to auditing, separate from
 the keys that hold roles.

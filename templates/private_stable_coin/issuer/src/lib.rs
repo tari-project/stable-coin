@@ -30,7 +30,6 @@ mod user_data;
 mod wrapped_exchange_token;
 use alloc::format;
 use alloc::string::String;
-use alloc::string::ToString;
 use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
 
@@ -247,7 +246,7 @@ mod template {
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
 
-            emit_event("increase_supply", metadata!("amount" => amount.to_string()));
+            emit_event("increase_supply", metadata!("amount" => amount));
         }
 
         /// Decrease token supply by amount.
@@ -259,7 +258,7 @@ mod template {
 
             emit_event(
                 "decrease_supply",
-                metadata!("revealed_burn_amount" => amount.to_string()),
+                metadata!("revealed_burn_amount" => amount),
             );
         }
 
@@ -267,10 +266,7 @@ mod template {
             self.assert_not_paused();
             assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
-            emit_event(
-                "withdraw",
-                metadata!("amount_withdrawn" => bucket.amount().to_string()),
-            );
+            emit_event("withdraw", metadata!("amount_withdrawn" => bucket.amount()));
             bucket
         }
 
@@ -278,7 +274,7 @@ mod template {
             self.assert_not_paused();
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
-            emit_event("deposit", metadata!("amount" => amount.to_string()));
+            emit_event("deposit", metadata!("amount" => amount));
         }
 
         /// Allow the user to exchange their tokens for wrapped tokens
@@ -332,9 +328,9 @@ mod template {
             emit_event(
                 "exchange_stable_for_wrapped_tokens",
                 metadata!(
-                    "user_id" => user.user_id.to_string(),
-                    "amount" => amount.to_string(),
-                    "fee" => fee.to_string(),
+                    "user_id" => user.user_id,
+                    "amount" => amount,
+                    "fee" => fee,
                 ),
             );
 
@@ -378,9 +374,9 @@ mod template {
             emit_event(
                 "exchange_wrapped_for_stable_tokens",
                 metadata!(
-                        "user_id" => user.user_id.to_string(),
-                        "amount" => amount.to_string(),
-                        "fee" => 0.to_string(),
+                        "user_id" => user.user_id,
+                        "amount" => amount,
+                        "fee" => 0u64,
                 ),
             );
 
@@ -408,8 +404,8 @@ mod template {
             emit_event(
                 "recall_tokens",
                 metadata!(
-                        "user_id" => user_id.to_string(),
-                        "revealed_amount" => amount.to_string(),
+                        "user_id" => user_id,
+                        "revealed_amount" => amount,
                 ),
             );
         }
@@ -421,15 +417,15 @@ mod template {
             emit_event(
                 "burn_utxo",
                 metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "utxo_id" => utxo.to_string()
+                    "tx_signer" => CallerContext::transaction_signer_public_key(),
+                    "utxo_id" => utxo
                 ),
             );
         }
 
         pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
             let id = NonFungibleId::random();
-            emit_event("create_new_admin", metadata!("admin_id" => id.to_string()));
+            emit_event("create_new_admin", metadata!("admin_id" => id));
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", &employee_id);
             self.admin_auth_manager
@@ -445,10 +441,7 @@ mod template {
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
             badge.burn();
-            emit_event(
-                "revoke_admin",
-                metadata!("admin_id" => badge_id.to_string()),
-            );
+            emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 
         /// Gives `role` to whoever satisfies `rule`, for a governor that the transaction's signers satisfy.
@@ -488,10 +481,7 @@ mod template {
                     wrapped_exchange_limit: self.config.default_exchange_limit,
                 },
             );
-            emit_event(
-                "create_new_user",
-                metadata!("user_id" => user_id.to_string()),
-            );
+            emit_event("create_new_user", metadata!("user_id" => user_id));
             badge
         }
 
@@ -513,9 +503,9 @@ mod template {
             emit_event(
                 "set_user_exchange_limit",
                 metadata!(
-                        "user_id" => user_id.to_string(),
-                        "limit" => limit.to_string(),
-                        "admin" => admin.to_string(),
+                        "user_id" => user_id,
+                        "limit" => limit,
+                        "admin" => admin,
                 ),
             );
         }
@@ -537,10 +527,7 @@ mod template {
             );
 
             self.blacklisted_users.deposit(recalled);
-            emit_event(
-                "blacklist_user",
-                metadata!("user_id" => user_id.to_string()),
-            );
+            emit_event("blacklist_user", metadata!("user_id" => user_id));
         }
 
         pub fn remove_from_blacklist(&mut self, user_id: UserId) -> Bucket {
@@ -557,7 +544,7 @@ mod template {
                     ..user_data
                 },
             );
-            emit_event("remove_from_blacklist", [("user_id", user_id.to_string())]);
+            emit_event("remove_from_blacklist", metadata!("user_id" => user_id));
             user_badge_bucket
         }
 
@@ -568,10 +555,10 @@ mod template {
             badge.set_mutable_data(&user_data);
             emit_event(
                 "set_user_wrapped_exchange_limit",
-                [
-                    ("user_id", user_id.to_string()),
-                    ("limit", new_limit.to_string()),
-                ],
+                metadata!(
+                    "user_id" => user_id,
+                    "limit" => new_limit,
+                ),
             );
         }
 
@@ -579,8 +566,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_fixed",
                 metadata!(
-                    "old_transfer_fee" => self.config.transfer_fee.to_string(),
-                    "new_transfer_fee" => new_fee.to_string(),
+                    "old_transfer_fee" => self.config.transfer_fee,
+                    "new_transfer_fee" => FeeSpec::Fixed(new_fee),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Fixed(new_fee);
@@ -594,8 +581,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_percentage",
                 metadata!(
-                        "old_transfer_fee" => self.config.transfer_fee.to_string(),
-                        "new_transfer_fee" => format!("{new_fee_perc}%"),
+                        "old_transfer_fee" => self.config.transfer_fee,
+                        "new_transfer_fee" => FeeSpec::Percentage(new_fee_perc),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
@@ -605,7 +592,7 @@ mod template {
             self.is_paused = true;
             emit_event(
                 "admin.paused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key().to_string()),
+                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
             );
         }
 
@@ -613,7 +600,7 @@ mod template {
             self.is_paused = false;
             emit_event(
                 "admin.unpaused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key().to_string()),
+                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
             );
         }
 
@@ -625,8 +612,8 @@ mod template {
             emit_event(
                 "admin.freeze_utxos",
                 metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "num_utxos" => utxos.len().to_string(),
+                    "tx_signer" => CallerContext::transaction_signer_public_key(),
+                    "num_utxos" => utxos.len(),
                 ),
             );
             self.token_vault_manager().freeze_utxos(utxos);
@@ -636,8 +623,8 @@ mod template {
             emit_event(
                 "admin.unfreeze_utxos",
                 metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "num_utxos" => utxos.len().to_string(),
+                    "tx_signer" => CallerContext::transaction_signer_public_key(),
+                    "num_utxos" => utxos.len(),
                 ),
             );
             self.token_vault_manager().unfreeze_utxos(utxos);
@@ -648,8 +635,8 @@ mod template {
         }
 
         fn component_access_rules(roles: &Roles, user_badge: ResourceAddress) -> AccessRules {
-            // Users exchange their own tokens, presenting their badge; the treasurer may also
-            // exchange on a user's behalf.
+            // Users exchange their own tokens. The treasurer may also call the exchange methods,
+            // but each still requires the user's badge proof.
             let require_user_or_treasurer =
                 rule!(resource(user_badge)).or(roles.get(Role::Treasurer).clone());
             METHOD_ROLES
@@ -678,11 +665,11 @@ mod template {
                 &self.roles,
                 self.user_auth_manager.resource_address(),
             ));
+            emit_event("set_role", metadata!("role" => role, "rule" => rule));
             // Ownership is checked against the current governor, so the owner rule changes last.
             if role == Role::Governor {
                 component.set_owner_rule(SubstateOwnerRule::ByAccessRule(rule));
             }
-            emit_event("set_role", metadata!("role" => role.to_string()));
         }
 
         fn wrapped_token(&self) -> &WrappedExchangeToken {
