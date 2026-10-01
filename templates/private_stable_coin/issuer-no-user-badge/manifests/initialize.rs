@@ -13,6 +13,8 @@ pub fn main() {
         // 32-byte public view key (hex)
         PublicKey("6c64d361a661900be82695786a3f9cdbae26f7b216c3d093bea101a309700379"),
         true,
+        // Roles: None gives every role to the admin badge
+        None,
     );
     account.deposit(badge);
 }

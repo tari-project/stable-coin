@@ -13,9 +13,9 @@ the [privacy tradeoff](#privacy-tradeoff-of-the-user-badge) section below for ho
 
 | Resource | Type | Purpose |
 |---|---|---|
-| Admin badge | Non-fungible | Gates all privileged operations; returned to the caller of `instantiate`. |
-| User badge | Non-fungible | Per-user authentication token. Minted via `create_new_user` and recalled via `blacklist_user`, both admin-gated component methods. Stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). |
-| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint, burn, recall and freeze are performed only by the component, whose methods all require an admin badge. |
+| Admin badge | Non-fungible | Holds every role not assigned elsewhere (see [Roles](#roles)); one is returned to the caller of `instantiate`. Issued with `create_new_admin` and revoked with `revoke_admin`, both governor-only. |
+| User badge | Non-fungible | Per-user authentication token. Minted via `create_new_user` and recalled via `blacklist_user`, both role-gated component methods. Stores `UserData` (user id, account, created epoch) and `UserMutableData` (blacklist flag, wrapped-exchange limit). |
+| Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint, burn, recall and freeze are performed only by the component, whose methods are gated by role. |
 | Wrapped token (optional) | Public fungible | A transparent twin of the coin (`w<SYMBOL>`), exchangeable 1:1 (minus a configurable fee). See [Wrapped exchange token](#wrapped-exchange-token). |
 
 Who may hold the coin is enforced by an **authorization hook** (`authorize_user_deposit`) that runs on every
@@ -26,36 +26,58 @@ The hook, rather than a `depositable`/`withdrawable` access rule, is what does t
 inside the receiving account's call frame, where no proof is in scope, so a rule requiring a badge proof could
 never be satisfied there. The hook runs in that frame and reads the account's vaults instead.
 
-### Method summary
+## Roles
 
-Admin (requires admin badge):
+The component, not any key or badge, owns every resource it creates: the coin, the wrapped token and both badge
+resources have no owner, and their mint, burn, recall and freeze rules name only the component, with locked updaters.
+Every privileged action therefore goes through a component method, where the role rules and pause apply.
 
-- `increase_supply` / `decrease_supply` — mint into / burn from the issuer vault
-- `withdraw` / `deposit` — move coins out of / into the issuer vault
-- `create_new_user` / `create_new_admin` — mint badges
-- `blacklist_user` / `remove_from_blacklist` — recall a user's badge into a quarantine vault (and back)
-- `recall_revealed_tokens` — pull a revealed amount out of a user's account vault
-- `freeze_utxos` / `unfreeze_utxos`, `burn_utxo` — UTXO-level controls
-- `pause` — block all deposits of the coin
-- `set_user_exchange_limit`, `set_config_transfer_fee_fixed`, `set_config_transfer_fee_percentage`
+| Role | Methods |
+|---|---|
+| Governor | `set_role`, `set_role_with_proof`, `create_new_admin`, `revoke_admin`, `unpause`, `set_config_*` — and every other method, since the governor owns the component |
+| Minter | `increase_supply` |
+| Burner | `decrease_supply`, `burn_utxo` |
+| Treasurer | `withdraw`, `deposit`; may also call the exchange methods on a user's behalf |
+| Compliance | `recall_revealed_tokens`, `blacklist_user`, `remove_from_blacklist`, `freeze_utxos`, `unfreeze_utxos` |
+| UserManager | `create_new_user`, `set_user_exchange_limit`, `set_user_wrapped_exchange_limit` |
+| Pauser | `pause` |
 
-User (requires user badge proof):
+Users call the exchange methods with their user badge proof:
 
 - `exchange_stable_for_wrapped_tokens` — burn stable coins, mint wrapped tokens (fee applies, limited per user)
 - `exchange_wrapped_for_stable_tokens` — burn wrapped tokens, mint stable coins
+
+Each role is an access rule. `instantiate` takes an optional `RoleConfig` with one optional rule per role; a role
+left unset is held by any admin badge, so passing `None` keeps a single-admin setup. A rule can name signer keys
+(`public_key(..)`), specific admin badges (`non_fungible(..)`), or a threshold of either (`m_of_n(..)`), e.g. a
+2-of-3 governor.
+
+- **Rotation.** The governor reassigns a role with `set_role(role, rule)` when its rule is satisfied by the
+  transaction's signers, or `set_role_with_proof(role, rule, proof)` when it requires a badge: the method body needs
+  the governor's authority, and a badge is only in scope there if its proof is passed as an argument. Reassigning
+  the governor also hands over ownership of the component.
+- **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
+  and burns a lost badge.
+- **Guards.** No role may be open to everyone, and the governor role cannot be set to `deny_all`.
+- **Pause.** The pauser can pause; only the governor can unpause. While paused, the hook rejects every deposit of the
+  coin, and minting, burning, treasury movements, exchanges and user registration are blocked; compliance and
+  governance stay available so an incident can be contained.
+
+The resource view key is fixed at instantiation and cannot be rotated. Use a key dedicated to auditing, separate from
+the keys that hold roles.
 
 ## Wrapped exchange token
 
 If `enable_wrapped_token` is set at instantiation, the component creates a public fungible resource `w<SYMBOL>` with
 no initial supply — it is minted and burned only through the two exchange methods. Users swap stable coins for
 wrapped tokens 1:1 via `exchange_stable_for_wrapped_tokens` (the stable coins are burned, a configurable fee is
-taken into the issuer vault, and the swap is capped by the user's admin-set `wrapped_exchange_limit`) and back via
+taken into the issuer vault, and the swap is capped by the user's issuer-set `wrapped_exchange_limit`) and back via
 `exchange_wrapped_for_stable_tokens` (no fee).
 
 Exchanging into the wrapped token takes the value **outside the controlled stable coin**. The wrapped resource has
 no recall permission, no UTXO freeze, no deposit gating, and no badge requirement — once wrapped tokens sit in a
-user's vault, the issuer cannot recall or freeze them; admin authority over the wrapped resource is limited to
-minting and burning through the exchange methods. The per-user exchange limit is therefore the issuer's control
+user's vault, the issuer cannot recall or freeze them; the issuer's authority over the wrapped resource is limited
+to minting and burning through the exchange methods. The per-user exchange limit is therefore the issuer's control
 point: it caps how much value each user can move out of the controlled system. The flip side for the user is that
 the wrapped token is fully transparent — amounts and transfers are public, with none of the stealth resource's
 confidentiality.
@@ -79,7 +101,7 @@ The user badge buys the issuer **proactive compliance** at the cost of **holder 
 - **Deposits reveal the recipient.** The auth hook must inspect the receiving account's vaults at deposit time, so a
   transfer's destination account is visible on-ledger. The transaction graph (who pays whom, and when) is
   observable; only the amounts stay confidential.
-- **Events name users.** Exchanges and admin actions emit events carrying `user_id`, adding a public activity trail
+- **Events name users.** Exchanges and issuer actions emit events carrying `user_id`, adding a public activity trail
   per user.
 
 What the issuer gains in exchange:

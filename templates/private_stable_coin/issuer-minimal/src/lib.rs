@@ -25,6 +25,7 @@
 extern crate alloc;
 
 pub mod config;
+mod roles;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -43,19 +44,42 @@ static TALC: talc::wasm::WasmArenaTalc = {
 mod template {
     use tari_template_lib::types::crypto::CommitmentValueProof;
 
+    use tari_template_lib::types::SubstateOwnerRule;
+
     use super::*;
     use crate::config::FeeSpec;
     use crate::config::StableCoinConfig;
+    use crate::roles::{Role, RoleConfig, Roles};
+
+    /// The role that may call each component method. A method not listed here can only be called by the governor,
+    /// which owns the component.
+    const METHOD_ROLES: &[(&str, Role)] = &[
+        ("increase_supply", Role::Minter),
+        ("decrease_supply", Role::Burner),
+        ("burn_utxo", Role::Burner),
+        ("withdraw", Role::Treasurer),
+        ("deposit", Role::Treasurer),
+        ("recall_revealed_tokens", Role::Compliance),
+        ("freeze_utxos", Role::Compliance),
+        ("unfreeze_utxos", Role::Compliance),
+        ("pause", Role::Pauser),
+    ];
 
     pub struct TariStableCoin {
         config: StableCoinConfig,
         token_vault: Vault,
         admin_auth_manager: ResourceManager,
         is_paused: bool,
+        roles: Roles,
     }
 
     impl TariStableCoin {
-        /// Instantiates a new stable coin component, returning a bucket containing an admin badge
+        /// Instantiates a new stable coin component, returning a bucket containing an admin badge.
+        ///
+        /// `roles` assigns each privileged role an access rule; any role left unset is held by the admin badge. The
+        /// component owns every resource it creates, so all privileged actions go through its methods and are
+        /// subject to pause and to the role rules.
+        #[allow(clippy::too_many_arguments)]
         pub fn instantiate(
             address_alloc: ComponentAddressAllocation,
             initial_token_supply: Amount,
@@ -64,64 +88,62 @@ mod template {
             divisibility: u8,
             view_key: RistrettoPublicKeyBytes,
             config: Option<StableCoinConfig>,
+            roles: Option<RoleConfig>,
         ) -> Bucket {
             let config = config.unwrap_or_default();
             // Minting, burning, recalling and freezing the coin are reserved for this component.
             // A proof handed to a component at a call boundary is revoked once the callee's own
-            // access rule has been checked, so a badge proof is never in scope inside a method
-            // body and cannot satisfy a `resource(..)` rule there. The admin badge remains the
-            // single entry point: every component method requires it.
+            // access rule has been checked, so a workspace badge proof is not in scope inside a
+            // method body and cannot satisfy a `resource(..)` rule there. Role checks happen at the
+            // component method boundary.
             let component_address = address_alloc.get_address();
             let require_component = rule!(component(component_address));
 
-            // Create admin badge resource
+            // Admin badges are issued and revoked only through the component, so no key or badge
+            // can mint one directly and a lost badge can be recalled and burnt by the governor.
             let admin_badge = ResourceBuilder::non_fungible()
                 .with_token_symbol("ADM")
-                .recallable(rule![deny_all], OWNER)
+                .mintable(require_component.clone(), LOCKED)
+                .burnable(require_component.clone(), LOCKED)
+                .recallable(require_component.clone(), LOCKED)
+                .update_non_fungible_data(rule!(deny_all), LOCKED)
+                .with_owner_rule(OwnerRule::None)
                 .initial_supply(Some(NonFungibleId::from_u64(0)));
 
-            // Create admin access rules
             let admin_resource = admin_badge.resource_address();
-            let require_admin = rule!(resource(admin_resource));
-            // Allow other admins to recall an admin badge
-            ResourceManager::get(admin_resource)
-                .update_access_rule(ResourceAuthAction::Recall, require_admin.clone());
+            let roles =
+                Roles::from_config(roles.unwrap_or_default(), rule!(resource(admin_resource)));
 
             // Create tokens resource with initial supply
             let initial_tokens = ResourceBuilder::stealth()
                 .with_metadata(token_metadata)
                 .with_token_symbol(token_symbol.as_ref())
                 // Access rules
-                .mintable(require_component.clone(), OWNER)
-                .burnable(require_component.clone(), OWNER)
+                .mintable(require_component.clone(), LOCKED)
+                .burnable(require_component.clone(), LOCKED)
                 .recallable(require_component.clone(), LOCKED)
                 .freezable(require_component, LOCKED)
                 .with_view_key(view_key)
                 .with_divisibility(divisibility)
-                .with_owner_rule(OwnerRule::ByAccessRule(require_admin.clone()))
+                .with_owner_rule(OwnerRule::None)
                 .initial_supply(initial_token_supply);
 
-            // Create component access rules
-            let component_access_rules = AccessRules::new().default(require_admin);
+            let component_access_rules = Self::component_access_rules(&roles);
+            let governor = roles.get(Role::Governor).clone();
 
-            // Vault deposits below are gated on the admin owner rule of their resources, so we
-            // hold a proof of the freshly-minted admin badge for the duration of component
-            // construction. Creating a proof on a bucket implicitly adds it to the auth scope;
-            // dropping it removes the auth and releases the bucket lock so the badge can be
-            // returned to the caller.
-            let admin_proof = admin_badge.create_proof();
             Component::new(Self {
                 config,
                 token_vault: Vault::from_bucket(initial_tokens),
-                admin_auth_manager: admin_badge.resource_address().into(),
+                admin_auth_manager: admin_resource.into(),
                 is_paused: false,
+                roles,
             })
             .with_address_allocation(address_alloc)
             .with_access_rules(component_access_rules)
-            // Access is controlled by anyone with an admin badge
-            .with_owner_rule(OwnerRule::ByAccessRule(rule!(resource(admin_resource))))
+            // The governor owns the component: it can call every method and is the only role
+            // permitted to change the access rules.
+            .with_owner_rule(OwnerRule::ByAccessRule(governor))
             .create();
-            admin_proof.drop();
 
             admin_badge
         }
@@ -141,20 +163,14 @@ mod template {
             assert!(!amount.is_zero());
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
-            emit_event(
-                "decrease_supply",
-                metadata!("amt" => amount.to_string()),
-            );
+            emit_event("decrease_supply", metadata!("amt" => amount.to_string()));
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
             self.assert_not_paused();
             assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
-            emit_event(
-                "withdraw",
-                metadata!("amt" => bucket.amount().to_string()),
-            );
+            emit_event("withdraw", metadata!("amt" => bucket.amount().to_string()));
             bucket
         }
 
@@ -182,6 +198,7 @@ mod template {
         }
 
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
+            self.assert_not_paused();
             self.token_vault_manager()
                 .burn_utxo(utxo, Some(value_proof));
             emit_event(
@@ -197,9 +214,42 @@ mod template {
             let id = NonFungibleId::random();
             emit_event("create_new_admin", metadata!("admin_id" => id.to_string()));
             let mut metadata = Metadata::new();
-            metadata.insert("employee_id", employee_id);
+            metadata.insert("employee_id", &employee_id);
             self.admin_auth_manager
                 .mint_non_fungible(id, &metadata, &())
+        }
+
+        /// Recalls the admin badge `badge_id` from `vault_id` and burns it.
+        ///
+        /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
+        /// a lost badge removes its holder from every such role.
+        pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
+            let badge = self
+                .admin_auth_manager
+                .recall_non_fungible(vault_id, badge_id.clone());
+            badge.burn();
+            emit_event(
+                "revoke_admin",
+                metadata!("admin_id" => badge_id.to_string()),
+            );
+        }
+
+        /// Gives `role` to whoever satisfies `rule`, for a governor that the transaction's signers satisfy.
+        pub fn set_role(&mut self, role: Role, rule: AccessRule) {
+            self.apply_role(role, rule);
+        }
+
+        /// Gives `role` to whoever satisfies `rule`, for a governor that requires a badge.
+        ///
+        /// Changing the component's access rules needs the governor's authority inside the method
+        /// body, where a proof is in scope only if it is passed as an argument.
+        pub fn set_role_with_proof(
+            &mut self,
+            role: Role,
+            rule: AccessRule,
+            _governor_proof: Proof,
+        ) {
+            self.apply_role(role, rule);
         }
 
         pub fn set_config_transfer_fee_fixed(&mut self, new_fee: Amount) {
@@ -228,32 +278,19 @@ mod template {
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
         }
 
-        pub fn pause(&mut self, proof: Proof) {
-            proof.assert_resource(self.admin_auth_manager.resource_address());
-            // Could also add a check for a specific admin badge ID if desired
-            let badges = proof.get_non_fungibles();
-            let admin_badge = badges.first().expect("No admin badge");
+        pub fn pause(&mut self) {
             self.is_paused = true;
             emit_event(
                 "admin.paused",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "admin" => admin_badge.to_string()
-                ),
+                metadata!("tx_signer" => CallerContext::transaction_signer_public_key().to_string()),
             );
         }
 
-        pub fn unpause(&mut self, proof: Proof) {
-            proof.assert_resource(self.admin_auth_manager.resource_address());
-            let badges = proof.get_non_fungibles();
-            let admin_badge = badges.first().expect("No admin badge");
+        pub fn unpause(&mut self) {
             self.is_paused = false;
             emit_event(
                 "admin.unpaused",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key().to_string(),
-                    "admin" => admin_badge.to_string()
-                ),
+                metadata!("tx_signer" => CallerContext::transaction_signer_public_key().to_string()),
             );
         }
 
@@ -277,6 +314,26 @@ mod template {
                 ),
             );
             self.token_vault_manager().unfreeze_utxos(utxos);
+        }
+
+        fn component_access_rules(roles: &Roles) -> AccessRules {
+            METHOD_ROLES
+                .iter()
+                .fold(AccessRules::new(), |rules, (method, role)| {
+                    rules.add_method_rule(*method, roles.get(*role).clone())
+                })
+                .default(roles.get(Role::Governor).clone())
+        }
+
+        fn apply_role(&mut self, role: Role, rule: AccessRule) {
+            self.roles.set(role, rule.clone());
+            let component = ComponentManager::current();
+            component.set_access_rules(Self::component_access_rules(&self.roles));
+            // Ownership is checked against the current governor, so the owner rule changes last.
+            if role == Role::Governor {
+                component.set_owner_rule(SubstateOwnerRule::ByAccessRule(rule));
+            }
+            emit_event("set_role", metadata!("role" => role.to_string()));
         }
 
         fn token_vault_manager(&self) -> ResourceManager {
