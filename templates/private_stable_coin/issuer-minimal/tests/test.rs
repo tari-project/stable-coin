@@ -38,6 +38,7 @@ fn it_increases_and_decreases_supply() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "increase_supply", args![123])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -55,6 +56,7 @@ fn it_increases_and_decreases_supply() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "decrease_supply", args![456])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -91,6 +93,7 @@ fn it_allows_users_to_transact() {
             // Auth
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "withdraw", args![1234])
             .put_last_instruction_output_on_workspace("funds")
             // Deposit badge and funds into Alice's account
@@ -139,6 +142,7 @@ fn it_allows_anyone_to_receive_tokens_without_badge() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "withdraw", args![1000])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(alice_account, "deposit", args![Workspace("funds")])
@@ -183,6 +187,7 @@ fn it_creates_new_admin() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_admin",
@@ -226,6 +231,7 @@ fn it_recalls_tokens_from_user() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "withdraw", args![500])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(alice_account, "deposit", args![Workspace("funds")])
@@ -250,6 +256,7 @@ fn it_recalls_tokens_from_user() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "recall_revealed_tokens",
@@ -291,6 +298,7 @@ fn it_sets_config_transfer_fee() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_config_transfer_fee_fixed",
@@ -306,6 +314,7 @@ fn it_sets_config_transfer_fee() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_config_transfer_fee_percentage",
@@ -321,6 +330,7 @@ fn it_sets_config_transfer_fee() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_config_transfer_fee_percentage",
@@ -483,6 +493,7 @@ fn it_rejects_a_role_open_to_everyone() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_role_with_proof",
@@ -520,6 +531,7 @@ fn it_reassigns_a_role() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_role_with_proof",
@@ -555,6 +567,7 @@ fn it_rotates_the_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_role_with_proof",
@@ -574,6 +587,7 @@ fn it_rotates_the_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "create_new_admin", args!["x"])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -612,6 +626,7 @@ fn it_revokes_an_admin_badge() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_admin",
@@ -636,6 +651,7 @@ fn it_revokes_an_admin_badge() {
         test.transaction()
             .create_proof(other_admin, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "revoke_admin",
