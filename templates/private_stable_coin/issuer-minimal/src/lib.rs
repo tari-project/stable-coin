@@ -198,8 +198,7 @@ mod template {
 
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
-            self.token_vault_manager()
-                .burn_utxo(utxo, value_proof);
+            self.token_vault_manager().burn_utxo(utxo, value_proof);
             emit_event(
                 "burn_utxo",
                 metadata!(
@@ -227,6 +226,16 @@ mod template {
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
             badge.burn();
+            let admin_resource = self.admin_auth_manager.resource_address();
+            let remaining_supply = self.admin_auth_manager.total_supply();
+            let revoked_nf = NonFungibleAddress::new(admin_resource, badge_id.clone());
+            self.roles.assert_governor_satisfiable(|req| match req {
+                RuleRequirement::Resource(res) if *res == admin_resource => {
+                    remaining_supply.is_positive()
+                }
+                RuleRequirement::NonFungibleAddress(nf) if *nf == revoked_nf => false,
+                _ => true,
+            });
             emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 

@@ -133,6 +133,13 @@ impl Roles {
         };
         *slot = rule;
     }
+
+    pub fn assert_governor_satisfiable(&self, can_satisfy_req: impl Fn(&RuleRequirement) -> bool) {
+        assert!(
+            is_satisfiable(&self.governor, &can_satisfy_req),
+            "The governor role must be held by someone"
+        );
+    }
 }
 
 impl Role {
@@ -155,7 +162,70 @@ fn assert_valid_role_rule(role: Role, rule: &AccessRule) {
         "A role cannot be open to everyone"
     );
     assert!(
-        role != Role::Governor || !matches!(rule, AccessRule::DenyAll),
+        role != Role::Governor || is_satisfiable(rule, &|_| true),
         "The governor role must be held by someone"
     );
+}
+
+fn is_satisfiable(rule: &AccessRule, can_satisfy_req: &impl Fn(&RuleRequirement) -> bool) -> bool {
+    match rule {
+        AccessRule::AllowAll => true,
+        AccessRule::DenyAll => false,
+        AccessRule::Restricted(restricted) => {
+            is_restricted_satisfiable(restricted, can_satisfy_req)
+        }
+    }
+}
+
+fn is_restricted_satisfiable(
+    rule: &RestrictedAccessRule,
+    can_satisfy_req: &impl Fn(&RuleRequirement) -> bool,
+) -> bool {
+    match rule {
+        RestrictedAccessRule::Require(req) => match req {
+            RequireRule::Require(r) => can_satisfy_req(r),
+            RequireRule::AnyOf(reqs) => reqs.iter().any(can_satisfy_req),
+            RequireRule::AllOf(reqs) => !reqs.is_empty() && reqs.iter().all(can_satisfy_req),
+            RequireRule::MOfN(m, reqs) => {
+                *m > 0 && reqs.iter().filter(|r| can_satisfy_req(r)).count() >= usize::from(*m)
+            }
+        },
+        RestrictedAccessRule::AnyOf(rules) => rules
+            .iter()
+            .any(|r| is_restricted_satisfiable(r, can_satisfy_req)),
+        RestrictedAccessRule::AllOf(rules) => {
+            !rules.is_empty()
+                && rules
+                    .iter()
+                    .all(|r| is_restricted_satisfiable(r, can_satisfy_req))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate alloc;
+    use super::*;
+    use alloc::boxed::Box;
+
+    #[test]
+    #[should_panic(expected = "The governor role must be held by someone")]
+    fn rejects_empty_any_of_for_governor() {
+        let default_rule = rule!(resource(ResourceAddress::from([1u8; 32])));
+        let mut roles = Roles::from_config(RoleConfig::default(), default_rule);
+        roles.set(
+            Role::Governor,
+            AccessRule::Restricted(RestrictedAccessRule::AnyOf(Box::new([]))),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "The governor role must be held by someone")]
+    fn rejects_governor_when_last_admin_badge_supply_is_zero() {
+        let admin_res = ResourceAddress::from([2u8; 32]);
+        let roles = Roles::from_config(RoleConfig::default(), rule!(resource(admin_res)));
+        roles.assert_governor_satisfiable(
+            |req| !matches!(req, RuleRequirement::Resource(r) if *r == admin_res),
+        );
+    }
 }

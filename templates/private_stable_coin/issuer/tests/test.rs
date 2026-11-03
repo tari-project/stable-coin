@@ -361,13 +361,9 @@ fn it_blacklists_and_removes_from_blacklist() {
         .unwrap();
     assert_eq!(alice_vaults.get(&user_badge_resource).unwrap().balance(), 0);
 
-    // Alice can no longer deposit tokens (no user badge)
-    // This tests that the auth hook rejects deposits for blacklisted users
+    // Alice can no longer withdraw tokens to transfer to Bob once blacklisted
     let reason = test.execute_expect_failure(
         test.transaction()
-            .create_proof(alice_account, user_badge_resource)
-            .put_last_instruction_output_on_workspace("proof")
-            .authorize_proof("proof")
             .call_method(alice_account, "withdraw", args![token_resource, 100])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(bob_account, "deposit", args![Workspace("funds")])
@@ -375,8 +371,7 @@ fn it_blacklists_and_removes_from_blacklist() {
             .build_and_seal(&alice_key),
         vec![alice_proof.clone()],
     );
-    // Alice can't even create a proof because the badge was recalled
-    assert_reject_reason(&reason, "");
+    assert_reject_reason(&reason, "does not have permission to withdraw");
 
     // Remove Alice from the blacklist and re-deposit her badge
     test.execute_expect_success(
@@ -1342,6 +1337,92 @@ fn it_only_issues_admin_badges_to_the_governor() {
         vec![admin_proof],
     );
     assert_reject_reason(&reason, "Access Denied");
+}
+
+#[test]
+fn it_supports_zero_fee_wrapped_exchange_and_prevents_locking_out_governor() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        user_badge_resource,
+        token_resource,
+        ..
+    } = setup();
+
+    let (alice_account, alice_proof, _alice_key) = test.create_empty_account();
+
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "create_new_user",
+                args![1, alice_account],
+            )
+            .put_last_instruction_output_on_workspace("alice_badge")
+            .call_method(stable_coin_component, "withdraw", args![100])
+            .put_last_instruction_output_on_workspace("funds")
+            .call_method(alice_account, "deposit", args![Workspace("alice_badge")])
+            .call_method(alice_account, "deposit", args![Workspace("funds")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+
+    // Exchange 10 stable tokens where the 1% fee rounds to 0
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
+            .create_proof(alice_account, user_badge_resource)
+            .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
+            .call_method(alice_account, "withdraw", args![token_resource, 10])
+            .put_last_instruction_output_on_workspace("stable_tokens")
+            .call_method(
+                stable_coin_component,
+                "exchange_stable_for_wrapped_tokens",
+                args![Workspace("user_proof"), Workspace("stable_tokens")],
+            )
+            .put_last_instruction_output_on_workspace("wrapped_tokens")
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone(), alice_proof],
+    );
+
+    // Revoking the sole admin badge must be rejected when the governor rule requires an admin badge.
+    // The governor's proof locks that badge, so the engine refuses the recall before the governor
+    // check runs; `roles::tests::rejects_governor_when_last_admin_badge_supply_is_zero` covers the check.
+    let admin_badge_vault = test
+        .read_only_state_store()
+        .get_account(admin_account)
+        .unwrap()
+        .get_vault_by_resource(&admin_badge_resource)
+        .unwrap()
+        .vault_id();
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "revoke_admin",
+                args![admin_badge_vault, NonFungibleId::from_u64(0)],
+            )
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof],
+    );
+    assert_reject_reason(&reason, "Non fungible token not found");
 }
 
 struct TestSetup {
