@@ -32,6 +32,7 @@ fn it_increases_and_decreases_supply() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "increase_supply", args![123])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -49,6 +50,7 @@ fn it_increases_and_decreases_supply() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "decrease_supply", args![456])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -86,6 +88,7 @@ fn it_allows_users_to_transact() {
             // Auth
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             // Create user badges for Alice and Bob
             .call_method(
                 stable_coin_component,
@@ -115,6 +118,7 @@ fn it_allows_users_to_transact() {
         test.transaction()
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(alice_account, "withdraw", args![token_resource, 456])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(bob_account, "deposit", args![Workspace("funds")])
@@ -149,6 +153,7 @@ fn it_creates_new_admin() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_admin",
@@ -192,6 +197,7 @@ fn it_prevents_deposit_without_user_badge() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "withdraw", args![100])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(unauthorized_account, "deposit", args![Workspace("funds")])
@@ -225,6 +231,7 @@ fn it_pauses_deposits() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -252,6 +259,7 @@ fn it_pauses_deposits() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "pause", args![])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -263,6 +271,7 @@ fn it_pauses_deposits() {
         test.transaction()
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(alice_account, "withdraw", args![token_resource, 100])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(bob_account, "deposit", args![Workspace("funds")])
@@ -296,6 +305,7 @@ fn it_blacklists_and_removes_from_blacklist() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -333,6 +343,7 @@ fn it_blacklists_and_removes_from_blacklist() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "blacklist_user",
@@ -367,6 +378,7 @@ fn it_blacklists_and_removes_from_blacklist() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "remove_from_blacklist", args![1u64])
             .put_last_instruction_output_on_workspace("alice_badge")
             .call_method(alice_account, "deposit", args![Workspace("alice_badge")])
@@ -403,6 +415,7 @@ fn it_recalls_tokens_from_user() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -430,6 +443,7 @@ fn it_recalls_tokens_from_user() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "recall_revealed_tokens",
@@ -468,6 +482,7 @@ fn it_deposits_to_component_vault() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -494,6 +509,7 @@ fn it_deposits_to_component_vault() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             // Recall tokens from Alice's account
             .call_method(
                 stable_coin_component,
@@ -530,6 +546,7 @@ fn it_sets_config_transfer_fee() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_config_transfer_fee_fixed",
@@ -545,6 +562,7 @@ fn it_sets_config_transfer_fee() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_config_transfer_fee_percentage",
@@ -560,6 +578,7 @@ fn it_sets_config_transfer_fee() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_config_transfer_fee_percentage",
@@ -593,6 +612,7 @@ fn it_prevents_non_admin_from_calling_admin_methods() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -610,6 +630,7 @@ fn it_prevents_non_admin_from_calling_admin_methods() {
         test.transaction()
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "increase_supply", args![100])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&alice_key),
@@ -624,6 +645,7 @@ fn it_prevents_non_admin_from_calling_admin_methods() {
         test.transaction()
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -658,6 +680,7 @@ fn it_exchanges_stable_for_wrapped_tokens() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -680,8 +703,10 @@ fn it_exchanges_stable_for_wrapped_tokens() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
             .call_method(alice_account, "withdraw", args![token_resource, 100])
             .put_last_instruction_output_on_workspace("stable_tokens")
             .call_method(
@@ -737,6 +762,7 @@ fn it_exchanges_wrapped_for_stable_tokens() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -757,8 +783,10 @@ fn it_exchanges_wrapped_for_stable_tokens() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
             .call_method(alice_account, "withdraw", args![token_resource, 100])
             .put_last_instruction_output_on_workspace("stable_tokens")
             .call_method(
@@ -792,8 +820,10 @@ fn it_exchanges_wrapped_for_stable_tokens() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
             .call_method(
                 alice_account,
                 "withdraw",
@@ -844,6 +874,7 @@ fn it_enforces_exchange_limit() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -864,8 +895,10 @@ fn it_enforces_exchange_limit() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
             .call_method(alice_account, "withdraw", args![token_resource, 1001])
             .put_last_instruction_output_on_workspace("stable_tokens")
             .call_method(
@@ -904,6 +937,7 @@ fn it_sets_user_exchange_limit() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -924,6 +958,7 @@ fn it_sets_user_exchange_limit() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_user_exchange_limit",
@@ -940,8 +975,10 @@ fn it_sets_user_exchange_limit() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
             .call_method(alice_account, "withdraw", args![token_resource, 2000])
             .put_last_instruction_output_on_workspace("stable_tokens")
             .call_method(
@@ -1092,6 +1129,7 @@ fn it_rejects_a_role_open_to_everyone() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_role_with_proof",
@@ -1129,6 +1167,7 @@ fn it_reassigns_a_role() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_role_with_proof",
@@ -1164,6 +1203,7 @@ fn it_rotates_the_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "set_role_with_proof",
@@ -1183,6 +1223,7 @@ fn it_rotates_the_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(stable_coin_component, "create_new_admin", args!["x"])
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),
@@ -1221,6 +1262,7 @@ fn it_revokes_an_admin_badge() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_admin",
@@ -1245,6 +1287,7 @@ fn it_revokes_an_admin_badge() {
         test.transaction()
             .create_proof(other_admin, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "revoke_admin",
@@ -1316,6 +1359,7 @@ fn it_supports_zero_fee_wrapped_exchange_and_prevents_locking_out_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "create_new_user",
@@ -1336,8 +1380,10 @@ fn it_supports_zero_fee_wrapped_exchange_and_prevents_locking_out_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
             .create_proof(alice_account, user_badge_resource)
             .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
             .call_method(alice_account, "withdraw", args![token_resource, 10])
             .put_last_instruction_output_on_workspace("stable_tokens")
             .call_method(
@@ -1352,7 +1398,9 @@ fn it_supports_zero_fee_wrapped_exchange_and_prevents_locking_out_governor() {
         vec![admin_proof.clone(), alice_proof],
     );
 
-    // Revoking the sole admin badge must be rejected when the governor rule requires an admin badge
+    // Revoking the sole admin badge must be rejected when the governor rule requires an admin badge.
+    // The governor's proof locks that badge, so the engine refuses the recall before the governor
+    // check runs; `roles::tests::rejects_governor_when_last_admin_badge_supply_is_zero` covers the check.
     let admin_badge_vault = test
         .read_only_state_store()
         .get_account(admin_account)
@@ -1364,6 +1412,7 @@ fn it_supports_zero_fee_wrapped_exchange_and_prevents_locking_out_governor() {
         test.transaction()
             .create_proof(admin_account, admin_badge_resource)
             .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
             .call_method(
                 stable_coin_component,
                 "revoke_admin",
@@ -1373,7 +1422,7 @@ fn it_supports_zero_fee_wrapped_exchange_and_prevents_locking_out_governor() {
             .build_and_seal(&admin_key),
         vec![admin_proof],
     );
-    assert_reject_reason(&reason, "The governor role must be held by someone");
+    assert_reject_reason(&reason, "Non fungible token not found");
 }
 
 struct TestSetup {

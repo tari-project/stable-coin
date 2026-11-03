@@ -7,6 +7,7 @@ fn main() {
     let account = var!["account"];
 
     let proof = account.create_proof_by_amount(Address(resx), 1);
+    authorize!(proof);
     let user_acc = create_account!(user);
     let badge = sc.create_new_user(1, user_acc);
     user_acc.deposit(badge);
