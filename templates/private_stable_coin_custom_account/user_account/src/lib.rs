@@ -53,8 +53,9 @@ mod stable_coin {
 
             // Create component access rules
             let require_user_permission = rule!(resource(user_badge.resource_address()));
+            let require_owner = rule!(public_key(user_public_key));
             let component_access_rules = AccessRules::new()
-                .add_method_rule("transfer_to", rule!(allow_all))
+                .add_method_rule("transfer_to", require_owner)
                 .add_method_rule("deposit", require_user_permission.or(admin_only_access_rule.clone()))
                 .add_method_rule("deposit_auth_badge", admin_only_access_rule.clone())
                 .add_method_rule("freeze_account", admin_only_access_rule.clone())
@@ -70,7 +71,7 @@ mod stable_coin {
                 issuer,
             })
             .with_access_rules(component_access_rules)
-            .with_owner_rule(OwnerRule::None)
+            .with_owner_rule(OwnerRule::ByPublicKey(user_public_key))
             .create()
         }
 
@@ -125,12 +126,14 @@ mod stable_coin {
             emit_event("deposit_auth_badge", [] as [(&str, String); 0])
         }
 
-        pub fn freeze_account(&mut self, _admin_proof: Proof) {
+        pub fn freeze_account(&mut self, admin_proof: Proof) {
+            let _auth = admin_proof.authorize();
             self.is_frozen = true;
             emit_event("freeze_account", [] as [(&str, String); 0]);
         }
 
-        pub fn unfreeze_account(&mut self, _admin_proof: Proof) {
+        pub fn unfreeze_account(&mut self, admin_proof: Proof) {
+            let _auth = admin_proof.authorize();
             self.is_frozen = false;
             emit_event("unfreeze_account", [] as [(&str, String); 0]);
         }

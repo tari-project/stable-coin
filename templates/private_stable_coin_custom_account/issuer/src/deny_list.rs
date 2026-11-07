@@ -26,10 +26,10 @@ impl DenyList {
         public_key: RistrettoPublicKeyBytes,
         component: ComponentAddress,
     ) -> bool {
-        let id = self.next_id();
         if self.public_keys.contains_key(&public_key) || self.components.contains_key(&component) {
             return false;
         }
+        let id = self.next_id();
         self.public_keys.insert(public_key, id);
         self.components.insert(component, id);
         true
