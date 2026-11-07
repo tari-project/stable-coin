@@ -177,6 +177,10 @@ mod stable_coin {
             component_address: ComponentAddress,
             vault_id: VaultId,
         ) {
+            if !self.user_exists(&user_public_key) {
+                panic!("User does not exist");
+            }
+            admin_proof.assert_resource(self.admin_auth_resource);
             // TODO: we should fetch the associated component address for the user, however this requires that we know the user
             if !self
                 .deny_list
@@ -209,6 +213,7 @@ mod stable_coin {
             admin_proof: Proof,
             user_public_key: RistrettoPublicKeyBytes,
         ) {
+            admin_proof.assert_resource(self.admin_auth_resource);
             let Some(component) = self.deny_list.remove_by_public_key(&user_public_key) else {
                 panic!("User not found in blacklist");
             };
@@ -244,6 +249,7 @@ mod stable_coin {
                 panic!("User is on deny list");
             }
 
+            admin_proof.assert_resource(self.admin_auth_resource);
             let _auth = admin_proof.authorize();
 
             let user_badge = ResourceManager::get(self.user_auth_resource).mint_non_fungible(
