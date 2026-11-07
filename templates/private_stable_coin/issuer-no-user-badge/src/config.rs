@@ -36,7 +36,13 @@ impl FeeSpec {
     pub fn calculate_fee(&self, amount: Amount) -> Amount {
         match self {
             Self::Fixed(fee) => *fee,
-            Self::Percentage(percentage) => perc_rounded(amount, *percentage),
+            Self::Percentage(percentage) => {
+                assert!(
+                    *percentage <= 100,
+                    "Fee percentage ({percentage}%) cannot exceed 100%"
+                );
+                perc_rounded(amount, *percentage)
+            }
         }
     }
 }
@@ -54,18 +60,19 @@ fn perc_rounded<A: Into<Amount>>(v: A, percentage: u8) -> Amount {
     let v = v.into();
     let p = Amount::from(percentage);
 
-    // Compute `v * p / 100` rounding half up, working directly with the integer
-    // quotient and remainder. The previous version scaled by 1000 first
-    // (`v * 1000 * p`), which overflows `Amount` for large supplies.
-    let scaled = v * p;
-    let whole = scaled / Amount::ONE_HUNDRED;
-    let remainder = scaled - (whole * Amount::ONE_HUNDRED);
+    // Divide by 100 before multiplying by `p` so `(v / 100) * p` never overflows `Amount`
+    // even when `v` is near `Amount::MAX`.
+    let q = v / Amount::ONE_HUNDRED;
+    let r = v - (q * Amount::ONE_HUNDRED);
+    let r_scaled = r * p;
+    let r_whole = r_scaled / Amount::ONE_HUNDRED;
+    let remainder = r_scaled - (r_whole * Amount::ONE_HUNDRED);
 
     // If the fractional part is >= 0.5 (remainder >= 50), round up.
     if remainder >= 50 {
-        whole + Amount::ONE
+        (q * p) + r_whole + Amount::ONE
     } else {
-        whole
+        (q * p) + r_whole
     }
 }
 
