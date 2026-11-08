@@ -1,11 +1,10 @@
 // Copyright 2024 The Tari Project
 // SPDX-License-Identifier: BSD-3-Clause
 
-use tari_template_lib::args;
-use tari_template_lib::crypto::RistrettoPublicKeyBytes;
-use tari_template_lib::models::{Amount, Metadata, TemplateAddress};
-use tari_template_lib::prelude::ComponentAddress;
-use tari_transaction::{Transaction, UnsignedTransaction};
+use tari_template_lib::models::Metadata;
+use tari_template_lib::prelude::{ComponentAddress, RistrettoPublicKeyBytes};
+use tari_template_lib::types::{Amount, TemplateAddress};
+use tari_transaction::{args, Transaction, UnsignedTransaction};
 
 pub enum StableCoinTransaction {
     CreateIssuer {
@@ -55,19 +54,19 @@ fn create_issuer(
         .call_function(
             params.issuer_template,
             "instantiate",
-            args!(
+            args![
                 initial_token_supply,
                 token_symbol,
                 token_metadata,
                 view_key,
                 enable_wrapped_token
-            ),
+            ],
         )
         .put_last_instruction_output_on_workspace("issuer_badge")
         .call_method(
             params.fee_account,
             "deposit",
-            args!(Workspace("issuer_badge")),
+            args![Workspace("issuer_badge")],
         )
         .build_unsigned_transaction()
 }

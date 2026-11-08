@@ -7,8 +7,9 @@ use crate::transactions::StableCoinTransaction;
 use crate::{transactions, value_parsers};
 use clap::ArgAction;
 use clap::Parser;
-use tari_template_lib::crypto::RistrettoPublicKeyBytes;
-use tari_template_lib::models::{Amount, ComponentAddress, Metadata, TemplateAddress};
+use tari_template_lib::models::{ComponentAddress, Metadata};
+use tari_template_lib::prelude::RistrettoPublicKeyBytes;
+use tari_template_lib::types::{Amount, TemplateAddress};
 use url::Url;
 
 #[derive(Clone, Debug, clap::Parser)]

@@ -3,7 +3,7 @@
 
 use crate::cli::CommonCli;
 use crate::transactions::BuildParams;
-use tari_template_lib::models::{Amount, TemplateAddress};
+use tari_template_lib::types::{Amount, TemplateAddress};
 use tari_transaction::UnsignedTransaction;
 use tari_wallet_daemon_client::types::{
     AuthLoginAcceptRequest, AuthLoginRequest, TransactionSubmitRequest,
@@ -44,6 +44,7 @@ impl CliContext {
             .auth_request(AuthLoginRequest {
                 permissions: vec!["Admin".to_string()],
                 duration: None,
+                webauthn_finish_auth_request: None,
             })
             .await?;
 
@@ -66,7 +67,7 @@ impl CliContext {
             None => {
                 let client_mut = self.connect_wallet_client().await?;
                 let resp = client_mut.accounts_get_default().await?;
-                resp.account.address.as_component_address().unwrap()
+                *resp.account.address()
             }
         };
 
@@ -91,7 +92,7 @@ impl CliContext {
 
         let resp = client_mut
             .submit_transaction(TransactionSubmitRequest {
-                transaction: Some(transaction),
+                transaction,
                 signing_key_index: Some(resp.account.key_index),
                 ..Default::default()
             })
