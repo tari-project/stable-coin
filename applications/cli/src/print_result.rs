@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use std::fmt;
-use tari_crypto::tari_utilities::byte_array::ByteArray;
 use tari_engine_types::commit_result::{FinalizeResult, RejectReason, TransactionResult};
 use tari_engine_types::instruction_result::InstructionResult;
-use tari_engine_types::substate::{SubstateDiff, SubstateId, SubstateValue};
+use tari_engine_types::substate::{SubstateDiff, SubstateValue};
 use tari_template_abi::Type;
-use tari_template_lib::models::{Amount, BucketId, NonFungibleId};
+use tari_template_lib::models::{BucketId, NonFungibleId};
+use tari_template_lib::types::Amount;
 use tari_wallet_daemon_client::types::TransactionWaitResultResponse;
 
 pub fn print_result(resp: &TransactionWaitResultResponse) {
@@ -47,23 +47,18 @@ pub fn print_substate_diff(diff: &SubstateDiff) {
             SubstateValue::NonFungible(_) => {
                 println!("      ▶ NFT: {}", address);
             }
-            SubstateValue::UnclaimedConfidentialOutput(_) => {
+            SubstateValue::ClaimedOutputTombstone(_) => {
                 println!("      ▶ Layer 1 commitment: {}", address);
             }
-            SubstateValue::NonFungibleIndex(index) => {
-                let referenced_address = SubstateId::from(index.referenced_address().clone());
-                println!(
-                    "      ▶ NFT index {} referencing {}",
-                    address, referenced_address
-                );
+            SubstateValue::Template(_) => {
+                println!("      ▶ template: {}", address);
             }
-            SubstateValue::FeeClaim(fee_claim) => {
-                println!("      ▶ Fee claim: {}", address);
-                println!("        ▶ Amount: {}", fee_claim.amount);
-                println!(
-                    "        ▶ validator: {}",
-                    hex::encode(fee_claim.validator_public_key.as_bytes())
-                );
+            SubstateValue::ValidatorFeePool(fee_pool) => {
+                println!("      ▶ validator_fee_pool: {}", address);
+                println!("        ▶ Amount: {}", fee_pool.amount());
+            }
+            SubstateValue::Utxo(_) => {
+                println!("      ▶ utxo: {}", address);
             }
         }
         println!();
@@ -221,6 +216,13 @@ fn display_vec<W: fmt::Write>(
                 stringify_slice(&result.decode::<Vec<Amount>>().unwrap())
             )?;
         }
+        Type::Other { name } if name == "Bucket" => {
+            write!(
+                writer,
+                "{}",
+                stringify_slice(&result.decode::<Vec<BucketId>>().unwrap())
+            )?;
+        }
         Type::Other { name } if name == "NonFungibleId" => {
             write!(
                 writer,
@@ -306,6 +308,9 @@ pub fn print_execution_results(results: &[InstructionResult]) {
             }
             Type::Other { ref name } if name == "Bucket" => {
                 println!("{}: {}", name, result.decode::<BucketId>().unwrap());
+            }
+            Type::Other { ref name } if name == "NonFungibleId" => {
+                println!("{}: {}", name, result.decode::<NonFungibleId>().unwrap());
             }
             Type::Other { ref name } => {
                 println!(
