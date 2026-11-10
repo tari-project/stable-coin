@@ -150,7 +150,7 @@ mod template {
         /// Increase token supply by amount.
         pub fn increase_supply(&mut self, amount: Amount) {
             self.assert_not_paused();
-            assert!(!amount.is_zero());
+            assert!(amount.is_positive(), "Amount must be positive");
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
             emit_event("increase_supply", metadata!("amount" => amount));
@@ -159,7 +159,7 @@ mod template {
         /// Decrease token supply by amount.
         pub fn decrease_supply(&mut self, amount: Amount) {
             self.assert_not_paused();
-            assert!(!amount.is_zero());
+            assert!(amount.is_positive(), "Amount must be positive");
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
             emit_event("decrease_supply", metadata!("amt" => amount));
@@ -175,13 +175,17 @@ mod template {
 
         pub fn deposit(&mut self, bucket: Bucket) {
             self.assert_not_paused();
+            assert!(
+                bucket.amount().is_positive(),
+                "The bucket must contain some tokens"
+            );
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
             emit_event("deposit", metadata!("amt" => amount));
         }
 
         pub fn recall_revealed_tokens(&mut self, vault_id: VaultId, amount: Amount) {
-            assert!(!amount.is_zero());
+            assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self
                 .token_vault_manager()
                 .recall_fungible_amount(vault_id, amount);
@@ -223,6 +227,14 @@ mod template {
         /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
         /// a lost badge removes its holder from every such role.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
+            if *self.roles.get(Role::Governor)
+                == rule!(resource(self.admin_auth_manager.resource_address()))
+            {
+                assert!(
+                    self.admin_auth_manager.total_supply() > Amount::ONE,
+                    "Cannot revoke the last admin badge while it governs the component"
+                );
+            }
             let badge = self
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());

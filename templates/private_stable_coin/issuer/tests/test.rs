@@ -1344,6 +1344,105 @@ fn it_only_issues_admin_badges_to_the_governor() {
     assert_reject_reason(&reason, "Access Denied");
 }
 
+#[test]
+fn it_prevents_revoking_last_admin_badge_and_rejects_zero_net_exchange() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        user_badge_resource,
+        token_resource,
+        ..
+    } = setup();
+
+    let admin_badge_vault = test
+        .read_only_state_store()
+        .get_account(admin_account)
+        .unwrap()
+        .get_vault_by_resource(&admin_badge_resource)
+        .unwrap()
+        .vault_id();
+
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "revoke_admin",
+                args![admin_badge_vault, NonFungibleId::from_u64(0)],
+            )
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(
+        &reason,
+        "Cannot revoke the last admin badge while it governs the component",
+    );
+
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "set_user_exchange_limit",
+                args![1u64, 0],
+            )
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "Exchange limit must be positive");
+
+    let (alice_account, alice_proof, alice_key) = test.create_empty_account();
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "create_new_user",
+                args![1, alice_account],
+            )
+            .put_last_instruction_output_on_workspace("alice_badge")
+            .call_method(stable_coin_component, "withdraw", args![10])
+            .put_last_instruction_output_on_workspace("funds")
+            .call_method(alice_account, "deposit", args![Workspace("alice_badge")])
+            .call_method(alice_account, "deposit", args![Workspace("funds")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof],
+    );
+
+    // Exchanging a small amount (10 tokens) where the 1% rounded fee is 0 succeeds using only Alice's user proof
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(alice_account, user_badge_resource)
+            .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
+            .call_method(alice_account, "withdraw", args![token_resource, 10])
+            .put_last_instruction_output_on_workspace("stable_tokens")
+            .call_method(
+                stable_coin_component,
+                "exchange_stable_for_wrapped_tokens",
+                args![Workspace("user_proof"), Workspace("stable_tokens")],
+            )
+            .put_last_instruction_output_on_workspace("wrapped_tokens")
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&alice_key),
+        vec![alice_proof],
+    );
+}
+
 struct TestSetup {
     test: TemplateTest,
     stable_coin_component: ComponentAddress,
