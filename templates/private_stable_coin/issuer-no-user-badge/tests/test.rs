@@ -264,7 +264,7 @@ fn it_recalls_tokens_from_user() {
             .call_method(
                 stable_coin_component,
                 "recall_revealed_tokens",
-                args![1u64, 200],
+                args![1u64, alice_account, 200],
             )
             .drop_all_proofs_in_workspace()
             .build_and_seal(&admin_key),

@@ -349,13 +349,28 @@ mod template {
             tokens
         }
 
-        pub fn recall_revealed_tokens(&mut self, user_id: UserId, amount: Amount) {
+        /// Recalls `amount` revealed tokens from the user's account.
+        ///
+        /// `user_account` must be the account recorded on the user's badge. It is passed in, rather
+        /// than read from the badge, so that the account is in the call's scope and its state can be
+        /// read.
+        pub fn recall_revealed_tokens(
+            &mut self,
+            user_id: UserId,
+            user_account: ComponentAddress,
+            amount: Amount,
+        ) {
             assert!(amount.is_positive(), "Amount must be positive");
             // Fetch the user badge
             let badge = self.user_auth_manager.get_non_fungible(&user_id.into());
             let user = badge.get_data::<UserData>();
+            assert_eq!(
+                user_account,
+                user.user_account.component_address(),
+                "The account is not the user's registered account"
+            );
 
-            let account = user.user_account.get_state::<Account>();
+            let account = ComponentManager::get(user_account).get_state::<Account>();
 
             let vault = account
                 .get_vault_by_resource(&self.token_vault.resource_address())
@@ -378,8 +393,7 @@ mod template {
 
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
-            self.token_vault_manager()
-                .burn_utxo(utxo, value_proof);
+            self.token_vault_manager().burn_utxo(utxo, value_proof);
             emit_event(
                 "burn_utxo",
                 metadata!(
