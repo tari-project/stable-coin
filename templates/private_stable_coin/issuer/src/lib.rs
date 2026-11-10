@@ -272,6 +272,10 @@ mod template {
 
         pub fn deposit(&mut self, bucket: Bucket) {
             self.assert_not_paused();
+            assert!(
+                bucket.amount().is_positive(),
+                "The bucket must contain some tokens"
+            );
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
             emit_event("deposit", metadata!("amount" => amount));
@@ -302,6 +306,7 @@ mod template {
             let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
             let user_data = badge.get_mutable_data::<UserMutableData>();
+            assert!(!user_data.is_blacklisted, "User is blacklisted");
 
             let amount = bucket.amount();
             assert!(
@@ -318,10 +323,15 @@ mod template {
             let new_amount = amount
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
-            let fee_bucket = bucket.take(fee);
+            assert!(
+                new_amount.is_positive(),
+                "Insufficient funds to pay exchange fee"
+            );
+            if fee.is_positive() {
+                let fee_bucket = bucket.take(fee);
+                self.token_vault.deposit(fee_bucket);
+            }
             bucket.burn();
-
-            self.token_vault.deposit(fee_bucket);
 
             let wrapped_tokens = self.wrapped_token().manager().mint_fungible(new_amount);
 
@@ -345,7 +355,7 @@ mod template {
         ) -> Bucket {
             self.assert_not_paused();
             assert!(
-                !wrapped_bucket.amount().is_zero(),
+                wrapped_bucket.amount().is_positive(),
                 "The bucket must contain some tokens"
             );
 
@@ -362,6 +372,8 @@ mod template {
             let badge = badges.into_iter().next().unwrap();
             let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
+            let user_data = badge.get_mutable_data::<UserMutableData>();
+            assert!(!user_data.is_blacklisted, "User is blacklisted");
 
             let amount = wrapped_bucket.amount();
 
@@ -437,6 +449,14 @@ mod template {
         /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
         /// a lost badge removes its holder from every such role.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
+            if *self.roles.get(Role::Governor)
+                == rule!(resource(self.admin_auth_manager.resource_address()))
+            {
+                assert!(
+                    self.admin_auth_manager.total_supply() > Amount::ONE,
+                    "Cannot revoke the last admin badge while it governs the component"
+                );
+            }
             let badge = self
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());

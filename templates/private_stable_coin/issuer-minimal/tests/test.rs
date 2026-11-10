@@ -703,6 +703,70 @@ fn it_only_issues_admin_badges_to_the_governor() {
     assert_reject_reason(&reason, "Access Denied");
 }
 
+#[test]
+fn it_rejects_non_positive_amounts_negative_fees_and_last_admin_revoke() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        ..
+    } = setup();
+
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(stable_coin_component, "increase_supply", args![0])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "Amount must be positive");
+
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(stable_coin_component, "decrease_supply", args![0])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "Amount must be positive");
+
+    let admin_badge_vault = test
+        .read_only_state_store()
+        .get_account(admin_account)
+        .unwrap()
+        .get_vault_by_resource(&admin_badge_resource)
+        .unwrap()
+        .vault_id();
+
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "revoke_admin",
+                args![admin_badge_vault, NonFungibleId::from_u64(0)],
+            )
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof],
+    );
+    assert_reject_reason(
+        &reason,
+        "Cannot revoke the last admin badge while it governs the component",
+    );
+}
+
 struct TestSetup {
     test: TemplateTest,
     stable_coin_component: ComponentAddress,

@@ -54,16 +54,14 @@ mod template {
     use crate::roles::{Role, RoleConfig, Roles};
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
 
-    /// The role that may call each component method. A method not listed here can only be called by the governor,
-    /// which owns the component.
+    /// The role that may call each component method. Methods open to users are added in `component_access_rules`; any
+    /// other method can only be called by the governor, which owns the component.
     const METHOD_ROLES: &[(&str, Role)] = &[
         ("increase_supply", Role::Minter),
         ("decrease_supply", Role::Burner),
         ("burn_utxo", Role::Burner),
         ("withdraw", Role::Treasurer),
         ("deposit", Role::Treasurer),
-        ("exchange_stable_for_wrapped_tokens", Role::Treasurer),
-        ("exchange_wrapped_for_stable_tokens", Role::Treasurer),
         ("recall_revealed_tokens", Role::Compliance),
         ("blacklist_user", Role::Compliance),
         ("remove_from_blacklist", Role::Compliance),
@@ -182,7 +180,7 @@ mod template {
                 None
             };
 
-            let component_access_rules = Self::component_access_rules(&roles);
+            let component_access_rules = Self::component_access_rules(&roles, user_auth_resource);
             let governor = roles.get(Role::Governor).clone();
 
             Component::new(Self {
@@ -238,6 +236,10 @@ mod template {
 
         pub fn deposit(&mut self, bucket: Bucket) {
             self.assert_not_paused();
+            assert!(
+                bucket.amount().is_positive(),
+                "The bucket must contain some tokens"
+            );
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
             emit_event("deposit", metadata!("amount" => amount));
@@ -268,6 +270,7 @@ mod template {
             let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
             let user_data = badge.get_mutable_data::<UserMutableData>();
+            assert!(!user_data.is_blacklisted, "User is blacklisted");
 
             let amount = bucket.amount();
             assert!(
@@ -284,10 +287,15 @@ mod template {
             let new_amount = amount
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
-            let fee_bucket = bucket.take(fee);
+            assert!(
+                new_amount.is_positive(),
+                "Insufficient funds to pay exchange fee"
+            );
+            if fee.is_positive() {
+                let fee_bucket = bucket.take(fee);
+                self.token_vault.deposit(fee_bucket);
+            }
             bucket.burn();
-
-            self.token_vault.deposit(fee_bucket);
 
             let wrapped_tokens = self.wrapped_token().manager().mint_fungible(new_amount);
 
@@ -311,7 +319,7 @@ mod template {
         ) -> Bucket {
             self.assert_not_paused();
             assert!(
-                !wrapped_bucket.amount().is_zero(),
+                wrapped_bucket.amount().is_positive(),
                 "The bucket must contain some tokens"
             );
 
@@ -328,6 +336,8 @@ mod template {
             let badge = badges.into_iter().next().unwrap();
             let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
+            let user_data = badge.get_mutable_data::<UserMutableData>();
+            assert!(!user_data.is_blacklisted, "User is blacklisted");
 
             let amount = wrapped_bucket.amount();
 
@@ -403,6 +413,14 @@ mod template {
         /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
         /// a lost badge removes its holder from every such role.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
+            if *self.roles.get(Role::Governor)
+                == rule!(resource(self.admin_auth_manager.resource_address()))
+            {
+                assert!(
+                    self.admin_auth_manager.total_supply() > Amount::ONE,
+                    "Cannot revoke the last admin badge while it governs the component"
+                );
+            }
             let badge = self
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
@@ -600,19 +618,34 @@ mod template {
             self.token_vault.get_resource_manager()
         }
 
-        fn component_access_rules(roles: &Roles) -> AccessRules {
+        fn component_access_rules(roles: &Roles, user_badge: ResourceAddress) -> AccessRules {
+            // Users exchange their own tokens. The treasurer may also call the exchange methods,
+            // but each still requires the user's badge proof.
+            let require_user_or_treasurer =
+                rule!(resource(user_badge)).or(roles.get(Role::Treasurer).clone());
             METHOD_ROLES
                 .iter()
                 .fold(AccessRules::new(), |rules, (method, role)| {
                     rules.add_method_rule(*method, roles.get(*role).clone())
                 })
+                .add_method_rule(
+                    "exchange_stable_for_wrapped_tokens",
+                    require_user_or_treasurer.clone(),
+                )
+                .add_method_rule(
+                    "exchange_wrapped_for_stable_tokens",
+                    require_user_or_treasurer,
+                )
                 .default(roles.get(Role::Governor).clone())
         }
 
         fn apply_role(&mut self, role: Role, rule: AccessRule) {
             self.roles.set(role, rule.clone());
             let component = ComponentManager::current();
-            component.set_access_rules(Self::component_access_rules(&self.roles));
+            component.set_access_rules(Self::component_access_rules(
+                &self.roles,
+                self.user_auth_manager.resource_address(),
+            ));
             emit_event("set_role", metadata!("role" => role, "rule" => rule));
             // Ownership is checked against the current governor, so the owner rule changes last.
             if role == Role::Governor {
