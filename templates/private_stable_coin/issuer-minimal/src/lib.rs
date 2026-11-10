@@ -198,8 +198,7 @@ mod template {
 
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
-            self.token_vault_manager()
-                .burn_utxo(utxo, value_proof);
+            self.token_vault_manager().burn_utxo(utxo, value_proof);
             emit_event(
                 "burn_utxo",
                 metadata!(
