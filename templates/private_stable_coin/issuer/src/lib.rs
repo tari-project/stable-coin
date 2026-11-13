@@ -51,8 +51,9 @@ mod template {
 
     use super::*;
     use crate::config::FeeSpec;
-    use crate::roles::{Role, RoleConfig, Roles};
+    use crate::roles::{PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule};
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
+    use tari_template_lib::types::access_rules::RuleRequirement;
 
     /// The role that may call each component method. Methods open to users are added in `component_access_rules`; any
     /// other method can only be called by the governor, which owns the component.
@@ -82,14 +83,16 @@ mod template {
         wrapped_token: Option<WrappedExchangeToken>,
         is_paused: bool,
         roles: Roles,
+        pending_governor: Option<PendingGovernor>,
     }
 
     impl TariStableCoin {
         /// Instantiates a new stable coin component, returning a bucket containing an admin badge.
         ///
-        /// `roles` assigns each privileged role an access rule; any role left unset is held by the admin badge. The
-        /// component owns every resource it creates, so all privileged actions go through its methods and are
-        /// subject to pause and to the role rules.
+        /// `roles` assigns each privileged role an access rule. An unset governor is the returned admin badge (#0),
+        /// and every other unset role follows the governor. Badges later issued by `create_new_admin` hold no role
+        /// until a role rule names them. The component owns every resource it creates, so all privileged actions go
+        /// through its methods and are subject to pause and to the role rules.
         pub fn instantiate(
             initial_token_supply: Amount,
             token_symbol: MaxString<8>,
@@ -103,10 +106,8 @@ mod template {
 
             let config = StableCoinConfig::default();
 
-            // Privileged resource actions are reserved for this component. A proof handed to a
-            // component at a call boundary is revoked once the callee's own access rule has been
-            // checked, so a workspace badge proof is not in scope inside a method body and cannot satisfy
-            // a `resource(..)` rule there. Role checks happen at the component method boundary.
+            // Privileged resource actions are reserved for this component, so every privileged action
+            // goes through a component method, where the role rules and pause apply.
             let component_alloc = CallerContext::allocate_component_address(None);
             let component_address = component_alloc.get_address();
             let require_component = rule!(component(component_address));
@@ -128,8 +129,6 @@ mod template {
                 .initial_supply(Some(NonFungibleId::from_u64(0)));
 
             let admin_resource = admin_badge.resource_address();
-            let roles =
-                Roles::from_config(roles.unwrap_or_default(), rule!(resource(admin_resource)));
 
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
@@ -169,6 +168,13 @@ mod template {
                 .with_owner_rule(OwnerRule::None)
                 .initial_supply(initial_token_supply);
 
+            let first_admin = NonFungibleAddress::new(admin_resource, NonFungibleId::from_u64(0));
+            let roles = Roles::from_config(
+                roles.unwrap_or_default(),
+                rule!(non_fungible(first_admin)),
+                &initial_tokens.resource_address(),
+            );
+
             // Create wrapped token resource (no initial supply - minted on demand)
             let wrapped_token = if enable_wrapped_token {
                 let wrapped_resource = ResourceBuilder::public_fungible()
@@ -185,7 +191,8 @@ mod template {
                 None
             };
 
-            let component_access_rules = Self::component_access_rules(&roles, user_auth_resource);
+            let component_access_rules =
+                Self::component_access_rules(&roles, user_auth_resource, None);
             let governor = roles.get(Role::Governor).clone();
 
             Component::new(Self {
@@ -197,6 +204,7 @@ mod template {
                 wrapped_token,
                 is_paused: false,
                 roles,
+                pending_governor: None,
             })
             .with_address_allocation(component_alloc)
             .with_access_rules(component_access_rules)
@@ -450,7 +458,18 @@ mod template {
         ///
         /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
         /// a lost badge removes its holder from every such role.
+        /// A badge the governor rule names cannot be revoked: hand the governor over first.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
+            let badge_address = NonFungibleAddress::new(
+                self.admin_auth_manager.resource_address(),
+                badge_id.clone(),
+            );
+            assert!(
+                !self.roles.get(Role::Governor).contains_requirement(&|r| {
+                    matches!(r, RuleRequirement::NonFungibleAddress(a) if *a == badge_address)
+                }),
+                "Cannot revoke a badge the governor rule names"
+            );
             let badge = self
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
@@ -458,22 +477,69 @@ mod template {
             emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 
-        /// Gives `role` to whoever satisfies `rule`, for a governor that the transaction's signers satisfy.
+        /// Gives `role` to whoever satisfies `rule`.
+        ///
+        /// A badge governor authorizes its proof in the transaction (`authorize_proof`); the engine lends authorized
+        /// proofs to the method, where the component's ownership check runs.
+        ///
+        /// Changing the governor needs a proposal for `rule` that its holder has confirmed: see `propose_governor`.
         pub fn set_role(&mut self, role: Role, rule: AccessRule) {
-            self.apply_role(role, rule);
+            if role == Role::Governor {
+                let pending = self
+                    .pending_governor
+                    .take()
+                    .expect("No governor proposal is pending");
+                assert!(
+                    pending.rule == rule,
+                    "The rule does not match the pending governor proposal"
+                );
+                assert!(pending.confirmed, "The proposed governor has not confirmed");
+            }
+            self.roles
+                .set(role, rule.clone(), &self.token_vault.resource_address());
+            let component = ComponentManager::current();
+            self.update_access_rules();
+            emit_event("set_role", metadata!("role" => role, "rule" => rule));
+            // Ownership is checked against the current governor, so the owner rule changes last.
+            if role == Role::Governor {
+                component.set_owner_rule(SubstateOwnerRule::ByAccessRule(rule));
+            }
         }
 
-        /// Gives `role` to whoever satisfies `rule`, for a governor that requires a badge.
+        /// Proposes `rule` as the next governor, replacing any earlier proposal. Whoever satisfies `rule` must call
+        /// `confirm_governor` before the governor can hand over with `set_role`, which guards against a rule no one
+        /// holds (a mistyped key, an unheld badge).
         ///
-        /// Changing the component's access rules needs the governor's authority inside the method
-        /// body, where a proof is in scope only if it is passed as an argument.
-        pub fn set_role_with_proof(
-            &mut self,
-            role: Role,
-            rule: AccessRule,
-            _governor_proof: Proof,
-        ) {
-            self.apply_role(role, rule);
+        /// The governor owns the component and can call `confirm_governor` itself, so this guards against mistakes,
+        /// not against a governor that means to hand over to an unheld rule.
+        pub fn propose_governor(&mut self, rule: AccessRule) {
+            assert_valid_role_rule(Role::Governor, &rule, &self.token_vault.resource_address());
+            emit_event("governor.proposed", metadata!("rule" => rule));
+            self.pending_governor = Some(PendingGovernor {
+                rule,
+                confirmed: false,
+            });
+            self.update_access_rules();
+        }
+
+        /// Confirms the pending governor proposal. Callable by whoever satisfies the proposed rule.
+        pub fn confirm_governor(&mut self) {
+            let pending = self
+                .pending_governor
+                .as_mut()
+                .expect("No governor proposal is pending");
+            pending.confirmed = true;
+            emit_event("governor.confirmed", metadata!("rule" => pending.rule));
+        }
+
+        /// Withdraws the pending governor proposal.
+        pub fn cancel_governor_proposal(&mut self) {
+            let pending = self
+                .pending_governor
+                .take()
+                .expect("No governor proposal is pending");
+            emit_event("governor.cancelled", metadata!("rule" => pending.rule));
+            self.update_access_rules();
         }
 
         pub fn create_new_user(
@@ -648,7 +714,14 @@ mod template {
             self.token_vault.get_resource_manager()
         }
 
-        fn component_access_rules(roles: &Roles, user_badge: ResourceAddress) -> AccessRules {
+        /// `confirm_governor` is open to the proposed governor, and to no one but the owner while nothing is
+        /// proposed.
+        fn component_access_rules(
+            roles: &Roles,
+            user_badge: ResourceAddress,
+            pending: Option<&PendingGovernor>,
+        ) -> AccessRules {
+            let confirm_rule = pending.map_or(AccessRule::DenyAll, |p| p.rule.clone());
             // Users exchange their own tokens. The treasurer may also call the exchange methods,
             // but each still requires the user's badge proof.
             let require_user_or_treasurer =
@@ -669,21 +742,16 @@ mod template {
                 // An authorization hook is called by whichever frame moves the coin, so it must be
                 // callable by anyone.
                 .add_method_rule("authorize_user_deposit", rule!(allow_all))
+                .add_method_rule("confirm_governor", confirm_rule)
                 .default(roles.get(Role::Governor).clone())
         }
 
-        fn apply_role(&mut self, role: Role, rule: AccessRule) {
-            self.roles.set(role, rule.clone());
-            let component = ComponentManager::current();
-            component.set_access_rules(Self::component_access_rules(
+        fn update_access_rules(&self) {
+            ComponentManager::current().set_access_rules(Self::component_access_rules(
                 &self.roles,
                 self.user_auth_manager.resource_address(),
+                self.pending_governor.as_ref(),
             ));
-            emit_event("set_role", metadata!("role" => role, "rule" => rule));
-            // Ownership is checked against the current governor, so the owner rule changes last.
-            if role == Role::Governor {
-                component.set_owner_rule(SubstateOwnerRule::ByAccessRule(rule));
-            }
         }
 
         fn wrapped_token(&self) -> &WrappedExchangeToken {
