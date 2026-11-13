@@ -152,14 +152,14 @@ mod template {
             assert!(!amount.is_zero());
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
-            emit_event("decrease_supply", metadata!("amt" => amount));
+            emit_event("decrease_supply", metadata!("amount" => amount));
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
             self.assert_not_paused();
             assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
-            emit_event("withdraw", metadata!("amt" => bucket.amount()));
+            emit_event("withdraw", metadata!("amount" => bucket.amount()));
             bucket
         }
 
@@ -167,7 +167,7 @@ mod template {
             self.assert_not_paused();
             let amount = bucket.amount();
             self.token_vault.deposit(bucket);
-            emit_event("deposit", metadata!("amt" => amount));
+            emit_event("deposit", metadata!("amount" => amount));
         }
 
         pub fn recall_revealed_tokens(&mut self, vault_id: VaultId, amount: Amount) {
@@ -178,10 +178,10 @@ mod template {
             self.token_vault.deposit(bucket);
 
             emit_event(
-                "recall_tokens",
+                "recall_revealed_tokens",
                 metadata!(
                     "vault_id" => vault_id,
-                    "amt" => amount,
+                    "amount" => amount,
                 ),
             );
         }
@@ -189,13 +189,7 @@ mod template {
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
             self.token_vault_manager().burn_utxo(utxo, value_proof);
-            emit_event(
-                "burn_utxo",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "utxo_id" => utxo
-                ),
-            );
+            emit_event("burn_utxo", metadata!("utxo_id" => utxo));
         }
 
         /// Gives `role` to whoever satisfies `rule`.
@@ -276,41 +270,23 @@ mod template {
 
         pub fn pause(&mut self) {
             self.is_paused = true;
-            emit_event(
-                "admin.paused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
-            );
+            emit_event("pause", Metadata::new());
         }
 
         pub fn unpause(&mut self) {
             self.is_paused = false;
-            emit_event(
-                "admin.unpaused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
-            );
+            emit_event("unpause", Metadata::new());
         }
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event(
-                "admin.freeze_utxos",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "num_utxos" => utxos.len(),
-                ),
-            );
+            emit_event("freeze_utxos", metadata!("utxos" => utxos.clone()));
             self.token_vault_manager().freeze_utxos(utxos);
         }
 
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event(
-                "admin.unfreeze_utxos",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "num_utxos" => utxos.len(),
-                ),
-            );
+            emit_event("unfreeze_utxos", metadata!("utxos" => utxos.clone()));
             self.token_vault_manager().unfreeze_utxos(utxos);
         }
 

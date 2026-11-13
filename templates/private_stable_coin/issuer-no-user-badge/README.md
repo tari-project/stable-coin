@@ -67,6 +67,12 @@ often (minter, treasurer, pauser) their own keys.
 Pausing does not block transfers between holders: without the deposit authorization hook of the
 [`issuer`](../issuer/README.md) variant there is no resource-level enforcement point.
 
+### Events
+
+Every method emits an event named after the method (`TariStableCoin.<method>`); amounts are under the `amount` key
+and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
+the privileged methods do not depend on the transaction having a main signer.
+
 ### Threat model
 
 The template assumes the role holders are the issuer and are trusted. It does not defend holders against the

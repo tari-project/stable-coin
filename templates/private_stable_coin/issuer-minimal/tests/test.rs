@@ -782,6 +782,37 @@ fn it_rejects_an_initial_supply_above_max_supply() {
     assert_reject_reason(&reason, "The initial supply exceeds the max supply");
 }
 
+#[test]
+fn it_emits_an_event_named_after_the_method() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        ..
+    } = setup();
+
+    let result = test.execute_expect_success(
+        test.transaction()
+            .call_method(stable_coin_component, "increase_supply", args![100])
+            .call_method(stable_coin_component, "pause", args![])
+            .build_and_seal(&admin_key),
+        vec![admin_proof],
+    );
+
+    let events = &result.finalize.events;
+    let mint = events
+        .iter()
+        .find(|e| e.topic() == "TariStableCoin.increase_supply")
+        .expect("no increase_supply event");
+    assert!(mint.payload().get("amount").is_some());
+    let pause = events
+        .iter()
+        .find(|e| e.topic() == "TariStableCoin.pause")
+        .expect("no pause event");
+    assert!(pause.payload().get("tx_signer").is_none());
+}
+
 struct TestSetup {
     test: TemplateTest,
     stable_coin_component: ComponentAddress,

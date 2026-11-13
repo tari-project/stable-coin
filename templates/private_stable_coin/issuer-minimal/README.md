@@ -47,7 +47,9 @@ issuer involvement and no registration (see the `it_allows_anyone_to_hold_and_tr
 | `confirm_governor()` | Proposed governor | Confirms the pending proposal. |
 | `set_config_max_supply(max)` | Governor | Sets or removes (`None`) the supply cap. Cannot go below the current supply. |
 
-Every method emits an event describing what it did.
+Every method emits an event named after the method (`TariStableCoin.<method>`); amounts are under the `amount` key
+and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
+the privileged methods do not depend on the transaction having a main signer.
 
 ### Roles
 

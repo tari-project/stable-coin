@@ -69,6 +69,12 @@ often (minter, treasurer, pauser) their own keys.
   coin, and minting, burning, treasury movements, exchanges and user registration are blocked; compliance and
   governance stay available so an incident can be contained.
 
+### Events
+
+Every method emits an event named after the method (`TariStableCoin.<method>`); amounts are under the `amount` key
+and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
+the privileged methods do not depend on the transaction having a main signer.
+
 ### Threat model
 
 The template assumes the role holders are the issuer and are trusted. It does not defend holders against the

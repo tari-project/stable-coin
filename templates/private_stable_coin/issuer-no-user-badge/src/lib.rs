@@ -203,17 +203,14 @@ mod template {
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
 
-            emit_event(
-                "decrease_supply",
-                metadata!("revealed_burn_amount" => amount),
-            );
+            emit_event("decrease_supply", metadata!("amount" => amount));
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
             self.assert_not_paused();
             assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
-            emit_event("withdraw", metadata!("amount_withdrawn" => bucket.amount()));
+            emit_event("withdraw", metadata!("amount" => bucket.amount()));
             bucket
         }
 
@@ -364,10 +361,10 @@ mod template {
             self.token_vault.deposit(bucket);
 
             emit_event(
-                "recall_tokens",
+                "recall_revealed_tokens",
                 metadata!(
                         "user_id" => user_id,
-                        "revealed_amount" => amount,
+                        "amount" => amount,
                 ),
             );
         }
@@ -375,13 +372,7 @@ mod template {
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
             self.token_vault_manager().burn_utxo(utxo, value_proof);
-            emit_event(
-                "burn_utxo",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "utxo_id" => utxo
-                ),
-            );
+            emit_event("burn_utxo", metadata!("utxo_id" => utxo));
         }
 
         /// Gives `role` to whoever satisfies `rule`.
@@ -480,14 +471,11 @@ mod template {
                     ..user_data
                 },
             );
-
-            let admin = CallerContext::transaction_signer_public_key();
             emit_event(
                 "set_user_exchange_limit",
                 metadata!(
                         "user_id" => user_id,
                         "limit" => limit,
-                        "admin" => admin,
                 ),
             );
         }
@@ -556,8 +544,8 @@ mod template {
             emit_event(
                 "config.set_max_supply",
                 metadata!(
-                    "old_max_supply" => self.config.max_supply,
-                    "new_max_supply" => max_supply,
+                    "prev" => self.config.max_supply,
+                    "new" => max_supply,
                 ),
             );
             self.config.max_supply = max_supply;
@@ -567,8 +555,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_fixed",
                 metadata!(
-                    "old_transfer_fee" => self.config.transfer_fee,
-                    "new_transfer_fee" => FeeSpec::Fixed(new_fee),
+                    "prev" => self.config.transfer_fee,
+                    "new" => FeeSpec::Fixed(new_fee),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Fixed(new_fee);
@@ -582,8 +570,8 @@ mod template {
             emit_event(
                 "config.set_transfer_fee_percentage",
                 metadata!(
-                        "old_transfer_fee" => self.config.transfer_fee,
-                        "new_transfer_fee" => FeeSpec::Percentage(new_fee_perc),
+                        "prev" => self.config.transfer_fee,
+                        "new" => FeeSpec::Percentage(new_fee_perc),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
@@ -591,18 +579,12 @@ mod template {
 
         pub fn pause(&mut self) {
             self.is_paused = true;
-            emit_event(
-                "admin.paused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
-            );
+            emit_event("pause", Metadata::new());
         }
 
         pub fn unpause(&mut self) {
             self.is_paused = false;
-            emit_event(
-                "admin.unpaused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
-            );
+            emit_event("unpause", Metadata::new());
         }
 
         fn assert_not_paused(&self) {
@@ -611,25 +593,13 @@ mod template {
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event(
-                "admin.freeze_utxos",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "num_utxos" => utxos.len(),
-                ),
-            );
+            emit_event("freeze_utxos", metadata!("utxos" => utxos.clone()));
             self.token_vault_manager().freeze_utxos(utxos);
         }
 
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event(
-                "admin.unfreeze_utxos",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "num_utxos" => utxos.len(),
-                ),
-            );
+            emit_event("unfreeze_utxos", metadata!("utxos" => utxos.clone()));
             self.token_vault_manager().unfreeze_utxos(utxos);
         }
 
