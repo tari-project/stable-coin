@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use tari_template_lib::prelude::*;
+use tari_template_lib::types::access_rules::RuleRequirement;
 
 /// A privileged capability of the stable coin component.
 ///
@@ -33,8 +34,8 @@ pub enum Role {
     Pauser,
 }
 
-/// The access rule for each role, chosen at instantiation. A role left as `None` is held by any admin badge holder;
-/// the governor must be set if any other role is.
+/// The access rule for each role, chosen at instantiation. An unset governor is admin badge #0, the badge returned by
+/// `instantiate`; every other unset role follows the governor.
 ///
 /// A rule may name public keys (satisfied by the transaction's signers), specific admin badges
 /// (`non_fungible(..)`) or a threshold of either (`m_of_n(..)`).
@@ -52,6 +53,15 @@ pub struct RoleConfig {
     pub compliance: Option<AccessRule>,
     #[n(6)]
     pub pauser: Option<AccessRule>,
+}
+
+/// A governor rule proposed by the current governor. The handover needs its holder's confirmation.
+#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+pub struct PendingGovernor {
+    #[n(0)]
+    pub rule: AccessRule,
+    #[n(1)]
+    pub confirmed: bool,
 }
 
 /// The access rule currently held by each role.
@@ -72,29 +82,24 @@ pub struct Roles {
 }
 
 impl Roles {
-    /// Resolves `config`, giving every unset role to `default_rule`.
-    pub fn from_config(config: RoleConfig, default_rule: AccessRule) -> Self {
-        // With the default rule, every admin badge would satisfy the governor rule and so
-        // own the component, which overrides any narrower rule given to the other roles.
-        let assigns_a_role = config.minter.is_some()
-            || config.burner.is_some()
-            || config.treasurer.is_some()
-            || config.compliance.is_some()
-            || config.pauser.is_some();
-        assert!(
-            config.governor.is_some() || !assigns_a_role,
-            "The governor must be set when any other role is"
-        );
+    /// Resolves `config`. An unset governor gets `default_governor`, and every other unset role gets the
+    /// resolved governor rule.
+    pub fn from_config(
+        config: RoleConfig,
+        default_governor: AccessRule,
+        coin_resource: &ResourceAddress,
+    ) -> Self {
+        let governor = config.governor.unwrap_or(default_governor);
         let roles = Self {
-            governor: config.governor.unwrap_or_else(|| default_rule.clone()),
-            minter: config.minter.unwrap_or_else(|| default_rule.clone()),
-            burner: config.burner.unwrap_or_else(|| default_rule.clone()),
-            treasurer: config.treasurer.unwrap_or_else(|| default_rule.clone()),
-            compliance: config.compliance.unwrap_or_else(|| default_rule.clone()),
-            pauser: config.pauser.unwrap_or(default_rule),
+            minter: config.minter.unwrap_or_else(|| governor.clone()),
+            burner: config.burner.unwrap_or_else(|| governor.clone()),
+            treasurer: config.treasurer.unwrap_or_else(|| governor.clone()),
+            compliance: config.compliance.unwrap_or_else(|| governor.clone()),
+            pauser: config.pauser.unwrap_or_else(|| governor.clone()),
+            governor,
         };
         for role in Role::ALL {
-            assert_valid_role_rule(role, roles.get(role));
+            assert_valid_role_rule(role, roles.get(role), coin_resource);
         }
         roles
     }
@@ -110,8 +115,8 @@ impl Roles {
         }
     }
 
-    pub fn set(&mut self, role: Role, rule: AccessRule) {
-        assert_valid_role_rule(role, &rule);
+    pub fn set(&mut self, role: Role, rule: AccessRule, coin_resource: &ResourceAddress) {
+        assert_valid_role_rule(role, &rule, coin_resource);
         let slot = match role {
             Role::Governor => &mut self.governor,
             Role::Minter => &mut self.minter,
@@ -137,13 +142,27 @@ impl Role {
 
 /// A role open to everyone would make its privileged methods public, e.g. permissionless minting. A governor rule that
 /// no one satisfies would leave every role permanently fixed, including a compromised one.
-fn assert_valid_role_rule(role: Role, rule: &AccessRule) {
+pub fn assert_valid_role_rule(role: Role, rule: &AccessRule, coin_resource: &ResourceAddress) {
     assert!(
-        !matches!(rule, AccessRule::AllowAll),
+        !matches!(rule, AccessRule::AllowAll)
+            && !rule.contains_requirement(&|r| is_open_requirement(r, coin_resource)),
         "A role cannot be open to everyone"
     );
     assert!(
         role != Role::Governor || !matches!(rule, AccessRule::DenyAll),
         "The governor role must be held by someone"
     );
+}
+
+/// A requirement anyone can meet: any signer (the public identity resource), any coin holder, or any calling
+/// component or template (the caller-badge resources).
+fn is_open_requirement(requirement: &RuleRequirement, coin_resource: &ResourceAddress) -> bool {
+    match requirement {
+        RuleRequirement::Resource(resource) => {
+            resource == coin_resource
+                || resource.is_public_key_resource()
+                || resource.is_caller_badge()
+        }
+        _ => false,
+    }
 }
