@@ -59,14 +59,18 @@ names them, one by one (`non_fungible(..)`) or all together (`resource(admin_bad
   the same rule, which also hands over ownership of the component. `cancel_governor_proposal()` withdraws a
   proposal. This stops a handover to a rule no one holds, such as a mistyped key or an unissued badge. The governor
   owns the component and can confirm its own proposal, so the check guards against mistakes, not against a
-  governor acting deliberately.
+  governor acting deliberately. A confirmation does not expire: complete the handover promptly, and cancel and
+  re-propose if the new governor's keys may have changed since it confirmed.
 - **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
-  and burns a lost badge. A badge the governor rule names cannot be revoked: hand the governor over first.
-- **Guards.** No role may be open to everyone: a rule cannot be `allow_all` or name the public identity resource
-  (any signer), the coin (any holder) or the caller-badge resources (any component or template). The governor role
-  cannot be set to `deny_all`. These guards do not stop the governor making itself unreachable in other ways, such
-  as revoking the last admin badge that satisfies a `resource(admin_badge)` governor rule. If that happens no role
-  can change again, and a paused component stays paused.
+  and burns a lost badge. It refuses a badge without which the governor rule, or a pending governor proposal, could
+  no longer be satisfied: a stolen badge in an `any_of` or `m_of_n` governor rule can be revoked straight away while
+  the other badges still satisfy it, but the last badge able to govern cannot.
+- **Guards.** A role rule may name only signer keys (`public_key(..)`), specific admin badges (`non_fungible(..)`)
+  and every admin badge (`resource(admin_badge)`), combined with `any_of`, `all_of` and `m_of_n`. Anything else
+  (`allow_all`, the coin, TARI, the wrapped token, user badges, caller components) is rejected, so a role cannot go to
+  holders the issuer never chose. The governor role cannot be set to `deny_all`. These guards do not stop a governor
+  that deliberately confirms its own proposal for a rule no one holds. If that happens no role can change again, and
+  a paused component stays paused.
 - **Pause.** The pauser can pause; only the governor can unpause. While paused, minting, burning, treasury
   movements, exchanges and user registration are blocked; compliance and governance stay available so an incident
   can be contained.
@@ -76,6 +80,26 @@ Pausing does not block transfers between holders: without the deposit authorizat
 
 The resource view key is fixed at instantiation and cannot be rotated. Use a key dedicated to auditing, separate from
 the keys that hold roles.
+
+### Incident response
+
+If a role's key or badge is compromised, the governor reassigns every affected role in one transaction (several
+`set_role` calls). They take effect together, so the compromised holder has no window between them to act. Pause
+blocks issuance and treasury movements but not recall or freeze: a compromised compliance role keeps those until it
+is reassigned.
+
+## Configuration
+
+The component starts with the default `StableCoinConfig`; the governor changes it with the `set_config_*` methods.
+
+| Field | Default | Effect |
+|---|---|---|
+| `transfer_fee` | `FeeSpec::Fixed(1)` | Set with `set_config_transfer_fee_fixed` / `set_config_transfer_fee_percentage`. |
+| `wrapped_exchange_fee` | `FeeSpec::Percentage(1)` | Taken by `exchange_stable_for_wrapped_tokens`. |
+| `default_exchange_limit` | `1000` | Each new user's wrapped exchange limit. |
+| `max_supply` | `None` | Caps the coin plus the wrapped token outstanding: `increase_supply` fails past it. Exchanges never raise that total. Set or remove it with `set_config_max_supply`, which refuses a value below the current total. |
+
+`freeze_utxos` and `unfreeze_utxos` take at most 100 UTXOs per call.
 
 ## Wrapped exchange token
 

@@ -5,10 +5,10 @@ use ootle_byte_type::ToByteType;
 mod roles;
 use roles::{Role, RoleConfig};
 use tari_template_lib::prelude::rule;
-use tari_template_lib::types::constants::PUBLIC_IDENTITY_RESOURCE_ADDRESS;
+use tari_template_lib::types::constants::{PUBLIC_IDENTITY_RESOURCE_ADDRESS, TARI_TOKEN};
 use tari_template_lib::types::{
-    AccessRule, ComponentAddress, Metadata, NonFungibleAddress, NonFungibleId, ResourceAddress,
-    VaultId,
+    AccessRule, Amount, ComponentAddress, Metadata, NonFungibleAddress, NonFungibleId,
+    ResourceAddress, UtxoId, VaultId,
 };
 use tari_template_test_tooling::TemplateTest;
 use tari_template_test_tooling::crypto::{PublicKey, RistrettoPublicKey, RistrettoSecretKey};
@@ -1127,11 +1127,26 @@ fn it_rejects_a_role_open_to_everyone() {
         admin_account,
         admin_badge_resource,
         token_resource,
+        user_badge_resource,
         ..
     } = setup();
 
-    let open_rules = [
-        AccessRule::AllowAll,
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_role",
+            args![Role::Minter, AccessRule::AllowAll],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "cannot be open to everyone");
+
+    // Only signer keys and admin badges may hold a role
+    let foreign_rules = [
         rule!(resource(token_resource)),
         rule!(any_of(
             non_fungible(NonFungibleAddress::new(
@@ -1140,11 +1155,12 @@ fn it_rejects_a_role_open_to_everyone() {
             )),
             resource(token_resource)
         )),
+        rule!(resource(user_badge_resource)),
     ];
-    for open_rule in open_rules {
+    for foreign_rule in foreign_rules {
         for (method, args) in [
-            ("set_role", args![Role::Minter, open_rule.clone()]),
-            ("propose_governor", args![open_rule.clone()]),
+            ("set_role", args![Role::Minter, foreign_rule.clone()]),
+            ("propose_governor", args![foreign_rule.clone()]),
         ] {
             let reason = test.execute_expect_failure(
                 badge_call!(
@@ -1158,28 +1174,48 @@ fn it_rejects_a_role_open_to_everyone() {
                 ),
                 vec![admin_proof.clone()],
             );
-            assert_reject_reason(&reason, "cannot be open to everyone");
+            assert_reject_reason(&reason, "may only name signer keys and admin badges");
         }
     }
 }
 
-/// A test transaction cannot reference the system resources (the public identity and caller-badge resources are
-/// not in the test state), so the guard is checked directly for rules naming them.
+/// A test transaction cannot reference the system resources (they are not in the test state), so the guard is
+/// checked directly for rules naming them.
 #[test]
-fn it_rejects_a_role_open_to_every_signer_or_caller() {
-    let coin = ResourceAddress::from_hex(&"ab".repeat(32)).unwrap();
-    let open_rules = [
+fn it_rejects_a_role_naming_a_system_resource() {
+    let admin_badge = ResourceAddress::from_hex(&"ab".repeat(32)).unwrap();
+    let foreign_rules = [
         rule!(resource(PUBLIC_IDENTITY_RESOURCE_ADDRESS)),
+        rule!(resource(TARI_TOKEN)),
+        rule!(non_fungible(NonFungibleAddress::new(
+            ResourceAddress::from_hex(&"ef".repeat(32)).unwrap(),
+            NonFungibleId::from_u64(0)
+        ))),
         rule!(any_caller_component),
         rule!(any_caller_template),
+        rule!(caller_component(
+            ComponentAddress::from_hex(&"cd".repeat(32)).unwrap()
+        )),
     ];
-    for open_rule in &open_rules {
+    for foreign_rule in &foreign_rules {
         for role in [Role::Governor, Role::Minter] {
-            let result =
-                std::panic::catch_unwind(|| roles::assert_valid_role_rule(role, open_rule, &coin));
+            let result = std::panic::catch_unwind(|| {
+                roles::assert_valid_role_rule(role, foreign_rule, &admin_badge)
+            });
             assert!(result.is_err());
         }
     }
+    let allowed = rule!(any_of(
+        resource(admin_badge),
+        non_fungible(NonFungibleAddress::new(
+            admin_badge,
+            NonFungibleId::from_u64(0)
+        )),
+        non_fungible(NonFungibleAddress::from_public_key(
+            RistrettoPublicKey::from_secret_key(&RistrettoSecretKey::default()).to_byte_type()
+        ))
+    ));
+    roles::assert_valid_role_rule(Role::Governor, &allowed, &admin_badge);
 }
 
 #[test]
@@ -1515,7 +1551,7 @@ fn it_refuses_to_revoke_the_governor_badge() {
         ),
         vec![admin_proof],
     );
-    assert_reject_reason(&reason, "Cannot revoke a badge the governor rule names");
+    assert_reject_reason(&reason, "would leave no one able to govern");
 }
 
 #[test]
@@ -1679,6 +1715,507 @@ fn it_only_issues_admin_badges_to_the_governor() {
         vec![admin_proof],
     );
     assert_reject_reason(&reason, "Access Denied");
+}
+
+#[test]
+fn it_caps_supply_at_max_supply() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        token_resource,
+        ..
+    } = setup();
+    let max_supply = Amount::from(INITIAL_SUPPLY + 100);
+
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![Some(max_supply)],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+
+    // Up to the cap
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![100],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    let supply = test
+        .read_only_state_store()
+        .get_resource(&token_resource)
+        .unwrap()
+        .total_supply()
+        .unwrap();
+    assert_eq!(supply, max_supply);
+
+    // Over the cap
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![1],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "Minting would exceed the max supply");
+
+    // The cap cannot drop below the current supply
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![Some(max_supply - Amount::ONE)],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "The max supply is below the current supply");
+
+    // Removing the cap restores unlimited minting
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![None::<Amount>],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![1],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+}
+
+#[test]
+fn it_caps_freeze_batches() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        ..
+    } = setup();
+    let utxos: Vec<UtxoId> = (0..=100u8).map(|i| UtxoId::from_array([i; 32])).collect();
+
+    for method in ["freeze_utxos", "unfreeze_utxos"] {
+        let reason = test.execute_expect_failure(
+            badge_call!(
+                test,
+                admin_account,
+                admin_badge_resource,
+                stable_coin_component,
+                method,
+                args![utxos.clone()],
+                &admin_key
+            ),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, "Too many UTXOs in one batch");
+    }
+}
+
+#[test]
+fn it_counts_wrapped_tokens_toward_max_supply() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        user_badge_resource,
+        token_resource,
+        ..
+    } = setup();
+    let (alice_account, alice_proof, _) = test.create_empty_account();
+
+    // Alice exchanges 100 coins for 99 wrapped tokens; the 1 coin fee stays in the treasury
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("proof")
+            .authorize_proof("proof")
+            .call_method(
+                stable_coin_component,
+                "create_new_user",
+                args![1, alice_account],
+            )
+            .put_last_instruction_output_on_workspace("alice_badge")
+            .call_method(stable_coin_component, "withdraw", args![1000])
+            .put_last_instruction_output_on_workspace("funds")
+            .call_method(alice_account, "deposit", args![Workspace("alice_badge")])
+            .call_method(alice_account, "deposit", args![Workspace("funds")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(admin_account, admin_badge_resource)
+            .put_last_instruction_output_on_workspace("admin_proof")
+            .authorize_proof("admin_proof")
+            .create_proof(alice_account, user_badge_resource)
+            .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
+            .call_method(alice_account, "withdraw", args![token_resource, 100])
+            .put_last_instruction_output_on_workspace("stable_tokens")
+            .call_method(
+                stable_coin_component,
+                "exchange_stable_for_wrapped_tokens",
+                args![Workspace("user_proof"), Workspace("stable_tokens")],
+            )
+            .put_last_instruction_output_on_workspace("wrapped_tokens")
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone(), alice_proof],
+    );
+    let coin_supply = test
+        .read_only_state_store()
+        .get_resource(&token_resource)
+        .unwrap()
+        .total_supply()
+        .unwrap();
+    assert_eq!(coin_supply, Amount::from(INITIAL_SUPPLY - 99));
+
+    // The cap counts the 99 wrapped tokens alongside the coin
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![Some(coin_supply)],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "The max supply is below the current supply");
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![Some(Amount::from(INITIAL_SUPPLY))],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![1],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+    assert_reject_reason(&reason, "Minting would exceed the max supply");
+}
+
+#[test]
+fn it_revokes_a_badge_from_a_shared_governor_rule() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        ..
+    } = setup();
+    let (other_admin, _, _) = test.create_empty_account();
+    issue_admin_badge(
+        &mut test,
+        stable_coin_component,
+        admin_account,
+        &admin_proof,
+        &admin_key,
+        admin_badge_resource,
+        other_admin,
+    );
+    let other_badge_vault = badge_vault(&test, other_admin, admin_badge_resource);
+    let other_badge_id = test
+        .read_only_state_store()
+        .get_vault(&other_badge_vault)
+        .unwrap()
+        .get_non_fungible_ids()
+        .first()
+        .unwrap()
+        .clone();
+    let first_badge = NonFungibleAddress::new(admin_badge_resource, NonFungibleId::from_u64(0));
+    let other_badge = NonFungibleAddress::new(admin_badge_resource, other_badge_id.clone());
+    let shared = rule!(any_of(non_fungible(first_badge), non_fungible(other_badge)));
+
+    for (method, args) in [
+        ("propose_governor", args![shared.clone()]),
+        ("confirm_governor", args![]),
+        ("set_role", args![Role::Governor, shared.clone()]),
+    ] {
+        test.execute_expect_success(
+            badge_call!(
+                test,
+                admin_account,
+                admin_badge_resource,
+                stable_coin_component,
+                method,
+                args,
+                &admin_key
+            ),
+            vec![admin_proof.clone()],
+        );
+    }
+
+    // Badge #0 still satisfies the governor rule, so the other badge can go
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "revoke_admin",
+            args![other_badge_vault, other_badge_id],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    // Badge #0 is now the only way to govern
+    let admin_badge_vault = badge_vault(&test, admin_account, admin_badge_resource);
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "revoke_admin",
+            args![admin_badge_vault, NonFungibleId::from_u64(0)],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+    assert_reject_reason(&reason, "would leave no one able to govern");
+}
+
+#[test]
+fn it_refuses_to_revoke_a_badge_the_pending_governor_needs() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        ..
+    } = setup();
+    let (other_admin, other_admin_proof, other_admin_key) = test.create_empty_account();
+    issue_admin_badge(
+        &mut test,
+        stable_coin_component,
+        admin_account,
+        &admin_proof,
+        &admin_key,
+        admin_badge_resource,
+        other_admin,
+    );
+    let other_badge_vault = badge_vault(&test, other_admin, admin_badge_resource);
+    let other_badge_id = test
+        .read_only_state_store()
+        .get_vault(&other_badge_vault)
+        .unwrap()
+        .get_non_fungible_ids()
+        .first()
+        .unwrap()
+        .clone();
+    let proposed = rule!(non_fungible(NonFungibleAddress::new(
+        admin_badge_resource,
+        other_badge_id.clone()
+    )));
+
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "propose_governor",
+            args![proposed],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            other_admin,
+            admin_badge_resource,
+            stable_coin_component,
+            "confirm_governor",
+            args![],
+            &other_admin_key
+        ),
+        vec![other_admin_proof],
+    );
+
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "revoke_admin",
+            args![other_badge_vault, other_badge_id.clone()],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "pending governor proposal needs this badge");
+
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "cancel_governor_proposal",
+            args![],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "revoke_admin",
+            args![other_badge_vault, other_badge_id],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+}
+
+#[test]
+fn it_keeps_the_last_admin_badge_under_a_resource_governor() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        ..
+    } = setup();
+    let (other_admin, _, _) = test.create_empty_account();
+    issue_admin_badge(
+        &mut test,
+        stable_coin_component,
+        admin_account,
+        &admin_proof,
+        &admin_key,
+        admin_badge_resource,
+        other_admin,
+    );
+    let any_admin = rule!(resource(admin_badge_resource));
+    for (method, args) in [
+        ("propose_governor", args![any_admin.clone()]),
+        ("confirm_governor", args![]),
+        ("set_role", args![Role::Governor, any_admin.clone()]),
+    ] {
+        test.execute_expect_success(
+            badge_call!(
+                test,
+                admin_account,
+                admin_badge_resource,
+                stable_coin_component,
+                method,
+                args,
+                &admin_key
+            ),
+            vec![admin_proof.clone()],
+        );
+    }
+
+    let other_badge_vault = badge_vault(&test, other_admin, admin_badge_resource);
+    let other_badge_id = test
+        .read_only_state_store()
+        .get_vault(&other_badge_vault)
+        .unwrap()
+        .get_non_fungible_ids()
+        .first()
+        .unwrap()
+        .clone();
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "revoke_admin",
+            args![other_badge_vault, other_badge_id],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    let admin_badge_vault = badge_vault(&test, admin_account, admin_badge_resource);
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "revoke_admin",
+            args![admin_badge_vault, NonFungibleId::from_u64(0)],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+    assert_reject_reason(&reason, "would leave no one able to govern");
 }
 
 struct TestSetup {

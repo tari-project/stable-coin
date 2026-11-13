@@ -48,7 +48,9 @@ mod template {
     use super::*;
     use crate::config::FeeSpec;
     use crate::config::StableCoinConfig;
-    use crate::roles::{PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule};
+    use crate::roles::{
+        PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule, is_satisfiable,
+    };
     use tari_template_lib::types::access_rules::RuleRequirement;
 
     /// The role that may call each component method. A method not listed here can only be called by the governor,
@@ -65,6 +67,9 @@ mod template {
         ("pause", Role::Pauser),
     ];
 
+    /// The most UTXOs `freeze_utxos` and `unfreeze_utxos` take in one call.
+    const MAX_FREEZE_BATCH: usize = 100;
+
     pub struct TariStableCoin {
         config: StableCoinConfig,
         token_vault: Vault,
@@ -72,6 +77,10 @@ mod template {
         is_paused: bool,
         roles: Roles,
         pending_governor: Option<PendingGovernor>,
+        /// The admin badges in existence: minted by `instantiate` and `create_new_admin`, burnt only by
+        /// `revoke_admin`. A role rule may name a badge that was never issued or has been burnt; no one can present
+        /// it.
+        admin_badges: Vec<NonFungibleId>,
     }
 
     impl TariStableCoin {
@@ -93,6 +102,12 @@ mod template {
             roles: Option<RoleConfig>,
         ) -> Bucket {
             let config = config.unwrap_or_default();
+            if let Some(max_supply) = config.max_supply {
+                assert!(
+                    initial_token_supply <= max_supply,
+                    "The initial supply exceeds the max supply"
+                );
+            }
             // Minting, burning, recalling and freezing the coin are reserved for this component, so
             // every privileged action goes through a component method, where the role rules and
             // pause apply.
@@ -129,7 +144,7 @@ mod template {
             let roles = Roles::from_config(
                 roles.unwrap_or_default(),
                 rule!(non_fungible(first_admin)),
-                &initial_tokens.resource_address(),
+                &admin_resource,
             );
             let component_access_rules = Self::component_access_rules(&roles, None);
             let governor = roles.get(Role::Governor).clone();
@@ -141,6 +156,7 @@ mod template {
                 is_paused: false,
                 roles,
                 pending_governor: None,
+                admin_badges: alloc::vec![NonFungibleId::from_u64(0)],
             })
             .with_address_allocation(address_alloc)
             .with_access_rules(component_access_rules)
@@ -156,6 +172,7 @@ mod template {
         pub fn increase_supply(&mut self, amount: Amount) {
             self.assert_not_paused();
             assert!(!amount.is_zero());
+            self.assert_within_max_supply(amount);
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
             emit_event("increase_supply", metadata!("amount" => amount));
@@ -215,6 +232,7 @@ mod template {
 
         pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
             let id = NonFungibleId::random();
+            self.admin_badges.push(id.clone());
             emit_event("create_new_admin", metadata!("admin_id" => id));
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", &employee_id);
@@ -226,22 +244,38 @@ mod template {
         ///
         /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
         /// a lost badge removes its holder from every such role.
-        /// A badge the governor rule names cannot be revoked: hand the governor over first.
+        /// Refuses a badge without which the governor rule, or a pending governor proposal, could no longer be
+        /// satisfied. A badge in a threshold or `any_of` governor rule can be revoked while the others still
+        /// satisfy it.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
-            let badge_address = NonFungibleAddress::new(
-                self.admin_auth_manager.resource_address(),
-                badge_id.clone(),
-            );
+            let admin_resource = self.admin_auth_manager.resource_address();
+            // Signer keys cannot be checked, so they count as held.
+            let can_hold = |r: &RuleRequirement| match r {
+                RuleRequirement::NonFungibleAddress(badge)
+                    if *badge.resource_address() == admin_resource =>
+                {
+                    *badge.id() != badge_id && self.admin_badges.contains(badge.id())
+                }
+                RuleRequirement::Resource(resource) if *resource == admin_resource => {
+                    self.admin_badges.iter().any(|id| *id != badge_id)
+                }
+                _ => true,
+            };
             assert!(
-                !self.roles.get(Role::Governor).contains_requirement(&|r| {
-                    matches!(r, RuleRequirement::NonFungibleAddress(a) if *a == badge_address)
-                }),
-                "Cannot revoke a badge the governor rule names"
+                is_satisfiable(self.roles.get(Role::Governor), &can_hold),
+                "Revoking this badge would leave no one able to govern"
             );
+            if let Some(pending) = &self.pending_governor {
+                assert!(
+                    is_satisfiable(&pending.rule, &can_hold),
+                    "The pending governor proposal needs this badge: cancel it first"
+                );
+            }
             let badge = self
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
             badge.burn();
+            self.admin_badges.retain(|id| *id != badge_id);
             emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 
@@ -263,10 +297,12 @@ mod template {
                 );
                 assert!(pending.confirmed, "The proposed governor has not confirmed");
             }
-            self.roles
-                .set(role, rule.clone(), &self.token_vault.resource_address());
-            let component = ComponentManager::current();
-            self.update_access_rules();
+            self.roles.set(
+                role,
+                rule.clone(),
+                &self.admin_auth_manager.resource_address(),
+            );
+            let component = self.update_access_rules();
             emit_event("set_role", metadata!("role" => role, "rule" => rule));
             // Ownership is checked against the current governor, so the owner rule changes last.
             if role == Role::Governor {
@@ -281,7 +317,11 @@ mod template {
         /// The governor owns the component and can call `confirm_governor` itself, so this guards against mistakes,
         /// not against a governor that means to hand over to an unheld rule.
         pub fn propose_governor(&mut self, rule: AccessRule) {
-            assert_valid_role_rule(Role::Governor, &rule, &self.token_vault.resource_address());
+            assert_valid_role_rule(
+                Role::Governor,
+                &rule,
+                &self.admin_auth_manager.resource_address(),
+            );
             emit_event("governor.proposed", metadata!("rule" => rule));
             self.pending_governor = Some(PendingGovernor {
                 rule,
@@ -308,6 +348,22 @@ mod template {
                 .expect("No governor proposal is pending");
             emit_event("governor.cancelled", metadata!("rule" => pending.rule));
             self.update_access_rules();
+        }
+
+        /// Sets the cap on outstanding supply, or removes it with `None`. The cap cannot be set below the current
+        /// supply.
+        pub fn set_config_max_supply(&mut self, max_supply: Option<Amount>) {
+            if let Some(max_supply) = max_supply {
+                assert!(
+                    self.outstanding_supply() <= max_supply,
+                    "The max supply is below the current supply"
+                );
+            }
+            emit_event(
+                "config.set_max_supply",
+                metadata!("prev" => self.config.max_supply, "new" => max_supply),
+            );
+            self.config.max_supply = max_supply;
         }
 
         pub fn set_config_transfer_fee_fixed(&mut self, new_fee: Amount) {
@@ -353,6 +409,7 @@ mod template {
         }
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
+            assert_freeze_batch(&utxos);
             emit_event(
                 "admin.freeze_utxos",
                 metadata!(
@@ -364,6 +421,7 @@ mod template {
         }
 
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
+            assert_freeze_batch(&utxos);
             emit_event(
                 "admin.unfreeze_utxos",
                 metadata!(
@@ -387,11 +445,31 @@ mod template {
                 .default(roles.get(Role::Governor).clone())
         }
 
-        fn update_access_rules(&self) {
-            ComponentManager::current().set_access_rules(Self::component_access_rules(
+        fn update_access_rules(&self) -> ComponentManager {
+            let component = ComponentManager::current();
+            component.set_access_rules(Self::component_access_rules(
                 &self.roles,
                 self.pending_governor.as_ref(),
             ));
+            component
+        }
+
+        /// The supply `max_supply` caps.
+        fn outstanding_supply(&self) -> Amount {
+            self.token_vault_manager().total_supply()
+        }
+
+        fn assert_within_max_supply(&self, amount: Amount) {
+            if let Some(max_supply) = self.config.max_supply {
+                let new_supply = self
+                    .outstanding_supply()
+                    .checked_add(amount)
+                    .expect("Supply overflow");
+                assert!(
+                    new_supply <= max_supply,
+                    "Minting would exceed the max supply"
+                );
+            }
         }
 
         fn token_vault_manager(&self) -> ResourceManager {
@@ -401,5 +479,12 @@ mod template {
         fn assert_not_paused(&self) {
             assert!(!self.is_paused, "Stable coin is paused");
         }
+    }
+
+    fn assert_freeze_batch(utxos: &[UtxoId]) {
+        assert!(
+            utxos.len() <= MAX_FREEZE_BATCH,
+            "Too many UTXOs in one batch"
+        );
     }
 }

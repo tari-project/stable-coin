@@ -41,13 +41,14 @@ ordinary peer-to-peer stealth transfers between any two accounts — no issuer i
 | `deposit(bucket)` | Treasurer | Moves coins into the issuer vault. Blocked while paused. |
 | `recall_revealed_tokens(vault_id, amount)` | Compliance | Pulls a revealed amount out of any vault into the issuer vault. |
 | `burn_utxo(utxo, value_proof)` | Burner | Burns a single UTXO, given a stealth value proof. Blocked while paused. |
-| `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls. |
+| `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls, at most 100 UTXOs per call. |
 | `create_new_admin(employee_id) -> Bucket` | Governor | Mints another admin badge, tagged with `employee_id`. |
 | `revoke_admin(vault_id, badge_id)` | Governor | Recalls an admin badge and burns it. |
 | `pause()` / `unpause()` | Pauser / Governor | Sets or clears the paused flag. |
 | `set_role(role, rule)` | Governor | Reassigns a role (see [Roles](#roles)). Changing the governor needs a confirmed proposal. |
 | `propose_governor(rule)` / `cancel_governor_proposal()` | Governor | Proposes the next governor, or withdraws the proposal. |
 | `confirm_governor()` | Proposed governor | Confirms the pending proposal. |
+| `set_config_max_supply(max)` | Governor | Sets or removes (`None`) the supply cap. Cannot go below the current supply. |
 | `set_config_transfer_fee_fixed(amount)` / `set_config_transfer_fee_percentage(pct)` | Governor | Updates the configured transfer fee. |
 
 Every method emits an event describing what it did.
@@ -75,14 +76,18 @@ names them, one by one (`non_fungible(..)`) or all together (`resource(admin_bad
   the same rule, which also hands over ownership of the component. `cancel_governor_proposal()` withdraws a
   proposal. This stops a handover to a rule no one holds, such as a mistyped key or an unissued badge. The governor
   owns the component and can confirm its own proposal, so the check guards against mistakes, not against a
-  governor acting deliberately.
+  governor acting deliberately. A confirmation does not expire: complete the handover promptly, and cancel and
+  re-propose if the new governor's keys may have changed since it confirmed.
 - **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
-  and burns a lost badge. A badge the governor rule names cannot be revoked: hand the governor over first.
-- **Guards.** No role may be open to everyone: a rule cannot be `allow_all` or name the public identity resource
-  (any signer), the coin (any holder) or the caller-badge resources (any component or template). The governor role
-  cannot be set to `deny_all`. These guards do not stop the governor making itself unreachable in other ways, such
-  as revoking the last admin badge that satisfies a `resource(admin_badge)` governor rule. If that happens no role
-  can change again, and a paused component stays paused.
+  and burns a lost badge. It refuses a badge without which the governor rule, or a pending governor proposal, could
+  no longer be satisfied: a stolen badge in an `any_of` or `m_of_n` governor rule can be revoked straight away while
+  the other badges still satisfy it, but the last badge able to govern cannot.
+- **Guards.** A role rule may name only signer keys (`public_key(..)`), specific admin badges (`non_fungible(..)`)
+  and every admin badge (`resource(admin_badge)`), combined with `any_of`, `all_of` and `m_of_n`. Anything else
+  (`allow_all`, the coin, TARI, the wrapped token, user badges, caller components) is rejected, so a role cannot go to
+  holders the issuer never chose. The governor role cannot be set to `deny_all`. These guards do not stop a governor
+  that deliberately confirms its own proposal for a rule no one holds. If that happens no role can change again, and
+  a paused component stays paused.
 
 The resource view key is fixed at instantiation and cannot be rotated. Use a key dedicated to auditing, separate from
 the keys that hold roles.
@@ -97,12 +102,24 @@ issuer-side stop on issuance and treasury movement.
 
 ### Configuration
 
-`instantiate` takes an optional `StableCoinConfig`; passing `None` uses the default. It currently carries one
-field, `transfer_fee`, which is either `FeeSpec::Fixed(Amount)` (default: `1`) or `FeeSpec::Percentage(u8)`.
+`instantiate` takes an optional `StableCoinConfig`; passing `None` uses the default. The governor changes it later
+with the `set_config_*` methods.
 
-Note that this template has no transfer path of its own to charge against, so the fee is **stored and
+| Field | Default | Effect |
+|---|---|---|
+| `transfer_fee` | `FeeSpec::Fixed(1)` | Stored only (see below). Either `FeeSpec::Fixed(Amount)` or `FeeSpec::Percentage(u8)`. |
+| `max_supply` | `None` | Caps the total supply: `increase_supply` fails past it, and `instantiate` rejects a larger initial supply. `None` leaves supply uncapped. |
+
+The template has no transfer path of its own to charge against, so the transfer fee is **stored and
 configurable but not applied anywhere** — it is a hook for issuers extending the template. `FeeSpec::calculate_fee`
 implements the calculation (percentages round half up).
+
+### Incident response
+
+If a role's key or badge is compromised, the governor reassigns every affected role in one transaction (several
+`set_role` calls). They take effect together, so the compromised holder has no window between them to act. Pause
+blocks issuance and treasury movements but not recall or freeze: a compromised compliance role keeps those until it
+is reassigned.
 
 ## Control tradeoffs
 

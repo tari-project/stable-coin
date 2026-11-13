@@ -8,12 +8,16 @@ use tari_template_lib::types::Amount;
 pub struct StableCoinConfig {
     #[n(0)]
     pub transfer_fee: FeeSpec,
+    /// Caps the outstanding supply. `None` leaves supply uncapped.
+    #[n(1)]
+    pub max_supply: Option<Amount>,
 }
 
 impl Default for StableCoinConfig {
     fn default() -> Self {
         Self {
             transfer_fee: FeeSpec::Fixed(1u64.into()),
+            max_supply: None,
         }
     }
 }

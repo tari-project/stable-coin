@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use tari_template_lib::prelude::*;
-use tari_template_lib::types::access_rules::RuleRequirement;
+use tari_template_lib::types::access_rules::{RequireRule, RestrictedAccessRule, RuleRequirement};
 
 /// A privileged capability of the stable coin component.
 ///
@@ -94,7 +94,7 @@ impl Roles {
     pub fn from_config(
         config: RoleConfig,
         default_governor: AccessRule,
-        coin_resource: &ResourceAddress,
+        admin_badge: &ResourceAddress,
     ) -> Self {
         let governor = config.governor.unwrap_or(default_governor);
         let roles = Self {
@@ -107,7 +107,7 @@ impl Roles {
             governor,
         };
         for role in Role::ALL {
-            assert_valid_role_rule(role, roles.get(role), coin_resource);
+            assert_valid_role_rule(role, roles.get(role), admin_badge);
         }
         roles
     }
@@ -124,8 +124,8 @@ impl Roles {
         }
     }
 
-    pub fn set(&mut self, role: Role, rule: AccessRule, coin_resource: &ResourceAddress) {
-        assert_valid_role_rule(role, &rule, coin_resource);
+    pub fn set(&mut self, role: Role, rule: AccessRule, admin_badge: &ResourceAddress) {
+        assert_valid_role_rule(role, &rule, admin_badge);
         let slot = match role {
             Role::Governor => &mut self.governor,
             Role::Minter => &mut self.minter,
@@ -151,13 +151,18 @@ impl Role {
     ];
 }
 
-/// A role open to everyone would make its privileged methods public, e.g. permissionless minting. A governor rule that
+/// A role rule may name only signer keys (`public_key(..)`), specific admin badges (`non_fungible(..)`) and every admin
+/// badge (`resource(admin_badge)`), combined with `any_of`, `all_of` and `m_of_n`. Anything else, such as a resource
+/// anyone can hold or a user badge, would hand a privileged role to people the issuer never chose. A governor rule that
 /// no one satisfies would leave every role permanently fixed, including a compromised one.
-pub fn assert_valid_role_rule(role: Role, rule: &AccessRule, coin_resource: &ResourceAddress) {
+pub fn assert_valid_role_rule(role: Role, rule: &AccessRule, admin_badge: &ResourceAddress) {
     assert!(
-        !matches!(rule, AccessRule::AllowAll)
-            && !rule.contains_requirement(&|r| is_open_requirement(r, coin_resource)),
+        !matches!(rule, AccessRule::AllowAll),
         "A role cannot be open to everyone"
+    );
+    assert!(
+        !rule.contains_requirement(&|r| !is_role_requirement(r, admin_badge)),
+        "A role rule may only name signer keys and admin badges"
     );
     assert!(
         role != Role::Governor || !matches!(rule, AccessRule::DenyAll),
@@ -165,15 +170,51 @@ pub fn assert_valid_role_rule(role: Role, rule: &AccessRule, coin_resource: &Res
     );
 }
 
-/// A requirement anyone can meet: any signer (the public identity resource), any coin holder, or any calling
-/// component or template (the caller-badge resources).
-fn is_open_requirement(requirement: &RuleRequirement, coin_resource: &ResourceAddress) -> bool {
+fn is_role_requirement(requirement: &RuleRequirement, admin_badge: &ResourceAddress) -> bool {
     match requirement {
-        RuleRequirement::Resource(resource) => {
-            resource == coin_resource
-                || resource.is_public_key_resource()
-                || resource.is_caller_badge()
+        RuleRequirement::NonFungibleAddress(badge) => {
+            let resource = badge.resource_address();
+            resource == admin_badge || resource.is_public_key_resource()
         }
+        RuleRequirement::Resource(resource) => resource == admin_badge,
         _ => false,
+    }
+}
+
+/// Returns `true` if `rule` can still be satisfied when only the requirements `can_hold` accepts can be met.
+pub fn is_satisfiable(rule: &AccessRule, can_hold: &impl Fn(&RuleRequirement) -> bool) -> bool {
+    match rule {
+        AccessRule::AllowAll => true,
+        AccessRule::DenyAll => false,
+        AccessRule::Restricted(rule) => is_restricted_satisfiable(rule, can_hold),
+    }
+}
+
+fn is_restricted_satisfiable(
+    rule: &RestrictedAccessRule,
+    can_hold: &impl Fn(&RuleRequirement) -> bool,
+) -> bool {
+    match rule {
+        RestrictedAccessRule::Require(rule) => is_require_satisfiable(rule, can_hold),
+        RestrictedAccessRule::AnyOf(rules) => {
+            rules.iter().any(|r| is_restricted_satisfiable(r, can_hold))
+        }
+        RestrictedAccessRule::AllOf(rules) => {
+            rules.iter().all(|r| is_restricted_satisfiable(r, can_hold))
+        }
+    }
+}
+
+fn is_require_satisfiable(
+    rule: &RequireRule,
+    can_hold: &impl Fn(&RuleRequirement) -> bool,
+) -> bool {
+    match rule {
+        RequireRule::Require(requirement) => can_hold(requirement),
+        RequireRule::AnyOf(requirements) => requirements.iter().any(can_hold),
+        RequireRule::AllOf(requirements) => requirements.iter().all(can_hold),
+        RequireRule::MOfN(threshold, requirements) => {
+            requirements.iter().filter(|r| can_hold(r)).count() >= usize::from(*threshold)
+        }
     }
 }
