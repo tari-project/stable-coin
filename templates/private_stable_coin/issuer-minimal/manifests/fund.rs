@@ -1,13 +1,9 @@
 use StableCoin;
 
+// Sign with a key that holds the treasurer role.
 pub fn main() {
-    let admin_account = var!["admin_account"];
     let account = var!["account"];
     let sc = var!["sc"];
-    let badge_resx = var!["badge"];
-    let proof = admin_account.create_proof_by_amount(badge_resx, 1);
-    authorize!(proof);
     let coins = sc.withdraw("1000000000");
     account.deposit(coins);
-    drop_all_proofs!();
 }
