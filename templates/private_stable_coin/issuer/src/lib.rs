@@ -51,7 +51,9 @@ mod template {
 
     use super::*;
     use crate::config::FeeSpec;
-    use crate::roles::{PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule};
+    use crate::roles::{
+        PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule, is_satisfiable,
+    };
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
     use tari_template_lib::types::access_rules::RuleRequirement;
 
@@ -87,6 +89,9 @@ mod template {
         is_paused: bool,
         roles: Roles,
         pending_governor: Option<PendingGovernor>,
+        /// Admin badges burnt by `revoke_admin`, the only way an admin badge is burnt. A role rule may still name
+        /// them, but no one can present them.
+        burnt_admin_badges: Vec<NonFungibleId>,
     }
 
     impl TariStableCoin {
@@ -175,7 +180,7 @@ mod template {
             let roles = Roles::from_config(
                 roles.unwrap_or_default(),
                 rule!(non_fungible(first_admin)),
-                &initial_tokens.resource_address(),
+                &admin_resource,
             );
 
             // Create wrapped token resource (no initial supply - minted on demand)
@@ -208,6 +213,7 @@ mod template {
                 is_paused: false,
                 roles,
                 pending_governor: None,
+                burnt_admin_badges: Vec::new(),
             })
             .with_address_allocation(component_alloc)
             .with_access_rules(component_access_rules)
@@ -462,22 +468,37 @@ mod template {
         ///
         /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
         /// a lost badge removes its holder from every such role.
-        /// A badge the governor rule names cannot be revoked: hand the governor over first.
+        /// Refuses a badge without which the governor rule, or a pending governor proposal, could no longer be
+        /// satisfied. A badge in a threshold or `any_of` governor rule can be revoked while the others still
+        /// satisfy it.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
-            let badge_address = NonFungibleAddress::new(
-                self.admin_auth_manager.resource_address(),
-                badge_id.clone(),
-            );
+            let admin_resource = self.admin_auth_manager.resource_address();
+            let revoked = NonFungibleAddress::new(admin_resource, badge_id.clone());
+            let others_remain = self.admin_auth_manager.total_supply() > Amount::ONE;
+            let can_hold = |r: &RuleRequirement| match r {
+                RuleRequirement::NonFungibleAddress(badge) => {
+                    *badge != revoked
+                        && (*badge.resource_address() != admin_resource
+                            || !self.burnt_admin_badges.contains(badge.id()))
+                }
+                RuleRequirement::Resource(resource) if *resource == admin_resource => others_remain,
+                _ => true,
+            };
             assert!(
-                !self.roles.get(Role::Governor).contains_requirement(&|r| {
-                    matches!(r, RuleRequirement::NonFungibleAddress(a) if *a == badge_address)
-                }),
-                "Cannot revoke a badge the governor rule names"
+                is_satisfiable(self.roles.get(Role::Governor), &can_hold),
+                "Revoking this badge would leave no one able to govern"
             );
+            if let Some(pending) = &self.pending_governor {
+                assert!(
+                    is_satisfiable(&pending.rule, &can_hold),
+                    "The pending governor proposal needs this badge: cancel it first"
+                );
+            }
             let badge = self
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
             badge.burn();
+            self.burnt_admin_badges.push(badge_id.clone());
             emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 
@@ -499,10 +520,12 @@ mod template {
                 );
                 assert!(pending.confirmed, "The proposed governor has not confirmed");
             }
-            self.roles
-                .set(role, rule.clone(), &self.token_vault.resource_address());
-            let component = ComponentManager::current();
-            self.update_access_rules();
+            self.roles.set(
+                role,
+                rule.clone(),
+                &self.admin_auth_manager.resource_address(),
+            );
+            let component = self.update_access_rules();
             emit_event("set_role", metadata!("role" => role, "rule" => rule));
             // Ownership is checked against the current governor, so the owner rule changes last.
             if role == Role::Governor {
@@ -517,7 +540,11 @@ mod template {
         /// The governor owns the component and can call `confirm_governor` itself, so this guards against mistakes,
         /// not against a governor that means to hand over to an unheld rule.
         pub fn propose_governor(&mut self, rule: AccessRule) {
-            assert_valid_role_rule(Role::Governor, &rule, &self.token_vault.resource_address());
+            assert_valid_role_rule(
+                Role::Governor,
+                &rule,
+                &self.admin_auth_manager.resource_address(),
+            );
             emit_event("governor.proposed", metadata!("rule" => rule));
             self.pending_governor = Some(PendingGovernor {
                 rule,
@@ -794,12 +821,14 @@ mod template {
                 .default(roles.get(Role::Governor).clone())
         }
 
-        fn update_access_rules(&self) {
-            ComponentManager::current().set_access_rules(Self::component_access_rules(
+        fn update_access_rules(&self) -> ComponentManager {
+            let component = ComponentManager::current();
+            component.set_access_rules(Self::component_access_rules(
                 &self.roles,
                 self.user_auth_manager.resource_address(),
                 self.pending_governor.as_ref(),
             ));
+            component
         }
 
         fn wrapped_token(&self) -> &WrappedExchangeToken {

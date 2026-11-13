@@ -64,14 +64,18 @@ names them, one by one (`non_fungible(..)`) or all together (`resource(admin_bad
   the same rule, which also hands over ownership of the component. `cancel_governor_proposal()` withdraws a
   proposal. This stops a handover to a rule no one holds, such as a mistyped key or an unissued badge. The governor
   owns the component and can confirm its own proposal, so the check guards against mistakes, not against a
-  governor acting deliberately.
+  governor acting deliberately. A confirmation does not expire: complete the handover promptly, and cancel and
+  re-propose if the new governor's keys may have changed since it confirmed.
 - **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
-  and burns a lost badge. A badge the governor rule names cannot be revoked: hand the governor over first.
-- **Guards.** No role may be open to everyone: a rule cannot be `allow_all` or name the public identity resource
-  (any signer), the coin (any holder) or the caller-badge resources (any component or template). The governor role
-  cannot be set to `deny_all`. These guards do not stop the governor making itself unreachable in other ways, such
-  as revoking the last admin badge that satisfies a `resource(admin_badge)` governor rule. If that happens no role
-  can change again, and a paused component stays paused.
+  and burns a lost badge. It refuses a badge without which the governor rule, or a pending governor proposal, could
+  no longer be satisfied: a stolen badge in an `any_of` or `m_of_n` governor rule can be revoked straight away while
+  the other badges still satisfy it, but the last badge able to govern cannot.
+- **Guards.** A role rule may name only signer keys (`public_key(..)`), specific admin badges (`non_fungible(..)`)
+  and every admin badge (`resource(admin_badge)`), combined with `any_of`, `all_of` and `m_of_n`. Anything else
+  (`allow_all`, the coin, TARI, the wrapped token, user badges, caller components) is rejected, so a role cannot go to
+  holders the issuer never chose. The governor role cannot be set to `deny_all`. These guards do not stop a governor
+  that deliberately confirms its own proposal for a rule no one holds. If that happens no role can change again, and
+  a paused component stays paused.
 - **Pause.** The pauser can pause; only the governor can unpause. While paused, the hook rejects every deposit of the
   coin, and minting, burning, treasury movements, exchanges and user registration are blocked; compliance and
   governance stay available so an incident can be contained.
