@@ -222,6 +222,7 @@ impl Issuer {
         &mut self,
         wasm: Vec<u8>,
     ) -> anyhow::Result<(TemplateAddress, TxSummary)> {
+        self.ensure_funded().await?;
         let unsigned = IAccount::new(&self.provider, self.max_epoch().await?)
             .publish_template(wasm)
             .pay_fee(MAX_PUBLISH_FEE)
@@ -244,6 +245,7 @@ impl Issuer {
         &mut self,
         params: DeployParams,
     ) -> anyhow::Result<(Deployment, TxSummary)> {
+        self.ensure_funded().await?;
         let mut metadata = Metadata::new();
         metadata.insert("provider_name", params.name.as_str());
         let config = StableCoinConfig {
@@ -300,6 +302,7 @@ impl Issuer {
         method: &str,
         args: Vec<NamedArg>,
     ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
         let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
             .call_method(deployment.component, method, args)
             .pay_fee(MAX_FEE)
@@ -315,6 +318,7 @@ impl Issuer {
         recipient: &Address,
         amount: Amount,
     ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
         let recipient_key = *recipient.account_public_key();
         let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
             .call_method(deployment.component, "withdraw", args![amount])
@@ -336,6 +340,7 @@ impl Issuer {
         holder: &Address,
         amount: Amount,
     ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
         let vault = self.account_vault(holder, deployment.resource).await?;
         let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
             .call_method(
@@ -518,6 +523,19 @@ impl Issuer {
         Ok(Epoch(
             self.provider.get_epoch().await?.as_u64() + EPOCH_WINDOW,
         ))
+    }
+
+    /// Fees are paid from the signing key's account, which exists only once the address has been funded.
+    async fn ensure_funded(&self) -> anyhow::Result<()> {
+        let account = self.address.to_account_address();
+        if self.provider.get_substate(account).await?.is_none() {
+            bail!(
+                "This key has no account on the network yet, so it cannot pay fees. Send public TARI to {} or run \
+                 `faucet` on a test network.",
+                self.address
+            );
+        }
+        Ok(())
     }
 
     async fn submit(&mut self, unsigned: UnsignedTransaction) -> anyhow::Result<TxSummary> {

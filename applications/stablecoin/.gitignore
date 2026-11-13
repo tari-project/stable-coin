@@ -1,0 +1,4 @@
+# Key and deployment files created by the tool
+*.key
+deployment.json
+*-deployment.json
