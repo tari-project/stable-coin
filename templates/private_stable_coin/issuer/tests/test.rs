@@ -1515,6 +1515,84 @@ fn it_cancels_a_governor_proposal() {
     assert_reject_reason(&reason, "No governor proposal is pending");
 }
 
+#[test]
+fn it_rejects_instantiation_with_a_role_rule_that_is_not_signer_keys() {
+    let mut test = TemplateTest::my_crate();
+    let (admin_account, admin_proof, admin_key) = test.create_funded_account();
+
+    // The governor must be held by someone
+    let reason = test.execute_expect_failure(
+        instantiate_transaction(&test, &admin_key, governed_by(AccessRule::DenyAll)),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "The governor role must be held by someone");
+
+    let roles = RoleConfig {
+        minter: Some(AccessRule::AllowAll),
+        ..governed_by(signer_rule(&admin_key))
+    };
+    let reason = test.execute_expect_failure(
+        instantiate_transaction(&test, &admin_key, roles),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "cannot be open to everyone");
+
+    // A resource is not a signer key, whether it governs or holds another role
+    let held_resource = *test
+        .read_only_state_store()
+        .get_vaults_for_account(admin_account)
+        .unwrap()
+        .keys()
+        .next()
+        .expect("the funded account holds a resource");
+    let resource = rule!(resource(held_resource));
+    let role_configs = [
+        governed_by(resource.clone()),
+        RoleConfig {
+            minter: Some(resource),
+            ..governed_by(signer_rule(&admin_key))
+        },
+    ];
+    for roles in role_configs {
+        let reason = test.execute_expect_failure(
+            instantiate_transaction(&test, &admin_key, roles),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, "may only name signer keys");
+    }
+}
+
+#[test]
+fn it_emits_an_event_named_after_the_method() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        ..
+    } = setup();
+
+    let result = test.execute_expect_success(
+        test.transaction()
+            .call_method(stable_coin_component, "increase_supply", args![100])
+            .call_method(stable_coin_component, "pause", args![])
+            .build_and_seal(&admin_key),
+        vec![admin_proof],
+    );
+
+    let events = &result.finalize.events;
+    let mint = events
+        .iter()
+        .find(|e| e.topic() == "TariStableCoin.increase_supply")
+        .expect("no increase_supply event");
+    assert!(mint.payload().get("amount").is_some());
+    let pause = events
+        .iter()
+        .find(|e| e.topic() == "TariStableCoin.pause")
+        .expect("no pause event");
+    assert!(pause.payload().get("tx_signer").is_none());
+}
+
 struct TestSetup {
     test: TemplateTest,
     stable_coin_component: ComponentAddress,

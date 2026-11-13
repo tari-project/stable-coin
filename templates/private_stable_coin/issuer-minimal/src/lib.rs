@@ -224,7 +224,7 @@ mod template {
         /// not against a governor that means to hand over to an unheld rule.
         pub fn propose_governor(&mut self, rule: AccessRule) {
             assert_valid_role_rule(Role::Governor, &rule);
-            emit_event("governor.proposed", metadata!("rule" => rule));
+            emit_event("propose_governor", metadata!("rule" => rule));
             self.pending_governor = Some(PendingGovernor {
                 rule,
                 confirmed: false,
@@ -239,7 +239,7 @@ mod template {
                 .as_mut()
                 .expect("No governor proposal is pending");
             pending.confirmed = true;
-            emit_event("governor.confirmed", metadata!("rule" => pending.rule));
+            emit_event("confirm_governor", metadata!("rule" => pending.rule));
         }
 
         /// Withdraws the pending governor proposal.
@@ -248,7 +248,10 @@ mod template {
                 .pending_governor
                 .take()
                 .expect("No governor proposal is pending");
-            emit_event("governor.cancelled", metadata!("rule" => pending.rule));
+            emit_event(
+                "cancel_governor_proposal",
+                metadata!("rule" => pending.rule),
+            );
             self.update_access_rules();
         }
 
@@ -262,7 +265,7 @@ mod template {
                 );
             }
             emit_event(
-                "config.set_max_supply",
+                "set_config_max_supply",
                 metadata!("prev" => self.config.max_supply, "new" => max_supply),
             );
             self.config.max_supply = max_supply;
@@ -280,13 +283,13 @@ mod template {
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event("freeze_utxos", metadata!("utxos" => utxos.clone()));
+            emit_event("freeze_utxos", metadata!("utxos" => utxos));
             self.token_vault_manager().freeze_utxos(utxos);
         }
 
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event("unfreeze_utxos", metadata!("utxos" => utxos.clone()));
+            emit_event("unfreeze_utxos", metadata!("utxos" => utxos));
             self.token_vault_manager().unfreeze_utxos(utxos);
         }
 
