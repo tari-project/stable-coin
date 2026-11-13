@@ -12,6 +12,9 @@ pub struct StableCoinConfig {
     pub wrapped_exchange_fee: FeeSpec,
     #[n(2)]
     pub default_exchange_limit: Amount,
+    /// Caps the outstanding supply of the coin plus the wrapped token. `None` leaves supply uncapped.
+    #[n(3)]
+    pub max_supply: Option<Amount>,
 }
 
 impl Default for StableCoinConfig {
@@ -20,6 +23,7 @@ impl Default for StableCoinConfig {
             wrapped_exchange_fee: FeeSpec::Percentage(1),
             transfer_fee: FeeSpec::Fixed(1u64.into()),
             default_exchange_limit: 1000u64.into(),
+            max_supply: None,
         }
     }
 }

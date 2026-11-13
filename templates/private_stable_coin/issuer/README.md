@@ -79,6 +79,26 @@ names them, one by one (`non_fungible(..)`) or all together (`resource(admin_bad
 The resource view key is fixed at instantiation and cannot be rotated. Use a key dedicated to auditing, separate from
 the keys that hold roles.
 
+### Incident response
+
+If a role's key or badge is compromised, the governor reassigns every affected role in one transaction (several
+`set_role` calls). They take effect together, so the compromised holder has no window between them to act. Pause
+blocks issuance and treasury movements but not recall or freeze: a compromised compliance role keeps those until it
+is reassigned.
+
+## Configuration
+
+The component starts with the default `StableCoinConfig`; the governor changes it with the `set_config_*` methods.
+
+| Field | Default | Effect |
+|---|---|---|
+| `transfer_fee` | `FeeSpec::Fixed(1)` | Set with `set_config_transfer_fee_fixed` / `set_config_transfer_fee_percentage`. |
+| `wrapped_exchange_fee` | `FeeSpec::Percentage(1)` | Taken by `exchange_stable_for_wrapped_tokens`. |
+| `default_exchange_limit` | `1000` | Each new user's wrapped exchange limit. |
+| `max_supply` | `None` | Caps the coin plus the wrapped token outstanding: `increase_supply` fails past it. Exchanges never raise that total. Set or remove it with `set_config_max_supply`, which refuses a value below the current total. |
+
+`freeze_utxos` and `unfreeze_utxos` take at most 100 UTXOs per call.
+
 ## Wrapped exchange token
 
 If `enable_wrapped_token` is set at instantiation, the component creates a public fungible resource `w<SYMBOL>` with

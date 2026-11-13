@@ -41,13 +41,14 @@ ordinary peer-to-peer stealth transfers between any two accounts — no issuer i
 | `deposit(bucket)` | Treasurer | Moves coins into the issuer vault. Blocked while paused. |
 | `recall_revealed_tokens(vault_id, amount)` | Compliance | Pulls a revealed amount out of any vault into the issuer vault. |
 | `burn_utxo(utxo, value_proof)` | Burner | Burns a single UTXO, given a stealth value proof. Blocked while paused. |
-| `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls. |
+| `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls, at most 100 UTXOs per call. |
 | `create_new_admin(employee_id) -> Bucket` | Governor | Mints another admin badge, tagged with `employee_id`. |
 | `revoke_admin(vault_id, badge_id)` | Governor | Recalls an admin badge and burns it. |
 | `pause()` / `unpause()` | Pauser / Governor | Sets or clears the paused flag. |
 | `set_role(role, rule)` | Governor | Reassigns a role (see [Roles](#roles)). Changing the governor needs a confirmed proposal. |
 | `propose_governor(rule)` / `cancel_governor_proposal()` | Governor | Proposes the next governor, or withdraws the proposal. |
 | `confirm_governor()` | Proposed governor | Confirms the pending proposal. |
+| `set_config_max_supply(max)` | Governor | Sets or removes (`None`) the supply cap. Cannot go below the current supply. |
 | `set_config_transfer_fee_fixed(amount)` / `set_config_transfer_fee_percentage(pct)` | Governor | Updates the configured transfer fee. |
 
 Every method emits an event describing what it did.
@@ -97,12 +98,24 @@ issuer-side stop on issuance and treasury movement.
 
 ### Configuration
 
-`instantiate` takes an optional `StableCoinConfig`; passing `None` uses the default. It currently carries one
-field, `transfer_fee`, which is either `FeeSpec::Fixed(Amount)` (default: `1`) or `FeeSpec::Percentage(u8)`.
+`instantiate` takes an optional `StableCoinConfig`; passing `None` uses the default. The governor changes it later
+with the `set_config_*` methods.
 
-Note that this template has no transfer path of its own to charge against, so the fee is **stored and
+| Field | Default | Effect |
+|---|---|---|
+| `transfer_fee` | `FeeSpec::Fixed(1)` | Stored only (see below). Either `FeeSpec::Fixed(Amount)` or `FeeSpec::Percentage(u8)`. |
+| `max_supply` | `None` | Caps the total supply: `increase_supply` fails past it, and `instantiate` rejects a larger initial supply. `None` leaves supply uncapped. |
+
+The template has no transfer path of its own to charge against, so the transfer fee is **stored and
 configurable but not applied anywhere** — it is a hook for issuers extending the template. `FeeSpec::calculate_fee`
 implements the calculation (percentages round half up).
+
+### Incident response
+
+If a role's key or badge is compromised, the governor reassigns every affected role in one transaction (several
+`set_role` calls). They take effect together, so the compromised holder has no window between them to act. Pause
+blocks issuance and treasury movements but not recall or freeze: a compromised compliance role keeps those until it
+is reassigned.
 
 ## Control tradeoffs
 

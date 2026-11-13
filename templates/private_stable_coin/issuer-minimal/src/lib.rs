@@ -65,6 +65,9 @@ mod template {
         ("pause", Role::Pauser),
     ];
 
+    /// The most UTXOs `freeze_utxos` and `unfreeze_utxos` take in one call.
+    const MAX_FREEZE_BATCH: usize = 100;
+
     pub struct TariStableCoin {
         config: StableCoinConfig,
         token_vault: Vault,
@@ -93,6 +96,12 @@ mod template {
             roles: Option<RoleConfig>,
         ) -> Bucket {
             let config = config.unwrap_or_default();
+            if let Some(max_supply) = config.max_supply {
+                assert!(
+                    initial_token_supply <= max_supply,
+                    "The initial supply exceeds the max supply"
+                );
+            }
             // Minting, burning, recalling and freezing the coin are reserved for this component, so
             // every privileged action goes through a component method, where the role rules and
             // pause apply.
@@ -156,6 +165,7 @@ mod template {
         pub fn increase_supply(&mut self, amount: Amount) {
             self.assert_not_paused();
             assert!(!amount.is_zero());
+            self.assert_within_max_supply(amount);
             let new_tokens = self.token_vault_manager().mint_stealth(amount);
             self.token_vault.deposit(new_tokens);
             emit_event("increase_supply", metadata!("amount" => amount));
@@ -310,6 +320,22 @@ mod template {
             self.update_access_rules();
         }
 
+        /// Sets the cap on outstanding supply, or removes it with `None`. The cap cannot be set below the current
+        /// supply.
+        pub fn set_config_max_supply(&mut self, max_supply: Option<Amount>) {
+            if let Some(max_supply) = max_supply {
+                assert!(
+                    self.outstanding_supply() <= max_supply,
+                    "The max supply is below the current supply"
+                );
+            }
+            emit_event(
+                "config.set_max_supply",
+                metadata!("prev" => self.config.max_supply, "new" => max_supply),
+            );
+            self.config.max_supply = max_supply;
+        }
+
         pub fn set_config_transfer_fee_fixed(&mut self, new_fee: Amount) {
             emit_event(
                 "config.set_transfer_fee_fixed",
@@ -353,6 +379,7 @@ mod template {
         }
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
+            assert_freeze_batch(&utxos);
             emit_event(
                 "admin.freeze_utxos",
                 metadata!(
@@ -364,6 +391,7 @@ mod template {
         }
 
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
+            assert_freeze_batch(&utxos);
             emit_event(
                 "admin.unfreeze_utxos",
                 metadata!(
@@ -394,6 +422,24 @@ mod template {
             ));
         }
 
+        /// The supply `max_supply` caps.
+        fn outstanding_supply(&self) -> Amount {
+            self.token_vault_manager().total_supply()
+        }
+
+        fn assert_within_max_supply(&self, amount: Amount) {
+            if let Some(max_supply) = self.config.max_supply {
+                let new_supply = self
+                    .outstanding_supply()
+                    .checked_add(amount)
+                    .expect("Supply overflow");
+                assert!(
+                    new_supply <= max_supply,
+                    "Minting would exceed the max supply"
+                );
+            }
+        }
+
         fn token_vault_manager(&self) -> ResourceManager {
             self.token_vault.get_resource_manager()
         }
@@ -401,5 +447,12 @@ mod template {
         fn assert_not_paused(&self) {
             assert!(!self.is_paused, "Stable coin is paused");
         }
+    }
+
+    fn assert_freeze_batch(utxos: &[UtxoId]) {
+        assert!(
+            utxos.len() <= MAX_FREEZE_BATCH,
+            "Too many UTXOs in one batch"
+        );
     }
 }

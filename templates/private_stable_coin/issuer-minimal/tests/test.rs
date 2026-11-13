@@ -13,8 +13,8 @@ use roles::{Role, RoleConfig};
 use tari_template_lib::prelude::rule;
 use tari_template_lib::types::constants::PUBLIC_IDENTITY_RESOURCE_ADDRESS;
 use tari_template_lib::types::{
-    AccessRule, ComponentAddress, Metadata, NonFungibleAddress, NonFungibleId, ResourceAddress,
-    VaultId,
+    AccessRule, Amount, ComponentAddress, Metadata, NonFungibleAddress, NonFungibleId,
+    ResourceAddress, UtxoId, VaultId,
 };
 use tari_template_test_tooling::TemplateTest;
 use tari_template_test_tooling::crypto::{PublicKey, RistrettoPublicKey, RistrettoSecretKey};
@@ -1039,6 +1039,157 @@ fn it_only_issues_admin_badges_to_the_governor() {
     assert_reject_reason(&reason, "Access Denied");
 }
 
+#[test]
+fn it_caps_supply_at_max_supply() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        token_resource,
+        ..
+    } = setup();
+    let max_supply = Amount::from(INITIAL_SUPPLY + 100);
+
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![Some(max_supply)],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+
+    // Up to the cap
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![100],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    let supply = test
+        .read_only_state_store()
+        .get_resource(&token_resource)
+        .unwrap()
+        .total_supply()
+        .unwrap();
+    assert_eq!(supply, max_supply);
+
+    // Over the cap
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![1],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "Minting would exceed the max supply");
+
+    // The cap cannot drop below the current supply
+    let reason = test.execute_expect_failure(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![Some(max_supply - Amount::ONE)],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "The max supply is below the current supply");
+
+    // Removing the cap restores unlimited minting
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "set_config_max_supply",
+            args![None::<Amount>],
+            &admin_key
+        ),
+        vec![admin_proof.clone()],
+    );
+    test.execute_expect_success(
+        badge_call!(
+            test,
+            admin_account,
+            admin_badge_resource,
+            stable_coin_component,
+            "increase_supply",
+            args![1],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+}
+
+#[test]
+fn it_caps_freeze_batches() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        admin_account,
+        admin_badge_resource,
+        ..
+    } = setup();
+    let utxos: Vec<UtxoId> = (0..=100u8).map(|i| UtxoId::from_array([i; 32])).collect();
+
+    for method in ["freeze_utxos", "unfreeze_utxos"] {
+        let reason = test.execute_expect_failure(
+            badge_call!(
+                test,
+                admin_account,
+                admin_badge_resource,
+                stable_coin_component,
+                method,
+                args![utxos.clone()],
+                &admin_key
+            ),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, "Too many UTXOs in one batch");
+    }
+}
+
+#[test]
+fn it_rejects_an_initial_supply_above_max_supply() {
+    let mut test = TemplateTest::my_crate();
+    let (admin_account, admin_proof, admin_key) = test.create_funded_account();
+    let config = StableCoinConfig {
+        max_supply: Some(Amount::from(INITIAL_SUPPLY - 1)),
+        ..Default::default()
+    };
+
+    let reason = test.execute_expect_failure(
+        instantiate_transaction(&test, admin_account, &admin_key, config, None),
+        vec![admin_proof],
+    );
+    assert_reject_reason(&reason, "The initial supply exceeds the max supply");
+}
+
 struct TestSetup {
     test: TemplateTest,
     stable_coin_component: ComponentAddress,
@@ -1100,6 +1251,7 @@ fn instantiate_transaction(
     test: &TemplateTest,
     admin_account: ComponentAddress,
     admin_key: &RistrettoSecretKey,
+    config: StableCoinConfig,
     roles: Option<RoleConfig>,
 ) -> Transaction {
     let template = test.get_template_address("TariStableCoin");
@@ -1123,7 +1275,7 @@ fn instantiate_transaction(
                 metadata,
                 8,
                 view_key,
-                StableCoinConfig::default(),
+                config,
                 roles
             ],
         )
@@ -1143,7 +1295,13 @@ fn setup_with_roles(roles: impl FnOnce(&mut TemplateTest) -> Option<RoleConfig>)
     let (admin_account, admin_proof, admin_key) = test.create_funded_account();
     let template = test.get_template_address("TariStableCoin");
     let result = test.execute_expect_success(
-        instantiate_transaction(&test, admin_account, &admin_key, roles),
+        instantiate_transaction(
+            &test,
+            admin_account,
+            &admin_key,
+            StableCoinConfig::default(),
+            roles,
+        ),
         vec![admin_proof.clone()],
     );
 
