@@ -2,19 +2,21 @@ use StableCoin;
 
 pub fn main() {
     let addr = new_component_addr!();
-    let account = var!["account"];
-    // Initialize the StableCoin component
-    let badge = StableCoin::instantiate(
+    // The issuer's public view key. It reveals every amount of the coin, lets the burner burn any UTXO, and
+    // can never be rotated: generate it for this coin and keep its secret offline.
+    let view_key = var!["view_key"];
+    // A `RoleConfig`: the governor rule is required, every other role follows the governor unless set.
+    // Rules name signer keys, e.g. `rule!(m_of_n(2, public_key(a), public_key(b), public_key(c)))`.
+    let roles = var!["roles"];
+    StableCoin::instantiate(
         addr,
         "100000000000000000000000000",
         "STC",
         Metadata("provider_name=StableCoin Inc."),
         8,
-        // 32-byte public view key (hex)
-        PublicKey("6c64d361a661900be82695786a3f9cdbae26f7b216c3d093bea101a309700379"),
-        cbor!([[1, [1]]]), // Fee: 1%
-        // Roles: None makes admin badge #0 the governor and holder of every role
+        view_key,
+        // Config: None leaves supply uncapped
         None,
+        roles,
     );
-    account.deposit(badge);
 }

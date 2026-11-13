@@ -29,7 +29,6 @@ mod roles;
 mod user_data;
 mod wrapped_exchange_token;
 use alloc::format;
-use alloc::string::String;
 use alloc::vec::Vec;
 use tari_template_lib::prelude::*;
 
@@ -51,11 +50,8 @@ mod template {
 
     use super::*;
     use crate::config::FeeSpec;
-    use crate::roles::{
-        PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule, is_satisfiable,
-    };
+    use crate::roles::{PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule};
     use crate::{config::StableCoinConfig, wrapped_exchange_token::WrappedExchangeToken};
-    use tari_template_lib::types::access_rules::RuleRequirement;
 
     /// The role that may call each component method. Methods open to users are added in `component_access_rules`; any
     /// other method can only be called by the governor, which owns the component.
@@ -83,25 +79,19 @@ mod template {
         config: StableCoinConfig,
         token_vault: Vault,
         user_auth_manager: ResourceManager,
-        admin_auth_manager: ResourceManager,
         blacklisted_users: Vault,
         wrapped_token: Option<WrappedExchangeToken>,
         is_paused: bool,
         roles: Roles,
         pending_governor: Option<PendingGovernor>,
-        /// The admin badges in existence: minted by `instantiate` and `create_new_admin`, burnt only by
-        /// `revoke_admin`. A role rule may name a badge that was never issued or has been burnt; no one can present
-        /// it.
-        admin_badges: Vec<NonFungibleId>,
     }
 
     impl TariStableCoin {
-        /// Instantiates a new stable coin component, returning a bucket containing an admin badge.
+        /// Instantiates a new stable coin component.
         ///
-        /// `roles` assigns each privileged role an access rule. An unset governor is the returned admin badge (#0),
-        /// and every other unset role follows the governor. Badges later issued by `create_new_admin` hold no role
-        /// until a role rule names them. The component owns every resource it creates, so all privileged actions go
-        /// through its methods and are subject to pause and to the role rules.
+        /// `roles` assigns each privileged role an access rule over signer keys. The governor is required, and every
+        /// unset role follows the governor. The component owns every resource it creates, so all privileged actions
+        /// go through its methods and are subject to pause and to the role rules.
         pub fn instantiate(
             initial_token_supply: Amount,
             token_symbol: MaxString<8>,
@@ -109,8 +99,8 @@ mod template {
             divisibility: u8,
             view_key: RistrettoPublicKeyBytes,
             enable_wrapped_token: bool,
-            roles: Option<RoleConfig>,
-        ) -> Bucket {
+            roles: RoleConfig,
+        ) -> Component<Self> {
             let provider_name = token_metadata.get_str("provider_name").unwrap_or_default();
 
             let config = StableCoinConfig::default();
@@ -120,24 +110,6 @@ mod template {
             let component_alloc = CallerContext::allocate_component_address(None);
             let component_address = component_alloc.get_address();
             let require_component = rule!(component(component_address));
-
-            // Admin badges are issued and revoked only through the component, so no key or badge
-            // can mint one directly and a lost badge can be recalled and burnt by the governor.
-            let admin_badge = ResourceBuilder::non_fungible()
-                .with_metadata(metadata!(
-                    "name" => "Stable Coin Admin Badge",
-                    "provider_name" => provider_name,
-                    "description" => format!("Admin badge for the {provider_name} stable coin"),
-                    "admin_badge" => "true",
-                ))
-                .mintable(require_component.clone(), LOCKED)
-                .burnable(require_component.clone(), LOCKED)
-                .recallable(require_component.clone(), LOCKED)
-                .update_non_fungible_data(rule!(deny_all), LOCKED)
-                .with_owner_rule(OwnerRule::None)
-                .initial_supply(Some(NonFungibleId::from_u64(0)));
-
-            let admin_resource = admin_badge.resource_address();
 
             // Create user badge resource
             let user_auth_resource = ResourceBuilder::non_fungible()
@@ -177,12 +149,7 @@ mod template {
                 .with_owner_rule(OwnerRule::None)
                 .initial_supply(initial_token_supply);
 
-            let first_admin = NonFungibleAddress::new(admin_resource, NonFungibleId::from_u64(0));
-            let roles = Roles::from_config(
-                roles.unwrap_or_default(),
-                rule!(non_fungible(first_admin)),
-                &admin_resource,
-            );
+            let roles = Roles::from_config(roles);
 
             // Create wrapped token resource (no initial supply - minted on demand)
             let wrapped_token = if enable_wrapped_token {
@@ -208,22 +175,18 @@ mod template {
                 config,
                 token_vault: Vault::from_bucket(initial_tokens),
                 user_auth_manager: user_auth_resource.into(),
-                admin_auth_manager: admin_resource.into(),
                 blacklisted_users: Vault::new_empty(user_auth_resource),
                 wrapped_token,
                 is_paused: false,
                 roles,
                 pending_governor: None,
-                admin_badges: alloc::vec![NonFungibleId::from_u64(0)],
             })
             .with_address_allocation(component_alloc)
             .with_access_rules(component_access_rules)
             // The governor owns the component: it can call every method and is the only role
             // permitted to change the access rules.
             .with_owner_rule(OwnerRule::ByAccessRule(governor))
-            .create();
-
-            admin_badge
+            .create()
         }
 
         pub fn authorize_user_deposit(&self, action: ResourceAuthAction, caller: AuthHookCaller) {
@@ -275,17 +238,14 @@ mod template {
             let tokens = self.token_vault.withdraw(amount);
             tokens.burn();
 
-            emit_event(
-                "decrease_supply",
-                metadata!("revealed_burn_amount" => amount),
-            );
+            emit_event("decrease_supply", metadata!("amount" => amount));
         }
 
         pub fn withdraw(&mut self, amount: Amount) -> Bucket {
             self.assert_not_paused();
             assert!(amount.is_positive(), "Amount must be positive");
             let bucket = self.token_vault.withdraw(amount);
-            emit_event("withdraw", metadata!("amount_withdrawn" => bucket.amount()));
+            emit_event("withdraw", metadata!("amount" => bucket.amount()));
             bucket
         }
 
@@ -436,10 +396,10 @@ mod template {
             self.token_vault.deposit(bucket);
 
             emit_event(
-                "recall_tokens",
+                "recall_revealed_tokens",
                 metadata!(
                         "user_id" => user_id,
-                        "revealed_amount" => amount,
+                        "amount" => amount,
                 ),
             );
         }
@@ -447,68 +407,10 @@ mod template {
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
             self.token_vault_manager().burn_utxo(utxo, value_proof);
-            emit_event(
-                "burn_utxo",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "utxo_id" => utxo
-                ),
-            );
-        }
-
-        pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
-            let id = NonFungibleId::random();
-            self.admin_badges.push(id.clone());
-            emit_event("create_new_admin", metadata!("admin_id" => id));
-            let mut metadata = Metadata::new();
-            metadata.insert("employee_id", &employee_id);
-            self.admin_auth_manager
-                .mint_non_fungible(id, &metadata, &())
-        }
-
-        /// Recalls the admin badge `badge_id` from `vault_id` and burns it.
-        ///
-        /// A role rule naming `resource(admin_badge)` is satisfied by any admin badge, so revoking
-        /// a lost badge removes its holder from every such role.
-        /// Refuses a badge without which the governor rule, or a pending governor proposal, could no longer be
-        /// satisfied. A badge in a threshold or `any_of` governor rule can be revoked while the others still
-        /// satisfy it.
-        pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
-            let admin_resource = self.admin_auth_manager.resource_address();
-            // Signer keys cannot be checked, so they count as held.
-            let can_hold = |r: &RuleRequirement| match r {
-                RuleRequirement::NonFungibleAddress(badge)
-                    if *badge.resource_address() == admin_resource =>
-                {
-                    *badge.id() != badge_id && self.admin_badges.contains(badge.id())
-                }
-                RuleRequirement::Resource(resource) if *resource == admin_resource => {
-                    self.admin_badges.iter().any(|id| *id != badge_id)
-                }
-                _ => true,
-            };
-            assert!(
-                is_satisfiable(self.roles.get(Role::Governor), &can_hold),
-                "Revoking this badge would leave no one able to govern"
-            );
-            if let Some(pending) = &self.pending_governor {
-                assert!(
-                    is_satisfiable(&pending.rule, &can_hold),
-                    "The pending governor proposal needs this badge: cancel it first"
-                );
-            }
-            let badge = self
-                .admin_auth_manager
-                .recall_non_fungible(vault_id, badge_id.clone());
-            badge.burn();
-            self.admin_badges.retain(|id| *id != badge_id);
-            emit_event("revoke_admin", metadata!("admin_id" => badge_id));
+            emit_event("burn_utxo", metadata!("utxo_id" => utxo));
         }
 
         /// Gives `role` to whoever satisfies `rule`.
-        ///
-        /// A badge governor authorizes its proof in the transaction (`authorize_proof`); the engine lends authorized
-        /// proofs to the method, where the component's ownership check runs.
         ///
         /// Changing the governor needs a proposal for `rule` that its holder has confirmed: see `propose_governor`.
         pub fn set_role(&mut self, role: Role, rule: AccessRule) {
@@ -523,11 +425,7 @@ mod template {
                 );
                 assert!(pending.confirmed, "The proposed governor has not confirmed");
             }
-            self.roles.set(
-                role,
-                rule.clone(),
-                &self.admin_auth_manager.resource_address(),
-            );
+            self.roles.set(role, rule.clone());
             let component = self.update_access_rules();
             emit_event("set_role", metadata!("role" => role, "rule" => rule));
             // Ownership is checked against the current governor, so the owner rule changes last.
@@ -538,17 +436,13 @@ mod template {
 
         /// Proposes `rule` as the next governor, replacing any earlier proposal. Whoever satisfies `rule` must call
         /// `confirm_governor` before the governor can hand over with `set_role`, which guards against a rule no one
-        /// holds (a mistyped key, an unheld badge).
+        /// holds (a mistyped key).
         ///
         /// The governor owns the component and can call `confirm_governor` itself, so this guards against mistakes,
         /// not against a governor that means to hand over to an unheld rule.
         pub fn propose_governor(&mut self, rule: AccessRule) {
-            assert_valid_role_rule(
-                Role::Governor,
-                &rule,
-                &self.admin_auth_manager.resource_address(),
-            );
-            emit_event("governor.proposed", metadata!("rule" => rule));
+            assert_valid_role_rule(Role::Governor, &rule);
+            emit_event("propose_governor", metadata!("rule" => rule));
             self.pending_governor = Some(PendingGovernor {
                 rule,
                 confirmed: false,
@@ -563,7 +457,7 @@ mod template {
                 .as_mut()
                 .expect("No governor proposal is pending");
             pending.confirmed = true;
-            emit_event("governor.confirmed", metadata!("rule" => pending.rule));
+            emit_event("confirm_governor", metadata!("rule" => pending.rule));
         }
 
         /// Withdraws the pending governor proposal.
@@ -572,7 +466,10 @@ mod template {
                 .pending_governor
                 .take()
                 .expect("No governor proposal is pending");
-            emit_event("governor.cancelled", metadata!("rule" => pending.rule));
+            emit_event(
+                "cancel_governor_proposal",
+                metadata!("rule" => pending.rule),
+            );
             self.update_access_rules();
         }
 
@@ -612,14 +509,11 @@ mod template {
                     ..user_data
                 },
             );
-
-            let admin = CallerContext::transaction_signer_public_key();
             emit_event(
                 "set_user_exchange_limit",
                 metadata!(
                         "user_id" => user_id,
                         "limit" => limit,
-                        "admin" => admin,
                 ),
             );
         }
@@ -686,10 +580,10 @@ mod template {
                 );
             }
             emit_event(
-                "config.set_max_supply",
+                "set_config_max_supply",
                 metadata!(
-                    "old_max_supply" => self.config.max_supply,
-                    "new_max_supply" => max_supply,
+                    "prev" => self.config.max_supply,
+                    "new" => max_supply,
                 ),
             );
             self.config.max_supply = max_supply;
@@ -697,10 +591,10 @@ mod template {
 
         pub fn set_config_transfer_fee_fixed(&mut self, new_fee: Amount) {
             emit_event(
-                "config.set_transfer_fee_fixed",
+                "set_config_transfer_fee_fixed",
                 metadata!(
-                    "old_transfer_fee" => self.config.transfer_fee,
-                    "new_transfer_fee" => FeeSpec::Fixed(new_fee),
+                    "prev" => self.config.transfer_fee,
+                    "new" => FeeSpec::Fixed(new_fee),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Fixed(new_fee);
@@ -712,10 +606,10 @@ mod template {
                 "Percentage fee must be between 0 and 100"
             );
             emit_event(
-                "config.set_transfer_fee_percentage",
+                "set_config_transfer_fee_percentage",
                 metadata!(
-                        "old_transfer_fee" => self.config.transfer_fee,
-                        "new_transfer_fee" => FeeSpec::Percentage(new_fee_perc),
+                        "prev" => self.config.transfer_fee,
+                        "new" => FeeSpec::Percentage(new_fee_perc),
                 ),
             );
             self.config.transfer_fee = FeeSpec::Percentage(new_fee_perc);
@@ -723,18 +617,12 @@ mod template {
 
         pub fn pause(&mut self) {
             self.is_paused = true;
-            emit_event(
-                "admin.paused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
-            );
+            emit_event("pause", Metadata::new());
         }
 
         pub fn unpause(&mut self) {
             self.is_paused = false;
-            emit_event(
-                "admin.unpaused",
-                metadata!("tx_signer" => CallerContext::transaction_signer_public_key()),
-            );
+            emit_event("unpause", Metadata::new());
         }
 
         fn assert_not_paused(&self) {
@@ -743,25 +631,13 @@ mod template {
 
         pub fn freeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event(
-                "admin.freeze_utxos",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "num_utxos" => utxos.len(),
-                ),
-            );
+            emit_event("freeze_utxos", metadata!("utxos" => utxos));
             self.token_vault_manager().freeze_utxos(utxos);
         }
 
         pub fn unfreeze_utxos(&self, utxos: Vec<UtxoId>) {
             assert_freeze_batch(&utxos);
-            emit_event(
-                "admin.unfreeze_utxos",
-                metadata!(
-                    "tx_signer" => CallerContext::transaction_signer_public_key(),
-                    "num_utxos" => utxos.len(),
-                ),
-            );
+            emit_event("unfreeze_utxos", metadata!("utxos" => utxos));
             self.token_vault_manager().unfreeze_utxos(utxos);
         }
 

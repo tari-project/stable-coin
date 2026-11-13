@@ -36,4 +36,11 @@ jobs:
 
       - name: Run tests
         working-directory: ${{ matrix.template }}
-        run: cargo test --all-features
+        run: cargo test --all-features --locked
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Check advisories
+        working-directory: ${{ matrix.template }}
+        run: cargo deny --locked --config "$GITHUB_WORKSPACE/deny.toml" check advisories

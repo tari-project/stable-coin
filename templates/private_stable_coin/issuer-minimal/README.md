@@ -1,8 +1,8 @@
 # Private Stable Coin — Issuer (minimal)
 
 The smallest of the private stable coin templates for the [Tari](https://www.tari.com/) network. It issues a
-single **stealth (confidential) coin** controlled entirely by an **admin badge**, and nothing else: no user
-badges, no user registry, no blacklist, no wrapped token. Anyone can hold and transfer the coin; the issuer's
+single **stealth (confidential) coin** controlled by **role keys**, and nothing else: no badges, no user
+registry, no blacklist, no wrapped token. Anyone can hold and transfer the coin; the issuer's
 authority is *reactive* — a view key to reveal amounts, plus recall, UTXO freeze and UTXO burn.
 
 The sibling templates build on the same core:
@@ -17,19 +17,18 @@ best starting point for a custom issuer.
 
 ## How it works
 
-`instantiate` creates two resources and one component:
+`instantiate` creates one resource and one component:
 
-| Resource    | Type                   | Purpose                                                                                                                                                                             |
-|-------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Admin badge | Non-fungible (`ADM`)   | Badge #0 is minted and returned to the caller of `instantiate`, and holds every role not assigned elsewhere (see [Roles](#roles)). The governor issues more with `create_new_admin`, which hold no role until a rule names them, and revokes them with `revoke_admin`. |
+| Resource    | Type                   | Purpose |
+|-------------|------------------------|---------|
 | Stable coin | Stealth (confidential) | The coin itself. Amounts are hidden on-ledger; the issuer holds a **view key** that can reveal them. Mint, burn, recall and freeze are performed only by the component, whose methods are gated by role — **deposit and withdraw on the resource are unrestricted**. |
 
-The component holds the issuer's `token_vault` (seeded with `initial_token_supply`), a reference to the admin
-badge resource, a paused flag, a `StableCoinConfig` and the rule for each role.
+The component holds the issuer's `token_vault` (seeded with `initial_token_supply`), a paused flag, a
+`StableCoinConfig` and the rule for each role.
 
-Every method is gated by a role (see [Roles](#roles)). The coin resource itself has no deposit/withdraw rules and no authorization hook, so transfers are
-ordinary peer-to-peer stealth transfers between any two accounts — no issuer involvement and no registration
-(see the `it_allows_anyone_to_receive_tokens_without_badge` test).
+Every method is gated by a role (see [Roles](#roles)). The coin resource itself has no deposit/withdraw rules and
+no authorization hook, so transfers are ordinary peer-to-peer stealth transfers between any two accounts — no
+issuer involvement and no registration (see the `it_allows_anyone_to_hold_and_transfer_the_coin` test).
 
 ### Methods
 
@@ -42,55 +41,69 @@ ordinary peer-to-peer stealth transfers between any two accounts — no issuer i
 | `recall_revealed_tokens(vault_id, amount)` | Compliance | Pulls a revealed amount out of any vault into the issuer vault. |
 | `burn_utxo(utxo, value_proof)` | Burner | Burns a single UTXO, given a stealth value proof. Blocked while paused. |
 | `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls, at most 100 UTXOs per call. |
-| `create_new_admin(employee_id) -> Bucket` | Governor | Mints another admin badge, tagged with `employee_id`. |
-| `revoke_admin(vault_id, badge_id)` | Governor | Recalls an admin badge and burns it. |
 | `pause()` / `unpause()` | Pauser / Governor | Sets or clears the paused flag. |
 | `set_role(role, rule)` | Governor | Reassigns a role (see [Roles](#roles)). Changing the governor needs a confirmed proposal. |
 | `propose_governor(rule)` / `cancel_governor_proposal()` | Governor | Proposes the next governor, or withdraws the proposal. |
 | `confirm_governor()` | Proposed governor | Confirms the pending proposal. |
 | `set_config_max_supply(max)` | Governor | Sets or removes (`None`) the supply cap. Cannot go below the current supply. |
-| `set_config_transfer_fee_fixed(amount)` / `set_config_transfer_fee_percentage(pct)` | Governor | Updates the configured transfer fee. |
 
-Every method emits an event describing what it did.
+Every method emits an event named after the method (`TariStableCoin.<method>`); amounts are under the `amount` key
+and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
+the privileged methods do not depend on the transaction having a main signer.
 
 ### Roles
 
-The component, not any key or badge, owns both resources: they have no owner, and their mint, burn, recall and
-freeze rules name only the component, with locked updaters. Every privileged action therefore goes through a
-component method, where the role rules and pause apply. The governor owns the component, so it can also call every
-other method.
+The component, not any key, owns the coin resource: it has no owner, and its mint, burn, recall and freeze rules
+name only the component, with locked updaters. Every privileged action therefore goes through a component method,
+where the role rules and pause apply. The governor owns the component, so it can also call every other method.
 
-Each role is an access rule. `instantiate` takes an optional `RoleConfig` with one optional rule per role. An unset
-governor is admin badge #0, the badge `instantiate` returns, and every other unset role follows the governor, so
-passing `None` keeps a single-admin setup. Badges issued later with `create_new_admin` hold no role until a rule
-names them, one by one (`non_fungible(..)`) or all together (`resource(admin_badge)`). A rule can name signer keys
-(`public_key(..)`), specific admin badges (`non_fungible(..)`), or a threshold of either (`m_of_n(..)`), e.g. a
-2-of-3 governor.
+Each role is an access rule over **signer keys**: it is satisfied by the keys that sign the transaction.
+`instantiate` takes a `RoleConfig` with a required governor rule and one optional rule per other role; an unset
+role follows the governor. A rule names one key (`public_key(..)`) or a combination (`any_of(..)`, `all_of(..)`,
+`m_of_n(..)`), e.g. a 2-of-3 governor.
 
-- **Rotation.** The governor reassigns a role with `set_role(role, rule)`. A badge governor authorizes its badge
-  proof in the transaction (`create_proof`, then `authorize_proof`); the engine lends authorized proofs to the
-  method, where the component's ownership check runs. A threshold across several parties is better expressed over
-  their signer keys than over badges held in separate accounts.
+| Role | Does | Suggested custody |
+|---|---|---|
+| Governor | Reassigns roles, changes config, unpauses. Owns the component. | A threshold of offline keys. |
+| Minter | `increase_supply` | Separate from the treasurer. |
+| Burner | `decrease_supply`, `burn_utxo` | Separate from the view key holder. |
+| Treasurer | `withdraw`, `deposit` | Operational key. |
+| Compliance | Recall, freeze, unfreeze | Compliance team key. |
+| Pauser | `pause` | A key that can act quickly. |
+
+- **Rotation.** The governor reassigns a role with `set_role(role, rule)`. The old rule stops working in the same
+  transaction.
 - **Governor handover.** Changing the governor takes three calls: the governor calls `propose_governor(rule)`,
   whoever satisfies `rule` calls `confirm_governor()`, and the governor then calls `set_role(Governor, rule)` with
   the same rule, which also hands over ownership of the component. `cancel_governor_proposal()` withdraws a
-  proposal. This stops a handover to a rule no one holds, such as a mistyped key or an unissued badge. The governor
-  owns the component and can confirm its own proposal, so the check guards against mistakes, not against a
-  governor acting deliberately. A confirmation does not expire: complete the handover promptly, and cancel and
-  re-propose if the new governor's keys may have changed since it confirmed.
-- **Revocation.** Admin badges are recallable by the component, so `revoke_admin(vault_id, badge_id)` claws back
-  and burns a lost badge. It refuses a badge without which the governor rule, or a pending governor proposal, could
-  no longer be satisfied: a stolen badge in an `any_of` or `m_of_n` governor rule can be revoked straight away while
-  the other badges still satisfy it, but the last badge able to govern cannot.
-- **Guards.** A role rule may name only signer keys (`public_key(..)`), specific admin badges (`non_fungible(..)`)
-  and every admin badge (`resource(admin_badge)`), combined with `any_of`, `all_of` and `m_of_n`. Anything else
-  (`allow_all`, the coin, TARI, the wrapped token, user badges, caller components) is rejected, so a role cannot go to
-  holders the issuer never chose. The governor role cannot be set to `deny_all`. These guards do not stop a governor
-  that deliberately confirms its own proposal for a rule no one holds. If that happens no role can change again, and
-  a paused component stays paused.
+  proposal. This stops a handover to a rule no one holds, such as a mistyped key. The governor owns the component
+  and can confirm its own proposal, so the check guards against mistakes, not against a governor acting
+  deliberately. A confirmation does not expire: complete the handover promptly, and cancel and re-propose if the
+  new governor's keys may have changed since it confirmed.
+- **Guards.** A role rule may name only signer keys. Anything else (`allow_all`, any resource or badge, caller
+  components) is rejected, so a role cannot go to holders the issuer never chose. The governor role cannot be set
+  to `deny_all`.
 
-The resource view key is fixed at instantiation and cannot be rotated. Use a key dedicated to auditing, separate from
-the keys that hold roles.
+### Threat model
+
+The template assumes the role holders are the issuer and are trusted. It does not defend holders against the
+issuer: the compliance role can recall and freeze, and the burner can burn any UTXO with the view key.
+
+What it is built to limit is **key compromise and operator error**:
+
+- A stolen **non-governor** key is contained: the governor reassigns that role and the key stops working. Until
+  then it can do everything its role allows; `max_supply` bounds what a stolen minter key can mint.
+- A stolen **governor** key is not recoverable. Nothing sits above the governor: whoever satisfies its rule can
+  hand the component over to themselves. Use a threshold rule and keep the keys offline.
+- A governor rule that no one can satisfy is equally permanent: no role can change again and a paused component
+  stays paused. The handover confirmation guards against doing this by mistake.
+
+### View key
+
+The resource view key is fixed at instantiation and **cannot be rotated**. Its secret reveals every amount of the
+coin, and together with the burner role it can burn **any holder's UTXO** without that holder's signature. Treat it
+as a privileged credential, not just an audit key: generate it for this coin, keep it offline, and keep it separate
+from the keys that hold roles.
 
 ### Pausing
 
@@ -103,20 +116,15 @@ issuer-side stop on issuance and treasury movement.
 ### Configuration
 
 `instantiate` takes an optional `StableCoinConfig`; passing `None` uses the default. The governor changes it later
-with the `set_config_*` methods.
+with `set_config_max_supply`.
 
 | Field | Default | Effect |
 |---|---|---|
-| `transfer_fee` | `FeeSpec::Fixed(1)` | Stored only (see below). Either `FeeSpec::Fixed(Amount)` or `FeeSpec::Percentage(u8)`. |
 | `max_supply` | `None` | Caps the total supply: `increase_supply` fails past it, and `instantiate` rejects a larger initial supply. `None` leaves supply uncapped. |
-
-The template has no transfer path of its own to charge against, so the transfer fee is **stored and
-configurable but not applied anywhere** — it is a hook for issuers extending the template. `FeeSpec::calculate_fee`
-implements the calculation (percentages round half up).
 
 ### Incident response
 
-If a role's key or badge is compromised, the governor reassigns every affected role in one transaction (several
+If a role's key is compromised, the governor reassigns every affected role in one transaction (several
 `set_role` calls). They take effect together, so the compromised holder has no window between them to act. Pause
 blocks issuance and treasury movements but not recall or freeze: a compromised compliance role keeps those until it
 is reassigned.
@@ -158,8 +166,13 @@ The release profile is tuned for size (`opt-level = "s"`, LTO, `panic = "abort"`
 ## Manifests
 
 - [`manifests/initialize.rs`](manifests/initialize.rs) — instantiates the component (initial supply, symbol,
-  metadata, divisibility, view key, config, roles) and deposits the admin badge into the caller's account.
-- [`manifests/fund.rs`](manifests/fund.rs) — withdraws from the issuer vault under a treasurer proof and deposits
-  into a given account.
+  metadata, divisibility, config) with the view key and `RoleConfig` passed in as variables.
+- [`manifests/fund.rs`](manifests/fund.rs) — withdraws from the issuer vault, signed by a treasurer key, and
+  deposits into a given account.
 - [`manifests/transfer.rs`](manifests/transfer.rs) — creates an account and transfers funds to it from the
   issuer vault.
+
+## Integrating
+
+Identify the coin by its **resource address** and the issuer by its **component address**. The template is public:
+anyone can instantiate a coin with the same symbol and metadata, so neither identifies the issuer.

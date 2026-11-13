@@ -28,7 +28,7 @@ stable-coin/
     ├── stable-coin/                          # Basic stable coin template
     ├── private_stable_coin/
     │   ├── issuer/                           # Full-featured with user badges
-    │   └── issuer-no-user-badge/             # Simplified, admin-only control (working template)
+    │   └── issuer-no-user-badge/             # No holder registration, role-key control (working template)
     └── private_stable_coin_custom_account/   # Custom account architecture
 ```
 
@@ -37,11 +37,11 @@ stable-coin/
 ### `private_stable_coin/issuer-no-user-badge/` (Working Template)
 
 This is the current working template. It provides a full-featured stable coin without requiring per-user
-authentication badges. All privileged operations are gated by an admin badge.
+authentication badges. All privileged operations are gated by roles held by signer keys.
 
 Features:
 - Stealth token issuance with configurable supply
-- Withdraw/deposit with admin access control
+- Withdraw/deposit under the treasurer role
 - Wrapped token exchange (stable <-> public fungible)
 - User creation, blacklisting, and exchange limit management
 - UTXO freeze/unfreeze and token recall
