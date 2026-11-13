@@ -77,9 +77,10 @@ mod template {
         is_paused: bool,
         roles: Roles,
         pending_governor: Option<PendingGovernor>,
-        /// Admin badges burnt by `revoke_admin`, the only way an admin badge is burnt. A role rule may still name
-        /// them, but no one can present them.
-        burnt_admin_badges: Vec<NonFungibleId>,
+        /// The admin badges in existence: minted by `instantiate` and `create_new_admin`, burnt only by
+        /// `revoke_admin`. A role rule may name a badge that was never issued or has been burnt; no one can present
+        /// it.
+        admin_badges: Vec<NonFungibleId>,
     }
 
     impl TariStableCoin {
@@ -155,7 +156,7 @@ mod template {
                 is_paused: false,
                 roles,
                 pending_governor: None,
-                burnt_admin_badges: Vec::new(),
+                admin_badges: alloc::vec![NonFungibleId::from_u64(0)],
             })
             .with_address_allocation(address_alloc)
             .with_access_rules(component_access_rules)
@@ -231,6 +232,7 @@ mod template {
 
         pub fn create_new_admin(&mut self, employee_id: String) -> Bucket {
             let id = NonFungibleId::random();
+            self.admin_badges.push(id.clone());
             emit_event("create_new_admin", metadata!("admin_id" => id));
             let mut metadata = Metadata::new();
             metadata.insert("employee_id", &employee_id);
@@ -247,15 +249,16 @@ mod template {
         /// satisfy it.
         pub fn revoke_admin(&mut self, vault_id: VaultId, badge_id: NonFungibleId) {
             let admin_resource = self.admin_auth_manager.resource_address();
-            let revoked = NonFungibleAddress::new(admin_resource, badge_id.clone());
-            let others_remain = self.admin_auth_manager.total_supply() > Amount::ONE;
+            // Signer keys cannot be checked, so they count as held.
             let can_hold = |r: &RuleRequirement| match r {
-                RuleRequirement::NonFungibleAddress(badge) => {
-                    *badge != revoked
-                        && (*badge.resource_address() != admin_resource
-                            || !self.burnt_admin_badges.contains(badge.id()))
+                RuleRequirement::NonFungibleAddress(badge)
+                    if *badge.resource_address() == admin_resource =>
+                {
+                    *badge.id() != badge_id && self.admin_badges.contains(badge.id())
                 }
-                RuleRequirement::Resource(resource) if *resource == admin_resource => others_remain,
+                RuleRequirement::Resource(resource) if *resource == admin_resource => {
+                    self.admin_badges.iter().any(|id| *id != badge_id)
+                }
                 _ => true,
             };
             assert!(
@@ -272,7 +275,7 @@ mod template {
                 .admin_auth_manager
                 .recall_non_fungible(vault_id, badge_id.clone());
             badge.burn();
-            self.burnt_admin_badges.push(badge_id.clone());
+            self.admin_badges.retain(|id| *id != badge_id);
             emit_event("revoke_admin", metadata!("admin_id" => badge_id));
         }
 
