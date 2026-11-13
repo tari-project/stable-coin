@@ -1,0 +1,28 @@
+[package]
+name = "stablecoin"
+version = "0.1.0"
+edition = "2024"
+description = "Proof-of-concept operator tool for the issuer-minimal stable coin template"
+publish = false
+
+[dependencies]
+ootle-rs = "0.35"
+tari_ootle_transaction = "0.53"
+tari_ootle_common_types = "0.53"
+tari_template_lib = "0.40"
+tari_bor = "0.17"
+tari_crypto = "0.24"
+ootle_byte_type = "0.21"
+minicbor = { version = "2.3", features = ["derive", "alloc"] }
+
+anyhow = "1"
+argon2 = "0.5"
+axum = "0.8"
+chacha20poly1305 = "0.10"
+clap = { version = "4.5", features = ["derive", "env"] }
+hex = "0.4"
+rand = "0.9"
+rpassword = "7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }

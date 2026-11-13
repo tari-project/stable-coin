@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stable coin issuer</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1c1b19; --muted: #6b6861; --line: #e3e0d9;
+    --accent: #5b3fd6; --accent-ink: #ffffff; --ok: #1f7a4d; --warn: #b45309; --bad: #b3261e;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214; --panel: #1b1b1f; --ink: #ecebe7; --muted: #9a978f; --line: #2c2c31;
+      --accent: #9d86ff; --accent-ink: #121214; --ok: #56c28b; --warn: #f0a94a; --bad: #f2867f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 16px 64px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.ok { color: var(--ok); border-color: currentColor; }
+  .tag.warn { color: var(--warn); border-color: currentColor; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .wide { grid-column: 1 / -1; }
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .stat b { display: block; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .mono { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; min-width: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  tr:first-child td { border-top: 0; }
+  td:first-child { width: 110px; font-weight: 600; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; align-items: center; }
+  form:last-child { margin-bottom: 0; }
+  form > label { flex: 0 0 96px; color: var(--muted); font-size: 13px; }
+  input, select, textarea, button { font: inherit; color: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); padding: 7px 10px; min-width: 0; }
+  input, textarea { flex: 1 1 140px; }
+  textarea { font-family: var(--mono); font-size: 12.5px; min-height: 62px; }
+  button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+  button.plain { background: transparent; color: var(--ink); border-color: var(--line); }
+  button:disabled { opacity: 0.5; cursor: progress; }
+  #log { list-style: none; margin: 0; padding: 0; }
+  #log li { padding: 9px 0; border-top: 1px solid var(--line); }
+  #log li:first-child { border-top: 0; }
+  #log .bad { color: var(--bad); }
+  #log small { display: block; color: var(--muted); }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Stable coin issuer</h1>
+    <span id="paused" class="tag">loading</span>
+    <span class="tag">proof of concept</span>
+  </header>
+
+  <div class="grid">
+    <section class="wide">
+      <h2>Supply</h2>
+      <div class="stats">
+        <div class="stat"><b id="total">–</b><span>Total supply</span></div>
+        <div class="stat"><b id="max">–</b><span>Max supply</span></div>
+        <div class="stat"><b id="treasury">–</b><span>Issuer vault</span></div>
+        <div class="stat"><b id="fees">–</b><span>Fee balance (TARI)</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Deployment</h2>
+      <dl>
+        <dt>Component</dt><dd class="mono" id="component">–</dd>
+        <dt>Resource</dt><dd class="mono" id="resource">–</dd>
+        <dt>This key</dt><dd class="mono" id="signer">–</dd>
+        <dt>Public key</dt><dd class="mono" id="pubkey">–</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Roles</h2>
+      <table id="roles"></table>
+      <p id="pending" class="empty" style="margin:12px 0 0"></p>
+    </section>
+
+    <section>
+      <h2>Supply and treasury</h2>
+      <form data-action="mint"><label>Mint</label><input name="amount" type="number" min="1" placeholder="amount" required><button>Mint</button></form>
+      <form data-action="burn"><label>Burn</label><input name="amount" type="number" min="1" placeholder="amount" required><button>Burn</button></form>
+      <form data-action="send"><label>Send</label><input name="to" placeholder="otl_… address" required><input name="amount" type="number" min="1" placeholder="amount" required><button>Send</button></form>
+      <form data-action="set_max_supply"><label>Max supply</label><input name="max_supply" type="number" min="1" placeholder="empty removes the cap"><button>Set</button></form>
+    </section>
+
+    <section>
+      <h2>Compliance</h2>
+      <form data-action="pause"><label>Pause</label><button>Pause</button><button class="plain" data-action="unpause" type="button">Unpause</button></form>
+      <form data-action="recall"><label>Recall</label><input name="from" placeholder="otl_… address" required><input name="amount" type="number" min="1" placeholder="amount" required><button>Recall</button></form>
+      <form data-action="freeze"><label>Freeze</label><textarea name="utxos" placeholder="UTXO ids (hex), one per line" required></textarea><button>Freeze</button><button class="plain" data-action="unfreeze" type="button">Unfreeze</button></form>
+    </section>
+
+    <section>
+      <h2>Roles and governor</h2>
+      <form data-action="set_role"><label>Set role</label>
+        <select name="role"><option>minter</option><option>burner</option><option>treasurer</option><option>compliance</option><option>pauser</option></select>
+        <input name="holder" placeholder="address or public key" required><button>Set</button></form>
+      <form data-action="propose_governor"><label>Propose</label><input name="holder" placeholder="next governor" required><button>Propose</button></form>
+      <form data-action="confirm_governor"><label>Confirm</label><button>Confirm as this key</button><button class="plain" data-action="cancel_governor" type="button">Cancel proposal</button></form>
+      <form data-action="set_role" data-role="governor"><label>Hand over</label><input name="holder" placeholder="the confirmed governor" required><button>Hand over</button></form>
+    </section>
+
+    <section class="wide">
+      <h2>Activity</h2>
+      <ul id="log"><li class="empty">Nothing yet this session.</li></ul>
+    </section>
+  </div>
+</main>
+<script>
+const token = new URLSearchParams(location.search).get("token") || "";
+const $ = (id) => document.getElementById(id);
+const fmt = (value) => value == null ? null : Number(value).toLocaleString("en-US");
+
+async function api(path, body) {
+  const response = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({ error: "Unexpected response" }));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+
+function log(text, detail, bad) {
+  const list = $("log");
+  if (list.firstElementChild && list.firstElementChild.classList.contains("empty")) list.replaceChildren();
+  const item = document.createElement("li");
+  const line = document.createElement("span");
+  line.textContent = text;
+  if (bad) line.className = "bad";
+  item.append(line);
+  if (detail) {
+    const small = document.createElement("small");
+    small.className = "mono";
+    small.textContent = detail;
+    item.append(small);
+  }
+  list.prepend(item);
+}
+
+async function refresh() {
+  try {
+    const s = await api("/api/status");
+    $("total").textContent = fmt(s.total_supply) ?? "not tracked";
+    $("max").textContent = fmt(s.max_supply) ?? "uncapped";
+    $("treasury").textContent = fmt(s.treasury_balance);
+    $("fees").textContent = fmt(s.fee_balance);
+    $("component").textContent = s.component;
+    $("resource").textContent = s.resource;
+    $("signer").textContent = s.signer;
+    $("pubkey").textContent = s.signer_public_key;
+    const paused = $("paused");
+    paused.textContent = s.paused ? "paused" : "active";
+    paused.className = "tag " + (s.paused ? "warn" : "ok");
+    $("roles").replaceChildren(...s.roles.map((role) => {
+      const row = document.createElement("tr");
+      const name = document.createElement("td");
+      name.textContent = role.role;
+      const rule = document.createElement("td");
+      rule.className = "mono";
+      rule.textContent = role.rule + (role.held_by_signer ? "  (this key)" : "");
+      row.append(name, rule);
+      return row;
+    }));
+    $("pending").textContent = s.pending_governor
+      ? "Pending governor: " + s.pending_governor.rule + (s.pending_governor.confirmed ? " (confirmed)" : " (awaiting confirmation)")
+      : "No governor proposal pending.";
+  } catch (err) {
+    log("Could not load status: " + err.message, null, true);
+  }
+}
+
+function payload(form, action) {
+  const data = { action };
+  for (const field of form.querySelectorAll("input, select, textarea")) {
+    const value = field.value.trim();
+    if (field.name === "utxos") data.utxos = value.split(/\s+/).filter(Boolean);
+    else if (field.type === "number") data[field.name] = value === "" ? null : Number(value);
+    else data[field.name] = value;
+  }
+  if (form.dataset.role) data.role = form.dataset.role;
+  return data;
+}
+
+async function run(form, action) {
+  const buttons = document.querySelectorAll("button");
+  buttons.forEach((button) => button.disabled = true);
+  try {
+    const result = await api("/api/action", payload(form, action));
+    const tx = result.transaction;
+    log(result.label, "tx " + tx.transaction_id + " · fee " + tx.fee + (tx.events.length ? " · " + tx.events.join(", ") : ""));
+    form.reset();
+  } catch (err) {
+    log(err.message, null, true);
+  } finally {
+    buttons.forEach((button) => button.disabled = false);
+    refresh();
+  }
+}
+
+for (const form of document.querySelectorAll("form")) {
+  form.addEventListener("submit", (event) => { event.preventDefault(); run(form, form.dataset.action); });
+  for (const button of form.querySelectorAll("button[data-action]")) {
+    button.addEventListener("click", () => { if (form.reportValidity()) run(form, button.dataset.action); });
+  }
+}
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

@@ -44,3 +44,23 @@ jobs:
       - name: Check advisories
         working-directory: ${{ matrix.template }}
         run: cargo deny --locked --config "$GITHUB_WORKSPACE/deny.toml" check advisories
+
+  app:
+    name: cargo test (applications/stablecoin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Lint
+        run: cargo clippy -p stablecoin --all-targets --locked -- -D warnings
+
+      - name: Run tests
+        run: cargo test -p stablecoin --locked

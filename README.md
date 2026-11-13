@@ -7,8 +7,8 @@ admin controls, user management, and optional wrapped token exchange.
 
 ## Overview
 
-This project provides Tari template smart contracts for issuing and managing a stable coin, along with a CLI and
-web application for interacting with deployed instances.
+This project provides Tari template smart contracts for issuing and managing a stable coin, along with a
+proof-of-concept operator tool (command line and local web dashboard) for a deployed coin.
 
 Key capabilities:
 - **Stealth tokens** for privacy-preserving transfers
@@ -22,8 +22,7 @@ Key capabilities:
 ```
 stable-coin/
 ├── applications/
-│   ├── cli/              # Command-line interface
-│   └── web/              # React + Vite web interface
+│   └── stablecoin/       # Operator CLI and local web dashboard (proof of concept)
 └── templates/
     ├── stable-coin/                          # Basic stable coin template
     ├── private_stable_coin/
@@ -65,19 +64,16 @@ cargo build --target wasm32-unknown-unknown --release
 cargo test
 ```
 
-## CLI
+## Operator tool
 
-The CLI interacts with a running Tari wallet daemon to build and submit transactions.
+`applications/stablecoin` operates a coin deployed from the `issuer-minimal` template. It talks to an Ootle indexer
+directly through `ootle-rs`, with no wallet daemon, and keeps role keys in encrypted key files.
 
 ```bash
-cargo build -p stable_coin_cli --release
+cargo build -p stablecoin --release
 ```
 
-Requires a Tari wallet daemon running (default: `http://localhost:9000`).
-
-## Web Interface
-
-See [applications/web/README.md](applications/web/README.md) for setup instructions.
+See [applications/stablecoin/README.md](applications/stablecoin/README.md) for a walkthrough.
 
 ## License
 
