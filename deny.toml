@@ -1,0 +1,12 @@
+# cargo-deny configuration for the template crates. CI checks advisories only.
+
+[advisories]
+yanked = "deny"
+ignore = [
+    # Unmaintained crates that reach the templates only through the `tari_template_test_tooling`
+    # dev-dependency (engine and wasmer). None is linked into a template's WASM.
+    { id = "RUSTSEC-2025-0141", reason = "bincode: unmaintained, test tooling only" },
+    { id = "RUSTSEC-2024-0436", reason = "paste: unmaintained, test tooling only" },
+    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2: unmaintained, test tooling only" },
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml: unmaintained, test tooling only" },
+]
