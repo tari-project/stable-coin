@@ -320,8 +320,13 @@ impl Issuer {
     ) -> anyhow::Result<TxSummary> {
         self.ensure_funded().await?;
         let recipient_key = *recipient.account_public_key();
+        let recipient_account = recipient.to_account_address();
         let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
             .call_method(deployment.component, "withdraw", args![amount])
+            // An account that already exists, and its vault for the coin, must be inputs: without them
+            // the transaction tries to create the account again.
+            .want_substate(recipient_account.into(), false)
+            .want_vault_for(recipient_account, deployment.resource, false)
             .then(|builder| {
                 builder
                     .put_last_instruction_output_on_workspace("coins")
