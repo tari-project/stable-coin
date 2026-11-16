@@ -125,6 +125,7 @@
 <script>
 const token = new URLSearchParams(location.search).get("token") || "";
 const $ = (id) => document.getElementById(id);
+let statusError = null;
 const fmt = (value) => value == null ? null : Number(value).toLocaleString("en-US");
 
 async function api(path, body) {
@@ -134,6 +135,9 @@ async function api(path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await response.json().catch(() => ({ error: "Unexpected response" }));
+  if (response.status === 401) {
+    throw new Error("This page was opened without a valid token. Open the full URL that `stablecoin serve` printed (it ends in ?token=…). The token changes every time the server starts.");
+  }
   if (!response.ok) throw new Error(data.error || response.statusText);
   return data;
 }
@@ -183,8 +187,12 @@ async function refresh() {
       ? "Pending governor: " + s.pending_governor.rule + (s.pending_governor.confirmed ? " (confirmed)" : " (awaiting confirmation)")
       : "No governor proposal pending.";
   } catch (err) {
-    log("Could not load status: " + err.message, null, true);
+    // Say it once, not on every refresh.
+    if (statusError !== err.message) log("Could not load status: " + err.message, null, true);
+    statusError = err.message;
+    return;
   }
+  statusError = null;
 }
 
 function payload(form, action) {
