@@ -11,6 +11,19 @@ existing manifests and event consumers need updating.
 
 ### Breaking
 
+- **`issuer-minimal`: roles are the component's access rules, changed by transaction instruction.** The
+  template needs Tari Ootle 0.55 (`tari_template_lib` 0.42).
+  - Removed `set_role`, `propose_governor`, `confirm_governor` and `cancel_governor_proposal`, with their
+    events. The component is created with `RulesUpdater::Owner`: the governor replaces the method rules with
+    the `SetComponentAccessRules` instruction and hands over with `SetComponentOwnerRule`.
+  - The component state is now `{ config, token_vault, is_paused }`. Read the role holders from the
+    component's access rules and owner rule.
+  - The governor handover is one step and unconfirmed, and a role rule is no longer restricted to signer keys:
+    the engine accepts any valid rule.
+  - An unset role has no rule of its own, so it stays with whoever is governor instead of keeping a copy of
+    the governor rule from instantiation.
+  - `Role::Governor` is gone and `Role` is no longer an argument type.
+  - `issuer-no-user-badge` and `issuer` are unchanged and still build against `tari_template_lib` 0.40.
 - **Roles are held by signer keys; the admin badge is removed.**
   ([#46](https://github.com/tari-project/stable-coin/pull/46))
   - `instantiate` takes `roles: RoleConfig` instead of `Option<RoleConfig>` and returns the component instead

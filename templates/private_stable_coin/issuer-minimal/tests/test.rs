@@ -6,14 +6,12 @@ use ootle_byte_type::ToByteType;
 mod config;
 use config::StableCoinConfig;
 #[path = "../src/roles.rs"]
-#[allow(dead_code)] // the tests only build role configs
 mod roles;
-use roles::{Role, RoleConfig};
+use roles::RoleConfig;
 use tari_template_lib::prelude::rule;
-use tari_template_lib::types::constants::{PUBLIC_IDENTITY_RESOURCE_ADDRESS, TARI_TOKEN};
 use tari_template_lib::types::{
-    AccessRule, Amount, ComponentAddress, Metadata, NonFungibleAddress, NonFungibleId,
-    ResourceAddress, UtxoId,
+    AccessRule, Amount, ComponentAddress, Metadata, NonFungibleAddress, OwnerRule, ResourceAddress,
+    UtxoId,
 };
 use tari_template_test_tooling::TemplateTest;
 use tari_template_test_tooling::crypto::{PublicKey, RistrettoPublicKey, RistrettoSecretKey};
@@ -179,9 +177,6 @@ fn it_denies_privileged_methods_to_other_signers() {
         ("pause", args![]),
         ("unpause", args![]),
         ("freeze_utxos", args![utxos.clone()]),
-        ("set_role", args![Role::Minter, signer_rule(&alice_key)]),
-        ("propose_governor", args![signer_rule(&alice_key)]),
-        ("confirm_governor", args![]),
         ("set_config_max_supply", args![None::<Amount>]),
     ] {
         let reason = test.execute_expect_failure(
@@ -293,138 +288,6 @@ fn it_restricts_each_role_to_its_own_methods() {
 }
 
 #[test]
-fn it_rejects_a_role_rule_that_is_not_signer_keys() {
-    let TestSetup {
-        mut test,
-        stable_coin_component,
-        admin_proof,
-        admin_key,
-        token_resource,
-        ..
-    } = setup();
-
-    let reason = test.execute_expect_failure(
-        call!(
-            test,
-            stable_coin_component,
-            "set_role",
-            args![Role::Minter, AccessRule::AllowAll],
-            &admin_key
-        ),
-        vec![admin_proof.clone()],
-    );
-    assert_reject_reason(&reason, "cannot be open to everyone");
-
-    let foreign_rules = [
-        rule!(resource(token_resource)),
-        rule!(any_of(
-            public_key(RistrettoPublicKey::from_secret_key(&admin_key).to_byte_type()),
-            resource(token_resource)
-        )),
-    ];
-    for foreign_rule in foreign_rules {
-        for (method, args) in [
-            ("set_role", args![Role::Minter, foreign_rule.clone()]),
-            ("propose_governor", args![foreign_rule.clone()]),
-        ] {
-            let reason = test.execute_expect_failure(
-                call!(test, stable_coin_component, method, args, &admin_key),
-                vec![admin_proof.clone()],
-            );
-            assert_reject_reason(&reason, "may only name signer keys");
-        }
-    }
-}
-
-#[test]
-fn it_rejects_instantiation_with_a_role_rule_that_is_not_signer_keys() {
-    let mut test = TemplateTest::my_crate();
-    let (admin_account, admin_proof, admin_key) = test.create_funded_account();
-
-    // The governor must be held by someone
-    let reason = test.execute_expect_failure(
-        instantiate_transaction(
-            &test,
-            &admin_key,
-            StableCoinConfig::default(),
-            governed_by(AccessRule::DenyAll),
-        ),
-        vec![admin_proof.clone()],
-    );
-    assert_reject_reason(&reason, "The governor role must be held by someone");
-
-    let roles = RoleConfig {
-        minter: Some(AccessRule::AllowAll),
-        ..governed_by(signer_rule(&admin_key))
-    };
-    let reason = test.execute_expect_failure(
-        instantiate_transaction(&test, &admin_key, StableCoinConfig::default(), roles),
-        vec![admin_proof.clone()],
-    );
-    assert_reject_reason(&reason, "cannot be open to everyone");
-
-    // A resource is not a signer key, whether it governs or holds another role
-    let held_resource = *test
-        .read_only_state_store()
-        .get_vaults_for_account(admin_account)
-        .unwrap()
-        .keys()
-        .next()
-        .expect("the funded account holds a resource");
-    let resource = rule!(resource(held_resource));
-    let role_configs = [
-        governed_by(resource.clone()),
-        RoleConfig {
-            minter: Some(resource),
-            ..governed_by(signer_rule(&admin_key))
-        },
-    ];
-    for roles in role_configs {
-        let reason = test.execute_expect_failure(
-            instantiate_transaction(&test, &admin_key, StableCoinConfig::default(), roles),
-            vec![admin_proof.clone()],
-        );
-        assert_reject_reason(&reason, "may only name signer keys");
-    }
-}
-
-/// A test transaction cannot reference the system resources (they are not in the test state), so the guard is
-/// checked directly for rules naming them.
-#[test]
-fn it_only_accepts_signer_keys_in_a_role_rule() {
-    let foreign_rules = [
-        rule!(resource(PUBLIC_IDENTITY_RESOURCE_ADDRESS)),
-        rule!(resource(TARI_TOKEN)),
-        rule!(non_fungible(NonFungibleAddress::new(
-            ResourceAddress::from_hex(&"ef".repeat(32)).unwrap(),
-            NonFungibleId::from_u64(0)
-        ))),
-        rule!(any_caller_component),
-        rule!(any_caller_template),
-        rule!(caller_component(
-            ComponentAddress::from_hex(&"cd".repeat(32)).unwrap()
-        )),
-    ];
-    for foreign_rule in &foreign_rules {
-        for role in [Role::Governor, Role::Minter] {
-            let result =
-                std::panic::catch_unwind(|| roles::assert_valid_role_rule(role, foreign_rule));
-            assert!(result.is_err());
-        }
-    }
-    let key = |n: u8| {
-        RistrettoPublicKey::from_secret_key(&RistrettoSecretKey::from(u64::from(n))).to_byte_type()
-    };
-    let allowed = rule!(m_of_n(
-        2,
-        public_key(key(1)),
-        public_key(key(2)),
-        public_key(key(3))
-    ));
-    roles::assert_valid_role_rule(Role::Governor, &allowed);
-}
-
-#[test]
 fn it_reassigns_a_role_away_from_a_stolen_key() {
     let mut keys = Vec::new();
     let TestSetup {
@@ -435,58 +298,59 @@ fn it_reassigns_a_role_away_from_a_stolen_key() {
         ..
     } = setup_with_roles(|test, governor| {
         let (_, stolen_proof, stolen_key) = test.create_empty_account();
+        let (_, pauser_proof, pauser_key) = test.create_empty_account();
         let roles = RoleConfig {
             minter: Some(signer_rule(&stolen_key)),
+            pauser: Some(signer_rule(&pauser_key)),
             ..governed_by(governor)
         };
+        keys.push((pauser_proof, pauser_key));
         keys.push((stolen_proof, stolen_key));
         roles
     });
     let (stolen_proof, stolen_key) = keys.pop().unwrap();
+    let (pauser_proof, pauser_key) = keys.pop().unwrap();
     let (_, minter_proof, minter_key) = test.create_empty_account();
-
-    test.execute_expect_success(
+    let mint = |test: &TemplateTest, key: &RistrettoSecretKey| {
         call!(
             test,
             stable_coin_component,
             "increase_supply",
             args![100],
-            &stolen_key
-        ),
+            key
+        )
+    };
+    let new_roles = RoleConfig {
+        minter: Some(signer_rule(&minter_key)),
+        pauser: Some(signer_rule(&pauser_key)),
+        ..governed_by(signer_rule(&admin_key))
+    };
+
+    test.execute_expect_success(mint(&test, &stolen_key), vec![stolen_proof.clone()]);
+
+    // A role holder cannot replace the rules
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .set_component_access_rules(stable_coin_component, new_roles.access_rules())
+            .build_and_seal(&stolen_key),
         vec![stolen_proof.clone()],
     );
+    assert_reject_reason(&reason, "Access Denied");
 
     test.execute_expect_success(
-        call!(
-            test,
-            stable_coin_component,
-            "set_role",
-            args![Role::Minter, signer_rule(&minter_key)],
-            &admin_key
-        ),
+        test.transaction()
+            .set_component_access_rules(stable_coin_component, new_roles.access_rules())
+            .build_and_seal(&admin_key),
         vec![admin_proof],
     );
 
-    let reason = test.execute_expect_failure(
-        call!(
-            test,
-            stable_coin_component,
-            "increase_supply",
-            args![100],
-            &stolen_key
-        ),
-        vec![stolen_proof],
-    );
+    let reason = test.execute_expect_failure(mint(&test, &stolen_key), vec![stolen_proof]);
     assert_reject_reason(&reason, "Access Denied");
+    test.execute_expect_success(mint(&test, &minter_key), vec![minter_proof]);
+    // The roles that were not reassigned are untouched
     test.execute_expect_success(
-        call!(
-            test,
-            stable_coin_component,
-            "increase_supply",
-            args![100],
-            &minter_key
-        ),
-        vec![minter_proof],
+        call!(test, stable_coin_component, "pause", args![], &pauser_key),
+        vec![pauser_proof],
     );
 }
 
@@ -511,14 +375,14 @@ fn it_governs_with_a_threshold_of_keys() {
         )))
     });
     let (_, minter_proof, minter_key) = test.create_empty_account();
+    let roles = RoleConfig {
+        minter: Some(signer_rule(&minter_key)),
+        ..governed_by(AccessRule::DenyAll)
+    };
     let set_minter = |test: &TemplateTest| {
-        call!(
-            test,
-            stable_coin_component,
-            "set_role",
-            args![Role::Minter, signer_rule(&minter_key)],
-            &signers[0].1
-        )
+        test.transaction()
+            .set_component_access_rules(stable_coin_component, roles.access_rules())
+            .build_and_seal(&signers[0].1)
     };
 
     // One signer is below the threshold
@@ -542,7 +406,7 @@ fn it_governs_with_a_threshold_of_keys() {
 }
 
 #[test]
-fn it_rotates_the_governor() {
+fn it_hands_over_the_governor() {
     let TestSetup {
         mut test,
         stable_coin_component,
@@ -551,161 +415,56 @@ fn it_rotates_the_governor() {
         ..
     } = setup();
     let (_, governor_proof, governor_key) = test.create_empty_account();
-    let (_, other_proof, other_key) = test.create_empty_account();
-    let new_governor = signer_rule(&governor_key);
-    let hand_over = |test: &TemplateTest, rule: AccessRule| {
-        call!(
-            test,
-            stable_coin_component,
-            "set_role",
-            args![Role::Governor, rule],
-            &admin_key
-        )
+    let hand_over = |test: &TemplateTest, key: &RistrettoSecretKey| {
+        test.transaction()
+            .set_component_owner_rule(
+                stable_coin_component,
+                OwnerRule::ByAccessRule(signer_rule(&governor_key)),
+            )
+            .build_and_seal(key)
     };
 
-    // No proposal
+    // Only the governor hands over
     let reason = test.execute_expect_failure(
-        hand_over(&test, new_governor.clone()),
-        vec![admin_proof.clone()],
-    );
-    assert_reject_reason(&reason, "No governor proposal is pending");
-
-    test.execute_expect_success(
-        call!(
-            test,
-            stable_coin_component,
-            "propose_governor",
-            args![new_governor.clone()],
-            &admin_key
-        ),
-        vec![admin_proof.clone()],
-    );
-
-    // Proposed but not confirmed
-    let reason = test.execute_expect_failure(
-        hand_over(&test, new_governor.clone()),
-        vec![admin_proof.clone()],
-    );
-    assert_reject_reason(&reason, "The proposed governor has not confirmed");
-
-    // Only the proposed governor can confirm
-    let reason = test.execute_expect_failure(
-        call!(
-            test,
-            stable_coin_component,
-            "confirm_governor",
-            args![],
-            &other_key
-        ),
-        vec![other_proof],
-    );
-    assert_reject_reason(&reason, "Access Denied");
-    test.execute_expect_success(
-        call!(
-            test,
-            stable_coin_component,
-            "confirm_governor",
-            args![],
-            &governor_key
-        ),
+        hand_over(&test, &governor_key),
         vec![governor_proof.clone()],
     );
+    assert_reject_reason(&reason, "Access Denied");
+    test.execute_expect_success(hand_over(&test, &admin_key), vec![admin_proof.clone()]);
 
-    // The handover must name the confirmed rule
+    // The old governor no longer governs, nor holds the roles that were left with the governor
+    for method in ["unpause", "pause"] {
+        let reason = test.execute_expect_failure(
+            call!(test, stable_coin_component, method, args![], &admin_key),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, "Access Denied");
+    }
     let reason = test.execute_expect_failure(
-        hand_over(&test, signer_rule(&other_key)),
-        vec![admin_proof.clone()],
-    );
-    assert_reject_reason(&reason, "does not match the pending governor proposal");
-
-    test.execute_expect_success(hand_over(&test, new_governor), vec![admin_proof.clone()]);
-
-    // The old governor no longer governs
-    let reason = test.execute_expect_failure(
-        call!(test, stable_coin_component, "unpause", args![], &admin_key),
+        test.transaction()
+            .set_component_access_rules(
+                stable_coin_component,
+                governed_by(AccessRule::AllowAll).access_rules(),
+            )
+            .build_and_seal(&admin_key),
         vec![admin_proof],
     );
     assert_reject_reason(&reason, "Access Denied");
 
-    // The new governor reassigns roles, and the proposal is spent
+    // The new governor holds them and can assign roles
+    let roles = RoleConfig {
+        minter: Some(signer_rule(&governor_key)),
+        ..governed_by(AccessRule::DenyAll)
+    };
     test.execute_expect_success(
         test.transaction()
-            .call_method(
-                stable_coin_component,
-                "set_role",
-                args![Role::Minter, signer_rule(&governor_key)],
-            )
+            .call_method(stable_coin_component, "pause", args![])
+            .call_method(stable_coin_component, "unpause", args![])
+            .set_component_access_rules(stable_coin_component, roles.access_rules())
             .call_method(stable_coin_component, "increase_supply", args![100])
             .build_and_seal(&governor_key),
-        vec![governor_proof.clone()],
-    );
-    let reason = test.execute_expect_failure(
-        call!(
-            test,
-            stable_coin_component,
-            "confirm_governor",
-            args![],
-            &governor_key
-        ),
         vec![governor_proof],
     );
-    assert_reject_reason(&reason, "No governor proposal is pending");
-}
-
-#[test]
-fn it_cancels_a_governor_proposal() {
-    let TestSetup {
-        mut test,
-        stable_coin_component,
-        admin_proof,
-        admin_key,
-        ..
-    } = setup();
-    let (_, governor_proof, governor_key) = test.create_empty_account();
-
-    test.execute_expect_success(
-        call!(
-            test,
-            stable_coin_component,
-            "propose_governor",
-            args![signer_rule(&governor_key)],
-            &admin_key
-        ),
-        vec![admin_proof.clone()],
-    );
-    test.execute_expect_success(
-        call!(
-            test,
-            stable_coin_component,
-            "cancel_governor_proposal",
-            args![],
-            &admin_key
-        ),
-        vec![admin_proof.clone()],
-    );
-
-    let reason = test.execute_expect_failure(
-        call!(
-            test,
-            stable_coin_component,
-            "confirm_governor",
-            args![],
-            &governor_key
-        ),
-        vec![governor_proof],
-    );
-    assert_reject_reason(&reason, "Access Denied");
-    let reason = test.execute_expect_failure(
-        call!(
-            test,
-            stable_coin_component,
-            "cancel_governor_proposal",
-            args![],
-            &admin_key
-        ),
-        vec![admin_proof],
-    );
-    assert_reject_reason(&reason, "No governor proposal is pending");
 }
 
 #[test]
@@ -852,7 +611,7 @@ fn signer_rule(key: &RistrettoSecretKey) -> AccessRule {
     ))
 }
 
-/// A role config where `governor` holds every role.
+/// A role config that leaves every role with `governor`.
 fn governed_by(governor: AccessRule) -> RoleConfig {
     RoleConfig {
         governor,

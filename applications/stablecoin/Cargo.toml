@@ -6,10 +6,10 @@ description = "Proof-of-concept operator tool for the issuer-minimal stable coin
 publish = false
 
 [dependencies]
-ootle-rs = "0.35"
-tari_ootle_transaction = "0.53"
-tari_ootle_common_types = "0.53"
-tari_template_lib = "0.40"
+ootle-rs = "0.37"
+tari_ootle_transaction = "0.55"
+tari_ootle_common_types = "0.55"
+tari_template_lib = "0.42"
 tari_bor = "0.17"
 tari_crypto = "0.24"
 ootle_byte_type = "0.21"

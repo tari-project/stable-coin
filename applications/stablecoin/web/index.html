@@ -88,7 +88,6 @@
     <section>
       <h2>Roles</h2>
       <table id="roles"></table>
-      <p id="pending" class="empty" style="margin:12px 0 0"></p>
     </section>
 
     <section>
@@ -110,10 +109,8 @@
       <h2>Roles and governor</h2>
       <form data-action="set_role"><label>Set role</label>
         <select name="role"><option>minter</option><option>burner</option><option>treasurer</option><option>compliance</option><option>pauser</option></select>
-        <input name="holder" placeholder="address or public key" required><button>Set</button></form>
-      <form data-action="propose_governor"><label>Propose</label><input name="holder" placeholder="next governor" required><button>Propose</button></form>
-      <form data-action="confirm_governor"><label>Confirm</label><button>Confirm as this key</button><button class="plain" data-action="cancel_governor" type="button">Cancel proposal</button></form>
-      <form data-action="set_role" data-role="governor"><label>Hand over</label><input name="holder" placeholder="the confirmed governor" required><button>Hand over</button></form>
+        <input name="holder" placeholder="address, public key or 'governor'" required><button>Set</button></form>
+      <form data-action="set_governor"><label>Hand over</label><input name="holder" placeholder="next governor (immediate, unchecked)" required><button>Hand over</button></form>
     </section>
 
     <section class="wide">
@@ -183,9 +180,6 @@ async function refresh() {
       row.append(name, rule);
       return row;
     }));
-    $("pending").textContent = s.pending_governor
-      ? "Pending governor: " + s.pending_governor.rule + (s.pending_governor.confirmed ? " (confirmed)" : " (awaiting confirmation)")
-      : "No governor proposal pending.";
   } catch (err) {
     // Say it once, not on every refresh.
     if (statusError !== err.message) log("Could not load status: " + err.message, null, true);
@@ -203,7 +197,6 @@ function payload(form, action) {
     else if (field.type === "number") data[field.name] = value === "" ? null : Number(value);
     else data[field.name] = value;
   }
-  if (form.dataset.role) data.role = form.dataset.role;
   return data;
 }
 
