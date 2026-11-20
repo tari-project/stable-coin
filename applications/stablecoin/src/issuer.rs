@@ -31,7 +31,7 @@ use tari_ootle_common_types::engine_types::{
 use tari_ootle_transaction::{UnsignedTransaction, args, builder::named_args::NamedArg};
 use tari_template_lib::{
     prelude::{AccessRule, AccessRules, Metadata, OwnerRule, rule},
-    types::{SubstateOwnerRule, access_rules::RuleRequirement},
+    types::{SubstateOwnerRule, UtxoAddress, access_rules::RuleRequirement},
 };
 
 use crate::{
@@ -392,6 +392,32 @@ impl Issuer {
         self.submit(unsigned).await
     }
 
+    /// Calls `freeze_utxos` or `unfreeze_utxos`. Each UTXO is a substate the transaction changes, so each must be
+    /// an input.
+    async fn freeze(
+        &mut self,
+        deployment: &Deployment,
+        method: &str,
+        utxos: Vec<UtxoId>,
+    ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
+        let inputs: Vec<_> = utxos
+            .iter()
+            .map(|id| SubstateId::Utxo(UtxoAddress::new(deployment.resource, *id)))
+            .collect();
+        let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
+            .call_method(deployment.component, method, args![utxos])
+            .then(|builder| {
+                inputs
+                    .into_iter()
+                    .fold(builder, |b, input| b.add_input(input))
+            })
+            .pay_fee(MAX_FEE)
+            .prepare()
+            .await?;
+        self.submit(unsigned).await
+    }
+
     /// Runs `action` and returns a one-line description with the transaction summary.
     pub async fn execute(
         &mut self,
@@ -423,16 +449,18 @@ impl Issuer {
                 "decrease_supply",
                 args![Amount::from(amount)],
             ),
-            Action::Freeze { utxos } => (
-                format!("Froze {} UTXO(s)", utxos.len()),
-                "freeze_utxos",
-                args![parse_utxos(&utxos)?],
-            ),
-            Action::Unfreeze { utxos } => (
-                format!("Unfroze {} UTXO(s)", utxos.len()),
-                "unfreeze_utxos",
-                args![parse_utxos(&utxos)?],
-            ),
+            Action::Freeze { utxos } => {
+                let summary = self
+                    .freeze(deployment, "freeze_utxos", parse_utxos(&utxos)?)
+                    .await?;
+                return Ok((format!("Froze {} UTXO(s)", utxos.len()), summary));
+            }
+            Action::Unfreeze { utxos } => {
+                let summary = self
+                    .freeze(deployment, "unfreeze_utxos", parse_utxos(&utxos)?)
+                    .await?;
+                return Ok((format!("Unfroze {} UTXO(s)", utxos.len()), summary));
+            }
             Action::Pause => ("Paused".to_string(), "pause", args![]),
             Action::Unpause => ("Unpaused".to_string(), "unpause", args![]),
             Action::SetRole { role, holder } => {
