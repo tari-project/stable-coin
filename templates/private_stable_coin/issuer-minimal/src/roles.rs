@@ -2,43 +2,50 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use tari_template_lib::prelude::*;
-use tari_template_lib::types::access_rules::RuleRequirement;
 
-/// A privileged capability of the stable coin component.
+/// A privileged capability of the stable coin component: a named group of methods.
 ///
-/// Each role is held by whoever satisfies its access rule, and the component's method access rules are derived from
-/// the role rules (see `TariStableCoin::component_access_rules`). The governor owns the component, so it can call
-/// every method and is the only role that can change who holds a role.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, minicbor::Encode, minicbor::Decode, minicbor::CborLen,
-)]
-#[cbor(index_only)]
+/// A role is held by whoever satisfies the access rule on its methods. The governor is not a role: it is the
+/// component's owner, which may call every method and replace the rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    /// Grants and revokes roles, changes config and unpauses.
-    #[n(0)]
-    Governor,
     /// Mints new supply into the treasury.
-    #[n(1)]
     Minter,
     /// Burns supply from the treasury and burns UTXOs.
-    #[n(2)]
     Burner,
     /// Moves funds into and out of the treasury.
-    #[n(3)]
     Treasurer,
     /// Recalls and freezes.
-    #[n(4)]
     Compliance,
     /// Pauses the component. Unpausing is reserved for the governor.
-    #[n(6)]
     Pauser,
 }
 
-/// The access rule for each role, chosen at instantiation. The governor is required; every other unset role follows
-/// the governor.
+impl Role {
+    pub const ALL: [Role; 5] = [
+        Role::Minter,
+        Role::Burner,
+        Role::Treasurer,
+        Role::Compliance,
+        Role::Pauser,
+    ];
+
+    /// The component methods the role may call. Every other method is reserved for the governor.
+    pub const fn methods(self) -> &'static [&'static str] {
+        match self {
+            Role::Minter => &["increase_supply"],
+            Role::Burner => &["decrease_supply", "burn_utxo"],
+            Role::Treasurer => &["withdraw", "deposit"],
+            Role::Compliance => &["recall_revealed_tokens", "freeze_utxos", "unfreeze_utxos"],
+            Role::Pauser => &["pause"],
+        }
+    }
+}
+
+/// Who governs the coin and who holds each role.
 ///
-/// A rule names public keys, satisfied by the transaction's signers: one key (`public_key(..)`) or a combination
-/// (`any_of(..)`, `all_of(..)`, `m_of_n(..)`).
+/// The governor rule becomes the component's owner rule. A role left unset has no rule of its own, so only the
+/// governor can call its methods, whoever the governor is at the time.
 #[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
 pub struct RoleConfig {
     #[n(0)]
@@ -55,107 +62,27 @@ pub struct RoleConfig {
     pub pauser: Option<AccessRule>,
 }
 
-/// A governor rule proposed by the current governor. The handover needs its holder's confirmation.
-#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
-pub struct PendingGovernor {
-    #[n(0)]
-    pub rule: AccessRule,
-    #[n(1)]
-    pub confirmed: bool,
-}
-
-/// The access rule currently held by each role.
-#[derive(Clone, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
-pub struct Roles {
-    #[n(0)]
-    governor: AccessRule,
-    #[n(1)]
-    minter: AccessRule,
-    #[n(2)]
-    burner: AccessRule,
-    #[n(3)]
-    treasurer: AccessRule,
-    #[n(4)]
-    compliance: AccessRule,
-    #[n(6)]
-    pauser: AccessRule,
-}
-
-impl Roles {
-    /// Resolves `config`, giving every unset role the governor rule.
-    pub fn from_config(config: RoleConfig) -> Self {
-        let governor = config.governor;
-        let roles = Self {
-            minter: config.minter.unwrap_or_else(|| governor.clone()),
-            burner: config.burner.unwrap_or_else(|| governor.clone()),
-            treasurer: config.treasurer.unwrap_or_else(|| governor.clone()),
-            compliance: config.compliance.unwrap_or_else(|| governor.clone()),
-            pauser: config.pauser.unwrap_or_else(|| governor.clone()),
-            governor,
-        };
-        for role in Role::ALL {
-            assert_valid_role_rule(role, roles.get(role));
-        }
-        roles
-    }
-
-    pub fn get(&self, role: Role) -> &AccessRule {
+impl RoleConfig {
+    pub fn get(&self, role: Role) -> Option<&AccessRule> {
         match role {
-            Role::Governor => &self.governor,
-            Role::Minter => &self.minter,
-            Role::Burner => &self.burner,
-            Role::Treasurer => &self.treasurer,
-            Role::Compliance => &self.compliance,
-            Role::Pauser => &self.pauser,
+            Role::Minter => self.minter.as_ref(),
+            Role::Burner => self.burner.as_ref(),
+            Role::Treasurer => self.treasurer.as_ref(),
+            Role::Compliance => self.compliance.as_ref(),
+            Role::Pauser => self.pauser.as_ref(),
         }
     }
 
-    pub fn set(&mut self, role: Role, rule: AccessRule) {
-        assert_valid_role_rule(role, &rule);
-        let slot = match role {
-            Role::Governor => &mut self.governor,
-            Role::Minter => &mut self.minter,
-            Role::Burner => &mut self.burner,
-            Role::Treasurer => &mut self.treasurer,
-            Role::Compliance => &mut self.compliance,
-            Role::Pauser => &mut self.pauser,
-        };
-        *slot = rule;
+    /// The component access rules that give each role its methods. Everything else is denied to all but the owner.
+    pub fn access_rules(&self) -> AccessRules {
+        let mut rules = AccessRules::new();
+        for role in Role::ALL {
+            if let Some(rule) = self.get(role) {
+                for method in role.methods() {
+                    rules = rules.add_method_rule(*method, rule.clone());
+                }
+            }
+        }
+        rules
     }
-}
-
-impl Role {
-    pub const ALL: [Role; 6] = [
-        Role::Governor,
-        Role::Minter,
-        Role::Burner,
-        Role::Treasurer,
-        Role::Compliance,
-        Role::Pauser,
-    ];
-}
-
-/// A role rule may name only signer keys (`public_key(..)`), combined with `any_of`, `all_of` and `m_of_n`. Anything
-/// else, such as a resource anyone can hold, would hand a privileged role to people the issuer never chose. A governor
-/// rule that no one satisfies would leave every role permanently fixed, including a compromised one.
-pub fn assert_valid_role_rule(role: Role, rule: &AccessRule) {
-    assert!(
-        !matches!(rule, AccessRule::AllowAll),
-        "A role cannot be open to everyone"
-    );
-    assert!(
-        !rule.contains_requirement(&|r| !is_signer_key(r)),
-        "A role rule may only name signer keys"
-    );
-    assert!(
-        role != Role::Governor || !matches!(rule, AccessRule::DenyAll),
-        "The governor role must be held by someone"
-    );
-}
-
-fn is_signer_key(requirement: &RuleRequirement) -> bool {
-    matches!(
-        requirement,
-        RuleRequirement::NonFungibleAddress(badge) if badge.resource_address().is_public_key_resource()
-    )
 }

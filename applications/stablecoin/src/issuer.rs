@@ -26,17 +26,17 @@ use ootle_rs::{
 use serde::{Deserialize, Serialize};
 use tari_crypto::{keys::PublicKey, ristretto::RistrettoPublicKey};
 use tari_ootle_common_types::engine_types::{
-    events::Event, indexed_value::IndexedWellKnownTypes, substate::SubstateId,
+    component::Component, events::Event, indexed_value::IndexedWellKnownTypes, substate::SubstateId,
 };
 use tari_ootle_transaction::{UnsignedTransaction, args, builder::named_args::NamedArg};
 use tari_template_lib::{
-    prelude::{AccessRule, Metadata, rule},
-    types::access_rules::RuleRequirement,
+    prelude::{AccessRule, AccessRules, Metadata, OwnerRule, rule},
+    types::{SubstateOwnerRule, UtxoAddress, access_rules::RuleRequirement},
 };
 
 use crate::{
     config::StableCoinConfig,
-    roles::{PendingGovernor, Role, RoleConfig, Roles},
+    roles::{Role, RoleConfig},
 };
 
 /// The fee ceiling attached to every transaction. Unused fees are not charged.
@@ -108,15 +108,15 @@ pub enum Action {
     },
     Pause,
     Unpause,
+    /// Give a role to a key, or back to the governor with the holder `governor` (governor).
     SetRole {
         role: String,
         holder: String,
     },
-    ProposeGovernor {
+    /// Hand governance to another key (governor).
+    SetGovernor {
         holder: String,
     },
-    ConfirmGovernor,
-    CancelGovernor,
     SetMaxSupply {
         max_supply: Option<u64>,
     },
@@ -144,7 +144,6 @@ pub struct Status {
     pub max_supply: Option<String>,
     pub treasury_balance: String,
     pub roles: Vec<RoleStatus>,
-    pub pending_governor: Option<PendingStatus>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -153,12 +152,6 @@ pub struct RoleStatus {
     pub rule: String,
     /// Whether the connected key alone satisfies this role's rule.
     pub held_by_signer: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct PendingStatus {
-    pub rule: String,
-    pub confirmed: bool,
 }
 
 /// The component state of the `issuer-minimal` template, field for field.
@@ -170,10 +163,6 @@ struct CoinState {
     token_vault: VaultId,
     #[n(2)]
     is_paused: bool,
-    #[n(3)]
-    roles: Roles,
-    #[n(4)]
-    pending_governor: Option<PendingGovernor>,
 }
 
 pub struct Issuer {
@@ -311,6 +300,49 @@ impl Issuer {
         self.submit(unsigned).await
     }
 
+    /// Gives `role` to whoever satisfies `rule`, or back to the governor with `None`.
+    ///
+    /// The component's access rules are replaced as a whole, so the current rules are read first and every other
+    /// method keeps its rule.
+    pub async fn set_role(
+        &mut self,
+        deployment: &Deployment,
+        role: Role,
+        rule: Option<AccessRule>,
+    ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
+        let current = self.component(deployment).await?;
+        let rules = with_role(current.access_rules(), role, rule);
+        let component = deployment.component;
+        let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
+            .want_substate(component.into(), true)
+            .then(|builder| builder.set_component_access_rules(component, rules))
+            .pay_fee(MAX_FEE)
+            .prepare()
+            .await?;
+        self.submit(unsigned).await
+    }
+
+    /// Hands the component, and with it every role left with the governor, to whoever satisfies `rule`. Nothing
+    /// checks that anyone does: a rule no one holds leaves the coin without a governor for good.
+    pub async fn set_governor(
+        &mut self,
+        deployment: &Deployment,
+        rule: AccessRule,
+    ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
+        let component = deployment.component;
+        let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
+            .want_substate(component.into(), true)
+            .then(|builder| {
+                builder.set_component_owner_rule(component, OwnerRule::ByAccessRule(rule))
+            })
+            .pay_fee(MAX_FEE)
+            .prepare()
+            .await?;
+        self.submit(unsigned).await
+    }
+
     /// Withdraws from the issuer vault and deposits into `recipient`'s account, creating it if needed.
     pub async fn withdraw_to(
         &mut self,
@@ -360,6 +392,32 @@ impl Issuer {
         self.submit(unsigned).await
     }
 
+    /// Calls `freeze_utxos` or `unfreeze_utxos`. Each UTXO is a substate the transaction changes, so each must be
+    /// an input.
+    async fn freeze(
+        &mut self,
+        deployment: &Deployment,
+        method: &str,
+        utxos: Vec<UtxoId>,
+    ) -> anyhow::Result<TxSummary> {
+        self.ensure_funded().await?;
+        let inputs: Vec<_> = utxos
+            .iter()
+            .map(|id| SubstateId::Utxo(UtxoAddress::new(deployment.resource, *id)))
+            .collect();
+        let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
+            .call_method(deployment.component, method, args![utxos])
+            .then(|builder| {
+                inputs
+                    .into_iter()
+                    .fold(builder, |b, input| b.add_input(input))
+            })
+            .pay_fee(MAX_FEE)
+            .prepare()
+            .await?;
+        self.submit(unsigned).await
+    }
+
     /// Runs `action` and returns a one-line description with the transaction summary.
     pub async fn execute(
         &mut self,
@@ -391,41 +449,36 @@ impl Issuer {
                 "decrease_supply",
                 args![Amount::from(amount)],
             ),
-            Action::Freeze { utxos } => (
-                format!("Froze {} UTXO(s)", utxos.len()),
-                "freeze_utxos",
-                args![parse_utxos(&utxos)?],
-            ),
-            Action::Unfreeze { utxos } => (
-                format!("Unfroze {} UTXO(s)", utxos.len()),
-                "unfreeze_utxos",
-                args![parse_utxos(&utxos)?],
-            ),
+            Action::Freeze { utxos } => {
+                let summary = self
+                    .freeze(deployment, "freeze_utxos", parse_utxos(&utxos)?)
+                    .await?;
+                return Ok((format!("Froze {} UTXO(s)", utxos.len()), summary));
+            }
+            Action::Unfreeze { utxos } => {
+                let summary = self
+                    .freeze(deployment, "unfreeze_utxos", parse_utxos(&utxos)?)
+                    .await?;
+                return Ok((format!("Unfroze {} UTXO(s)", utxos.len()), summary));
+            }
             Action::Pause => ("Paused".to_string(), "pause", args![]),
             Action::Unpause => ("Unpaused".to_string(), "unpause", args![]),
             Action::SetRole { role, holder } => {
                 let role = parse_role(&role)?;
-                (
-                    format!("Set {role:?} to {holder}"),
-                    "set_role",
-                    args![role, parse_holder(&holder)?],
-                )
+                let rule = if holder.eq_ignore_ascii_case("governor") {
+                    None
+                } else {
+                    Some(parse_holder(&holder)?)
+                };
+                let summary = self.set_role(deployment, role, rule).await?;
+                return Ok((format!("Set {role:?} to {holder}"), summary));
             }
-            Action::ProposeGovernor { holder } => (
-                format!("Proposed {holder} as governor"),
-                "propose_governor",
-                args![parse_holder(&holder)?],
-            ),
-            Action::ConfirmGovernor => (
-                "Confirmed the governor proposal".to_string(),
-                "confirm_governor",
-                args![],
-            ),
-            Action::CancelGovernor => (
-                "Cancelled the governor proposal".to_string(),
-                "cancel_governor_proposal",
-                args![],
-            ),
+            Action::SetGovernor { holder } => {
+                let summary = self
+                    .set_governor(deployment, parse_holder(&holder)?)
+                    .await?;
+                return Ok((format!("Handed governance to {holder}"), summary));
+            }
             Action::SetMaxSupply { max_supply } => (
                 match max_supply {
                     Some(max) => format!("Set the max supply to {max}"),
@@ -440,14 +493,7 @@ impl Issuer {
     }
 
     pub async fn status(&self, deployment: &Deployment) -> anyhow::Result<Status> {
-        let component = self
-            .provider
-            .get_substate(deployment.component)
-            .await?
-            .ok_or_else(|| anyhow!("Component {} not found", deployment.component))?
-            .into_substate_value()
-            .into_component()
-            .ok_or_else(|| anyhow!("{} is not a component", deployment.component))?;
+        let component = self.component(deployment).await?;
         let state: CoinState = tari_bor::from_value(component.state())
             .context("Unexpected component state: wrong template?")?;
 
@@ -466,17 +512,39 @@ impl Issuer {
             .map(|balance| balance.to_string())
             .unwrap_or_else(|_| "0".to_string());
 
-        let roles = Role::ALL
-            .iter()
-            .map(|role| {
-                let rule = state.roles.get(*role);
-                RoleStatus {
+        let governor = match component.owner_rule() {
+            SubstateOwnerRule::ByAccessRule(rule) => RoleStatus {
+                role: "Governor".to_string(),
+                rule: describe_rule(rule),
+                held_by_signer: *rule == self.signer_rule(),
+            },
+            SubstateOwnerRule::ByPublicKey(key) => RoleStatus {
+                role: "Governor".to_string(),
+                rule: key.to_string(),
+                held_by_signer: *key == self.public_key,
+            },
+            SubstateOwnerRule::None => RoleStatus {
+                role: "Governor".to_string(),
+                rule: "no one".to_string(),
+                held_by_signer: false,
+            },
+        };
+        let mut roles = vec![governor.clone()];
+        roles.extend(Role::ALL.iter().map(|role| {
+            // A role's methods share one rule; a role without one is left with the governor.
+            match role_rule(component.access_rules(), *role) {
+                Some(rule) => RoleStatus {
                     role: format!("{role:?}"),
                     rule: describe_rule(rule),
                     held_by_signer: *rule == self.signer_rule(),
-                }
-            })
-            .collect();
+                },
+                None => RoleStatus {
+                    role: format!("{role:?}"),
+                    rule: "the governor".to_string(),
+                    held_by_signer: governor.held_by_signer,
+                },
+            }
+        }));
 
         Ok(Status {
             component: deployment.component.to_string(),
@@ -489,11 +557,17 @@ impl Issuer {
             max_supply: state.config.max_supply.map(|a| a.to_string()),
             treasury_balance: treasury.to_string(),
             roles,
-            pending_governor: state.pending_governor.map(|pending| PendingStatus {
-                rule: describe_rule(&pending.rule),
-                confirmed: pending.confirmed,
-            }),
         })
+    }
+
+    async fn component(&self, deployment: &Deployment) -> anyhow::Result<Component> {
+        self.provider
+            .get_substate(deployment.component)
+            .await?
+            .ok_or_else(|| anyhow!("Component {} not found", deployment.component))?
+            .into_substate_value()
+            .into_component()
+            .ok_or_else(|| anyhow!("{} is not a component", deployment.component))
     }
 
     /// The vault holding `resource` in `holder`'s account.
@@ -543,7 +617,10 @@ impl Issuer {
         Ok(())
     }
 
-    async fn submit(&mut self, unsigned: UnsignedTransaction) -> anyhow::Result<TxSummary> {
+    async fn submit(&mut self, mut unsigned: UnsignedTransaction) -> anyhow::Result<TxSummary> {
+        // Without a nonce, repeating a command builds the same transaction, and the network answers with the
+        // result of the first one instead of running it again.
+        unsigned.set_nonce(rand::random());
         let transaction = TransactionRequest::default()
             .with_transaction(unsigned)
             .build(self.provider.wallet())
@@ -627,7 +704,35 @@ pub fn parse_role(role: &str) -> anyhow::Result<Role> {
     Role::ALL
         .into_iter()
         .find(|candidate| format!("{candidate:?}").eq_ignore_ascii_case(role))
-        .ok_or_else(|| anyhow!("Unknown role `{role}`: expected governor, minter, burner, treasurer, compliance or pauser"))
+        .ok_or_else(|| {
+            anyhow!(
+                "Unknown role `{role}`: expected minter, burner, treasurer, compliance or pauser"
+            )
+        })
+}
+
+/// The rule on `role`'s methods, or `None` when the role is left with the governor.
+fn role_rule(rules: &AccessRules, role: Role) -> Option<&AccessRule> {
+    rules
+        .method_access_rules_iter()
+        .find(|(method, _)| role.methods().contains(&method.as_str()))
+        .map(|(_, rule)| rule)
+}
+
+/// `rules` with `role`'s methods given `rule`, or left to the governor with `None`. Every other rule is kept.
+fn with_role(rules: &AccessRules, role: Role, rule: Option<AccessRule>) -> AccessRules {
+    let kept = rules
+        .method_access_rules_iter()
+        .filter(|(method, _)| !role.methods().contains(&method.as_str()))
+        .fold(AccessRules::new(), |kept, (method, rule)| {
+            kept.add_method_rule(method.clone(), rule.clone())
+        })
+        // No method has an empty name, so this reads the default rule.
+        .default(rules.get_method_access_rule("").clone());
+    let Some(rule) = rule else { return kept };
+    role.methods().iter().fold(kept, |rules, method| {
+        rules.add_method_rule(*method, rule.clone())
+    })
 }
 
 pub fn parse_utxos(utxos: &[String]) -> anyhow::Result<Vec<UtxoId>> {
@@ -676,11 +781,41 @@ mod tests {
     fn it_parses_role_names_and_holders() {
         assert_eq!(parse_role("Minter").unwrap(), Role::Minter);
         assert!(parse_role("wizard").is_err());
+        assert!(parse_role("governor").is_err());
         let key = "be2f2b71f42cbedd2e0a020a0d19304454174e49aa15189baae7b58f13031305";
         let rule = parse_holder(key).unwrap();
         assert_eq!(describe_rule(&rule), key);
         assert!(parse_holder("not-a-key").is_err());
         assert!(parse_utxos(&["zz".to_string()]).is_err());
         assert_eq!(parse_utxos(&["00".repeat(32)]).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn it_changes_one_role_and_keeps_the_others() {
+        let key = |n: u8| key_rule(RistrettoPublicKeyBytes::from([n; 32]));
+        let config = RoleConfig {
+            governor: key(1),
+            minter: Some(key(2)),
+            burner: None,
+            treasurer: None,
+            compliance: Some(key(3)),
+            pauser: None,
+        };
+        let rules = config.access_rules();
+        assert_eq!(role_rule(&rules, Role::Minter), Some(&key(2)));
+        assert_eq!(role_rule(&rules, Role::Burner), None);
+
+        let rules = with_role(&rules, Role::Burner, Some(key(4)));
+        let rules = with_role(&rules, Role::Minter, None);
+        assert_eq!(role_rule(&rules, Role::Minter), None);
+        assert_eq!(role_rule(&rules, Role::Compliance), Some(&key(3)));
+        for method in Role::Burner.methods() {
+            assert_eq!(rules.get_method_access_rule(method), &key(4));
+        }
+        // Unlisted methods stay closed to all but the governor
+        assert_eq!(
+            rules.get_method_access_rule("unpause"),
+            &AccessRule::DenyAll
+        );
     }
 }

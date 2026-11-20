@@ -42,25 +42,11 @@ static TALC: talc::wasm::WasmArenaTalc = {
 mod template {
     use tari_template_lib::types::crypto::CommitmentValueProof;
 
-    use tari_template_lib::types::SubstateOwnerRule;
+    use tari_template_lib::types::access_rules::RulesUpdater;
 
     use super::*;
     use crate::config::StableCoinConfig;
-    use crate::roles::{PendingGovernor, Role, RoleConfig, Roles, assert_valid_role_rule};
-
-    /// The role that may call each component method. A method not listed here can only be called by the governor,
-    /// which owns the component.
-    const METHOD_ROLES: &[(&str, Role)] = &[
-        ("increase_supply", Role::Minter),
-        ("decrease_supply", Role::Burner),
-        ("burn_utxo", Role::Burner),
-        ("withdraw", Role::Treasurer),
-        ("deposit", Role::Treasurer),
-        ("recall_revealed_tokens", Role::Compliance),
-        ("freeze_utxos", Role::Compliance),
-        ("unfreeze_utxos", Role::Compliance),
-        ("pause", Role::Pauser),
-    ];
+    use crate::roles::RoleConfig;
 
     /// The most UTXOs `freeze_utxos` and `unfreeze_utxos` take in one call.
     const MAX_FREEZE_BATCH: usize = 100;
@@ -69,16 +55,17 @@ mod template {
         config: StableCoinConfig,
         token_vault: Vault,
         is_paused: bool,
-        roles: Roles,
-        pending_governor: Option<PendingGovernor>,
     }
 
     impl TariStableCoin {
         /// Instantiates a new stable coin component.
         ///
-        /// `roles` assigns each privileged role an access rule over signer keys. The governor is required, and every
-        /// unset role follows the governor. The component owns the coin resource, so all privileged actions go
-        /// through its methods and are subject to pause and to the role rules.
+        /// `roles` names the governor, which owns the component, and the holder of each role. A role left unset stays
+        /// with the governor. The component owns the coin resource, so all privileged actions go through its methods
+        /// and are subject to pause and to the access rules.
+        ///
+        /// The governor changes who holds a role, or hands over governance, with the `SetComponentAccessRules` and
+        /// `SetComponentOwnerRule` transaction instructions. The template has no code for either.
         #[allow(clippy::too_many_arguments)]
         pub fn instantiate(
             address_alloc: ComponentAddressAllocation,
@@ -117,22 +104,17 @@ mod template {
                 .with_owner_rule(OwnerRule::None)
                 .initial_supply(initial_token_supply);
 
-            let roles = Roles::from_config(roles);
-            let component_access_rules = Self::component_access_rules(&roles, None);
-            let governor = roles.get(Role::Governor).clone();
-
             Component::new(Self {
                 config,
                 token_vault: Vault::from_bucket(initial_tokens),
                 is_paused: false,
-                roles,
-                pending_governor: None,
             })
             .with_address_allocation(address_alloc)
-            .with_access_rules(component_access_rules)
-            // The governor owns the component: it can call every method and is the only role
-            // permitted to change the access rules.
-            .with_owner_rule(OwnerRule::ByAccessRule(governor))
+            .with_access_rules(roles.access_rules())
+            // The governor owns the component: it can call every method, and it alone can replace the access rules
+            // and the owner rule, by transaction instruction.
+            .with_owner_rule(OwnerRule::ByAccessRule(roles.governor))
+            .with_rules_updater(RulesUpdater::Owner)
             .create()
         }
 
@@ -192,69 +174,6 @@ mod template {
             emit_event("burn_utxo", metadata!("utxo_id" => utxo));
         }
 
-        /// Gives `role` to whoever satisfies `rule`.
-        ///
-        /// Changing the governor needs a proposal for `rule` that its holder has confirmed: see `propose_governor`.
-        pub fn set_role(&mut self, role: Role, rule: AccessRule) {
-            if role == Role::Governor {
-                let pending = self
-                    .pending_governor
-                    .take()
-                    .expect("No governor proposal is pending");
-                assert!(
-                    pending.rule == rule,
-                    "The rule does not match the pending governor proposal"
-                );
-                assert!(pending.confirmed, "The proposed governor has not confirmed");
-            }
-            self.roles.set(role, rule.clone());
-            let component = self.update_access_rules();
-            emit_event("set_role", metadata!("role" => role, "rule" => rule));
-            // Ownership is checked against the current governor, so the owner rule changes last.
-            if role == Role::Governor {
-                component.set_owner_rule(SubstateOwnerRule::ByAccessRule(rule));
-            }
-        }
-
-        /// Proposes `rule` as the next governor, replacing any earlier proposal. Whoever satisfies `rule` must call
-        /// `confirm_governor` before the governor can hand over with `set_role`, which guards against a rule no one
-        /// holds (a mistyped key).
-        ///
-        /// The governor owns the component and can call `confirm_governor` itself, so this guards against mistakes,
-        /// not against a governor that means to hand over to an unheld rule.
-        pub fn propose_governor(&mut self, rule: AccessRule) {
-            assert_valid_role_rule(Role::Governor, &rule);
-            emit_event("propose_governor", metadata!("rule" => rule));
-            self.pending_governor = Some(PendingGovernor {
-                rule,
-                confirmed: false,
-            });
-            self.update_access_rules();
-        }
-
-        /// Confirms the pending governor proposal. Callable by whoever satisfies the proposed rule.
-        pub fn confirm_governor(&mut self) {
-            let pending = self
-                .pending_governor
-                .as_mut()
-                .expect("No governor proposal is pending");
-            pending.confirmed = true;
-            emit_event("confirm_governor", metadata!("rule" => pending.rule));
-        }
-
-        /// Withdraws the pending governor proposal.
-        pub fn cancel_governor_proposal(&mut self) {
-            let pending = self
-                .pending_governor
-                .take()
-                .expect("No governor proposal is pending");
-            emit_event(
-                "cancel_governor_proposal",
-                metadata!("rule" => pending.rule),
-            );
-            self.update_access_rules();
-        }
-
         /// Sets the cap on outstanding supply, or removes it with `None`. The cap cannot be set below the current
         /// supply.
         pub fn set_config_max_supply(&mut self, max_supply: Option<Amount>) {
@@ -291,28 +210,6 @@ mod template {
             assert_freeze_batch(&utxos);
             emit_event("unfreeze_utxos", metadata!("utxos" => utxos));
             self.token_vault_manager().unfreeze_utxos(utxos);
-        }
-
-        /// `confirm_governor` is open to the proposed governor, and to no one but the owner while nothing is
-        /// proposed.
-        fn component_access_rules(roles: &Roles, pending: Option<&PendingGovernor>) -> AccessRules {
-            let confirm_rule = pending.map_or(AccessRule::DenyAll, |p| p.rule.clone());
-            METHOD_ROLES
-                .iter()
-                .fold(AccessRules::new(), |rules, (method, role)| {
-                    rules.add_method_rule(*method, roles.get(*role).clone())
-                })
-                .add_method_rule("confirm_governor", confirm_rule)
-                .default(roles.get(Role::Governor).clone())
-        }
-
-        fn update_access_rules(&self) -> ComponentManager {
-            let component = ComponentManager::current();
-            component.set_access_rules(Self::component_access_rules(
-                &self.roles,
-                self.pending_governor.as_ref(),
-            ));
-            component
         }
 
         /// The supply `max_supply` caps.

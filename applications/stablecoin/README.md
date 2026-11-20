@@ -41,7 +41,7 @@ stablecoin send <otl_… address> 1000
 stablecoin serve            # local web dashboard
 ```
 
-`deploy` makes the signing key the governor, and every unset role follows the governor. Pass `--minter`,
+`deploy` makes the signing key the governor, and every unset role is left with the governor. Pass `--minter`,
 `--burner`, `--treasurer`, `--compliance` or `--pauser` (an address or a hex public key) to give a role to another
 key from the start. The signing key's view key becomes the coin's resource view key.
 
@@ -53,17 +53,14 @@ key from the start. The signing key's view key becomes the coin's resource view 
 | `faucet` | – | Take test funds (test networks only). |
 | `publish <wasm>` | – | Publish a template binary. |
 | `deploy --template <addr>` | – | Instantiate a coin and write the deployment file. |
-| `status` | – | Supply, max supply, issuer vault, roles, pause state, pending governor. |
+| `status` | – | Supply, max supply, issuer vault, roles, pause state. |
 | `mint <amount>` / `burn <amount>` | Minter / Burner | Change supply in the issuer vault. |
 | `send <address> <amount>` | Treasurer | Move coins from the issuer vault to an account. |
 | `recall <address> <amount>` | Compliance | Pull a revealed balance from an account back into the issuer vault. |
 | `freeze <utxo>…` / `unfreeze <utxo>…` | Compliance | Freeze or unfreeze UTXOs by hex id. |
 | `pause` / `unpause` | Pauser / Governor | Stop or resume issuance and treasury movements. |
-| `set-role <role> <holder>` | Governor | Give a role to another key. |
-| `propose-governor <holder>` | Governor | Start a governor handover. |
-| `confirm-governor` | Proposed governor | Confirm it, signed by the proposed key. |
-| `set-role governor <holder>` | Governor | Complete the handover after confirmation. |
-| `cancel-governor` | Governor | Withdraw the proposal. |
+| `set-role <role> <holder>` | Governor | Give a role to another key, or back to the governor with the holder `governor`. |
+| `set-governor <holder>` | Governor | Hand governance to another key. Immediate and unchecked: a mistyped key cannot be undone. |
 | `set-max-supply [amount]` | Governor | Set the supply cap, or remove it. |
 | `serve [--port 7400]` | – | Serve the web dashboard. |
 
@@ -84,6 +81,11 @@ passphrase. There is no recovery phrase: back the file up.
 
 ## Limits
 
+- Needs a network running Tari Ootle 0.55 or later: `set-role` and `set-governor` use the
+  `SetComponentAccessRules` and `SetComponentOwnerRule` instructions.
+- `set-governor` is immediate and nothing confirms that the new key is held by anyone.
+- `set-role` reads the current rules and replaces them all, so two role changes sent at the same time can
+  overwrite each other.
 - One signing key per transaction. A threshold (`m_of_n`) role cannot be exercised with this tool yet.
 - No view-key scanning and no `burn_utxo`: finding and burning holder UTXOs is not implemented.
 - `freeze` and `unfreeze` are wired up but have not been exercised against real UTXOs.

@@ -2919,9 +2919,9 @@ dependencies = [
 
 [[package]]
 name = "tari_engine"
-version = "0.53.4"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a9705624ad05e5aa7bf0d307262b5c68fd24fcd094e7abff16fdd7dc5f33ea4"
+checksum = "baa943c4e1fa4813d4f00dd53445a97a650e4630c35352611d3deee98e5867b3"
 dependencies = [
  "blake2",
  "digest 0.10.7",
@@ -2950,9 +2950,9 @@ dependencies = [
 
 [[package]]
 name = "tari_engine_types"
-version = "0.53.4"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c548934118864ac545e4aa39ddcc924d0d9ff58671dcd70625bf5f6b204aaf89"
+checksum = "7e4f1d346698e26612c9fd907a3afb178f69e0dea56ed0bc2a2d8100e2a8b8b9"
 dependencies = [
  "blake2",
  "borsh",
@@ -3021,9 +3021,9 @@ dependencies = [
 
 [[package]]
 name = "tari_ootle_common_types"
-version = "0.53.4"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2925220ec78bc26bfa41e67711af45c4e78d4c78ac8721c9064cf8b1a53aa806"
+checksum = "ff8342dced0236d92b0bf24d031f1da9fdae0e82350e6943fda7fb276af07c81"
 dependencies = [
  "blake2",
  "borsh",
@@ -3096,9 +3096,9 @@ dependencies = [
 
 [[package]]
 name = "tari_ootle_transaction"
-version = "0.53.4"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d63c9fc8e3f605b92b946383bee0cb36356063466868c576fe543b7ed4ac0e5"
+checksum = "75fe9dd4618e5010f8f137a800f65cc2d0e0041ac8dc02da9b1c0f3c407d9b53"
 dependencies = [
  "borsh",
  "hex",
@@ -3121,9 +3121,9 @@ dependencies = [
 
 [[package]]
 name = "tari_ootle_wallet_crypto"
-version = "0.54.0"
+version = "0.56.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eacb792edf9f653d639c734284a7ee806d6229f1a6a66393783129af72edb490"
+checksum = "4d62df13b9312419f04e4d538255a3e2688a12473ac04288fe4ae90d3131991f"
 dependencies = [
  "argon2",
  "blake2",
@@ -3181,9 +3181,9 @@ dependencies = [
 
 [[package]]
 name = "tari_template_builtin"
-version = "0.49.0"
+version = "0.49.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b14fee34ee03ee16410f932eff5d5703309a8b39637bd8ddc7484aa154ba5b3c"
+checksum = "e2648dac66d89469cda61259307d81f931f54959bb959f3db9df09161decc677"
 dependencies = [
  "anyhow",
  "minicbor",
@@ -3192,9 +3192,9 @@ dependencies = [
 
 [[package]]
 name = "tari_template_lib"
-version = "0.40.1"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b394c3d54673ddf4068b9e35f7ef941fc2d3ba9941ed1aef05bf7e55009db0d4"
+checksum = "da9551bf3544ae4320c8ed7715aa85927294dd8dfc0815dabd7844cb19b889b4"
 dependencies = [
  "borsh",
  "minicbor",
@@ -3207,9 +3207,9 @@ dependencies = [
 
 [[package]]
 name = "tari_template_lib_types"
-version = "0.39.2"
+version = "0.39.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c6a0226563ea3f0bd7d6702075c6f4f5b66ad7ebfb1877c05ecd60178db3fb5"
+checksum = "42f85f7d8b61d7b68388c6b04826e7ee718e53a386d2cd4505f95aaf3bee9123"
 dependencies = [
  "bnum",
  "borsh",
@@ -3223,9 +3223,9 @@ dependencies = [
 
 [[package]]
 name = "tari_template_macros"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec80c4b9946b6554ba6c814e436b55749b432a7285db64d3ed1ea2572c8d97c2"
+checksum = "bb3a69485da2ce26fa80077e08e5696e090fc5b1357ad8067ee98904b5e9e405"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3235,9 +3235,9 @@ dependencies = [
 
 [[package]]
 name = "tari_template_test_tooling"
-version = "0.53.4"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf07b5313e15d965e5aaae3452e87b1774705990a3370494eccf9d005005847a"
+checksum = "74246df8d40930d39ac22813a3fdd9c22e84cf21eabbf64a9b052aa595b8bb17"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -3259,9 +3259,9 @@ dependencies = [
 
 [[package]]
 name = "tari_transaction_manifest"
-version = "0.53.4"
+version = "0.55.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d582e30faaf5bdfe704e01cbef1f02a81014285ab4d2f70f06f195940d432395"
+checksum = "6f28c3c69475791b90e9b301371ee199e2ec45f4910314c62604fc1440bb3ccf"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",

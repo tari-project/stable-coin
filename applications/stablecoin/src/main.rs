@@ -85,17 +85,16 @@ enum Command {
     Unpause,
     /// Give a role to another key (governor).
     SetRole {
-        /// governor, minter, burner, treasurer, compliance or pauser.
+        /// minter, burner, treasurer, compliance or pauser.
         role: String,
-        /// The new holder: an Ootle address or a hex public key.
+        /// The new holder: an Ootle address or a hex public key, or `governor` to leave the role with the governor.
         holder: String,
     },
-    /// Propose the next governor (governor).
-    ProposeGovernor { holder: String },
-    /// Confirm a governor proposal naming this key.
-    ConfirmGovernor,
-    /// Withdraw the pending governor proposal (governor).
-    CancelGovernor,
+    /// Hand governance to another key (governor). This is immediate and nothing checks the key is held by anyone.
+    SetGovernor {
+        /// The new governor: an Ootle address or a hex public key.
+        holder: String,
+    },
     /// Set or remove the supply cap (governor).
     SetMaxSupply {
         /// The cap; omit to remove it.
@@ -141,7 +140,7 @@ struct DeployArgs {
     #[arg(long)]
     max_supply: Option<u64>,
     /// Role holders (address or hex public key). The governor defaults to this key, and unset
-    /// roles follow the governor.
+    /// roles are left with the governor.
     #[arg(long)]
     governor: Option<String>,
     #[arg(long)]
@@ -231,9 +230,7 @@ fn action(command: Command) -> Action {
         Command::Pause => Action::Pause,
         Command::Unpause => Action::Unpause,
         Command::SetRole { role, holder } => Action::SetRole { role, holder },
-        Command::ProposeGovernor { holder } => Action::ProposeGovernor { holder },
-        Command::ConfirmGovernor => Action::ConfirmGovernor,
-        Command::CancelGovernor => Action::CancelGovernor,
+        Command::SetGovernor { holder } => Action::SetGovernor { holder },
         Command::SetMaxSupply { max_supply } => Action::SetMaxSupply { max_supply },
         Command::Key(_)
         | Command::Faucet
@@ -290,13 +287,5 @@ fn print_status(status: &issuer::Status) {
             ""
         };
         println!("  {:<11} {}{mine}", role.role, role.rule);
-    }
-    if let Some(pending) = &status.pending_governor {
-        let state = if pending.confirmed {
-            "confirmed"
-        } else {
-            "awaiting confirmation"
-        };
-        println!("Pending governor: {} ({state})", pending.rule);
     }
 }
