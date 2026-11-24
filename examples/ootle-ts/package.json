@@ -10,8 +10,8 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@tari-project/ootle": "^0.20.1",
-    "@tari-project/ootle-indexer": "^0.20.0",
+    "@tari-project/ootle": "^0.21.0",
+    "@tari-project/ootle-indexer": "^0.21.0",
     "@tari-project/ootle-ts-bindings": "^1.66.1"
   },
   "devDependencies": {
