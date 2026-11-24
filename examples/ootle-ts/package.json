@@ -1,0 +1,20 @@
+{
+  "name": "stable-coin-ootle-ts-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tari-project/ootle": "^0.20.1",
+    "@tari-project/ootle-indexer": "^0.20.0",
+    "@tari-project/ootle-ts-bindings": "^1.66.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

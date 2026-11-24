@@ -75,6 +75,11 @@ cargo build -p stablecoin --release
 
 See [applications/stablecoin/README.md](applications/stablecoin/README.md) for a walkthrough.
 
+## TypeScript example
+
+[`examples/ootle-ts`](examples/ootle-ts/README.md) deploys and governs an `issuer-minimal` coin from TypeScript with
+`ootle.ts`.
+
 ## License
 
 BSD 3-Clause. See individual source files for the full license text.
