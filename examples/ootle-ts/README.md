@@ -13,8 +13,7 @@ transaction instructions that take rules as plain objects.
 
 ## Requirements
 
-- `@tari-project/ootle` 0.20.1 or later, for `accessRuleLiteral`, `publicKeyAccessRule`, `listLiteral` and
-  `noneLiteral`.
+- `@tari-project/ootle` 0.21.0 or later, for `CborBuilder` and `AccessRuleBuilder`.
 - A network running Tari Ootle 0.55 or later.
 
 ## Type-check

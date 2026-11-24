@@ -8,16 +8,16 @@
 // encoding at all; only `instantiate` takes a CBOR-encoded `RoleConfig`.
 
 import {
+  AccessRuleBuilder,
+  CborBuilder,
   TransactionBuilder,
-  accessRuleLiteral,
   amountLiteral,
   getVaultIdsForAccount,
   intLiteral,
-  listLiteral,
   metadataLiteral,
   noneLiteral,
-  publicKeyAccessRule,
   publicKeyLiteral,
+  requirement,
   resolveMaxEpoch,
   sealTransaction,
   signTransaction,
@@ -28,24 +28,15 @@ import type {
   AccessRule,
   ComponentAddress,
   PublishedTemplateAddress,
-  RuleRequirement,
   UnsignedTransactionV1,
 } from "@tari-project/ootle-ts-bindings";
 import type { IndexerProvider } from "@tari-project/ootle-indexer";
 
 const MAX_FEE = 20_000n;
 
-// A transaction signer holds the badge of this resource whose id is the signer's public key.
-const PUBLIC_IDENTITY_RESOURCE = "resource_01" + "00".repeat(31);
-
-const signedBy = (publicKeyHex: string): RuleRequirement => ({
-  NonFungibleAddress: { resource_address: PUBLIC_IDENTITY_RESOURCE, id: { U256: publicKeyHex } },
-});
-
 /** At least `m` of the keys must sign: the Rust `rule!(m_of_n(m, public_key(a), public_key(b), ..))`. */
-export const mOfN = (m: number, publicKeysHex: string[]): AccessRule => ({
-  Restricted: { Require: { MOfN: [m, publicKeysHex.map(signedBy)] } },
-});
+export const mOfN = (m: number, publicKeysHex: string[]): AccessRule =>
+  AccessRuleBuilder.mOfN(m, ...publicKeysHex.map(requirement.publicKey)).build();
 
 export interface Deployer {
   provider: IndexerProvider;
@@ -66,12 +57,13 @@ export interface CoinParams {
 
 /** Instantiates the coin. The new `component_…` and `resource_…` are in the receipt's diff. */
 export async function instantiateStableCoin(deployer: Deployer, params: CoinParams) {
-  // `RoleConfig` is a struct, encoded as the array of its fields:
-  //   [governor, minter, burner, treasurer, compliance, <unused>, pauser]
-  // Only the governor is set, so every role stays with the governor. To set a role here, pass
-  // `noneLiteral()` for each unset slot before it and leave trailing unset slots out.
-  const governor = mOfN(1, params.governorKeysHex);
-  const roles = listLiteral([accessRuleLiteral(governor)]);
+  // `RoleConfig` is a struct. Its fields are set by their `#[n(i)]` index in the template:
+  //   0 governor, 1 minter, 2 burner, 3 treasurer, 4 compliance, 6 pauser
+  // Only the governor is set, so every role stays with the governor. To give a role its own
+  // rule at deployment, add e.g. `.field(1, AccessRuleBuilder.publicKey(minterKeyHex))`.
+  const roles = CborBuilder.struct()
+    .field(0, AccessRuleBuilder.mOfN(1, ...params.governorKeysHex.map(requirement.publicKey)))
+    .finish();
 
   const builder = (await newBuilder(deployer))
     .allocateAddress("Component", "coin")
@@ -104,8 +96,8 @@ export async function setRoles(
     .addInput({ substate_id: coin, version: null })
     .setComponentAccessRules(coin, {
       method_access: {
-        increase_supply: publicKeyAccessRule(minterKeyHex),
-        pause: publicKeyAccessRule(pauserKeyHex),
+        increase_supply: AccessRuleBuilder.publicKey(minterKeyHex).build(),
+        pause: AccessRuleBuilder.publicKey(pauserKeyHex).build(),
       },
       default: "DenyAll",
     });
