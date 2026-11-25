@@ -286,13 +286,9 @@ fn it_blacklists_and_removes_from_blacklist() {
         .unwrap();
     assert_eq!(alice_vaults.get(&user_badge_resource).unwrap().balance(), 0);
 
-    // Alice can no longer deposit tokens (no user badge)
-    // This tests that the auth hook rejects deposits for blacklisted users
+    // Alice can no longer withdraw tokens to transfer to Bob once blacklisted
     let reason = test.execute_expect_failure(
         test.transaction()
-            .create_proof(alice_account, user_badge_resource)
-            .put_last_instruction_output_on_workspace("proof")
-            .authorize_proof("proof")
             .call_method(alice_account, "withdraw", args![token_resource, 100])
             .put_last_instruction_output_on_workspace("funds")
             .call_method(bob_account, "deposit", args![Workspace("funds")])
@@ -300,8 +296,7 @@ fn it_blacklists_and_removes_from_blacklist() {
             .build_and_seal(&alice_key),
         vec![alice_proof.clone()],
     );
-    // Alice can't even create a proof because the badge was recalled
-    assert_reject_reason(&reason, "");
+    assert_reject_reason(&reason, "does not have permission to withdraw");
 
     // Remove Alice from the blacklist and re-deposit her badge
     test.execute_expect_success(
@@ -1591,6 +1586,71 @@ fn it_emits_an_event_named_after_the_method() {
         .find(|e| e.topic() == "TariStableCoin.pause")
         .expect("no pause event");
     assert!(pause.payload().get("tx_signer").is_none());
+}
+
+#[test]
+fn it_supports_zero_fee_wrapped_exchange() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        user_badge_resource,
+        token_resource,
+        ..
+    } = setup();
+
+    let (alice_account, alice_proof, _alice_key) = test.create_empty_account();
+
+    test.execute_expect_success(
+        test.transaction()
+            .call_method(
+                stable_coin_component,
+                "create_new_user",
+                args![1, alice_account],
+            )
+            .put_last_instruction_output_on_workspace("alice_badge")
+            .call_method(stable_coin_component, "withdraw", args![100])
+            .put_last_instruction_output_on_workspace("funds")
+            .call_method(alice_account, "deposit", args![Workspace("alice_badge")])
+            .call_method(alice_account, "deposit", args![Workspace("funds")])
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+
+    // Exchange 10 stable tokens where the 1% fee rounds to 0
+    test.execute_expect_success(
+        test.transaction()
+            .create_proof(alice_account, user_badge_resource)
+            .put_last_instruction_output_on_workspace("user_proof")
+            .authorize_proof("user_proof")
+            .call_method(alice_account, "withdraw", args![token_resource, 10])
+            .put_last_instruction_output_on_workspace("stable_tokens")
+            .call_method(
+                stable_coin_component,
+                "exchange_stable_for_wrapped_tokens",
+                args![Workspace("user_proof"), Workspace("stable_tokens")],
+            )
+            .put_last_instruction_output_on_workspace("wrapped_tokens")
+            .call_method(alice_account, "deposit", args![Workspace("wrapped_tokens")])
+            .drop_all_proofs_in_workspace()
+            .build_and_seal(&admin_key),
+        vec![admin_proof, alice_proof],
+    );
+
+    let alice_vaults = test
+        .read_only_state_store()
+        .get_vaults_for_account(alice_account)
+        .unwrap();
+    assert_eq!(alice_vaults.get(&token_resource).unwrap().balance(), 90);
+    let wrapped_resource = alice_vaults
+        .iter()
+        .find(|(addr, vault)| {
+            **addr != token_resource && **addr != user_badge_resource && vault.balance() > 0
+        })
+        .map(|(addr, _)| *addr)
+        .expect("Alice should have wrapped tokens");
+    assert_eq!(alice_vaults.get(&wrapped_resource).unwrap().balance(), 10);
 }
 
 struct TestSetup {

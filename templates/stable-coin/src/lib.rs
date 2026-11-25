@@ -230,7 +230,7 @@ mod stable_coin {
         }
 
         pub fn recall_funds(&mut self, vault_id: VaultId, amount: Amount) {
-            let bucket = ResourceManager::get(self.fungible.resource_address()).recall_fungible_amount(vault_id, amount);
+            let bucket = ResourceManager::get(self.token_vault.resource_address()).recall_fungible_amount(vault_id, amount);
             self.token_vault.deposit(bucket);
             emit_event("recall_funds", [("amount", amount.to_string()), ("vault_id", vault_id.to_string())]);
         }

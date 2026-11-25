@@ -214,8 +214,24 @@ mod template {
                         panic!("This account does not have permission to deposit");
                     }
                 }
+                ResourceAuthAction::Withdraw => {
+                    if self.is_paused {
+                        panic!("Token is paused");
+                    }
+                    if let Some(component_state) = caller.component_state() {
+                        let user_account = Account::from_value(component_state)
+                            .expect("Withdraw must be from an account");
+                        let vault = user_account
+                            .get_vault_by_resource(&self.user_auth_manager.resource_address())
+                            .expect("Caller account does not have a vault for the resource");
+
+                        if vault.balance().is_zero() && vault.locked_balance().is_zero() {
+                            panic!("This account does not have permission to withdraw");
+                        }
+                    }
+                }
                 _ => {
-                    // Withdraws etc are permitted as per normal resource access rules
+                    // Other actions are permitted as per normal resource access rules
                 }
             }
         }
@@ -281,6 +297,7 @@ mod template {
             let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
             let user_data = badge.get_mutable_data::<UserMutableData>();
+            assert!(!user_data.is_blacklisted, "User is blacklisted");
 
             let amount = bucket.amount();
             assert!(
@@ -297,10 +314,15 @@ mod template {
             let new_amount = amount
                 .checked_sub(fee)
                 .expect("Insufficient funds to pay exchange fee");
-            let fee_bucket = bucket.take(fee);
+            assert!(
+                new_amount.is_positive(),
+                "Exchange amount after fee must be positive"
+            );
+            if fee.is_positive() {
+                let fee_bucket = bucket.take(fee);
+                self.token_vault.deposit(fee_bucket);
+            }
             bucket.burn();
-
-            self.token_vault.deposit(fee_bucket);
 
             let wrapped_tokens = self.wrapped_token().manager().mint_fungible(new_amount);
 
@@ -324,7 +346,7 @@ mod template {
         ) -> Bucket {
             self.assert_not_paused();
             assert!(
-                !wrapped_bucket.amount().is_zero(),
+                wrapped_bucket.amount().is_positive(),
                 "The bucket must contain some tokens"
             );
 
@@ -341,6 +363,8 @@ mod template {
             let badge = badges.into_iter().next().unwrap();
             let badge = self.user_auth_manager.get_non_fungible(&badge);
             let user = badge.get_data::<UserData>();
+            let user_data = badge.get_mutable_data::<UserMutableData>();
+            assert!(!user_data.is_blacklisted, "User is blacklisted");
 
             let amount = wrapped_bucket.amount();
 
