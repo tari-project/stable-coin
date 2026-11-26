@@ -99,3 +99,51 @@ fn it_rejects_transaction_if_dest_is_on_deny_list() {
         vec![alice_proof],
     );
 }
+
+#[test]
+fn it_rejects_unauthorized_transfer_from_another_user_account() {
+    let mut test = UserAccountTest::new();
+    let (alice_proof, alice_pk, alice_key) = test.test.create_owner_proof();
+    let alice_pk = alice_pk.to_byte_type();
+    let (bob_proof, bob_pk, bob_key) = test.test.create_owner_proof();
+    let bob_pk = bob_pk.to_byte_type();
+
+    let accounts = test.open_accounts(vec![alice_pk, bob_pk]);
+    let (alice_account, bob_account) = (accounts[0], accounts[1]);
+
+    let output_mask = test.fund_account(alice_account, Amount(500));
+
+    let steal_proof = generate_withdraw_proof(
+        &output_mask,
+        Amount(50),
+        Some(Amount(500 - 50)),
+        Amount::zero(),
+    );
+    // Bob cannot call transfer_to on Alice's account
+    let reason = test.test.execute_expect_failure(
+        Transaction::builder()
+            .call_method(
+                alice_account,
+                "transfer_to",
+                args![bob_account, steal_proof.proof],
+            )
+            .build_and_seal(&bob_key),
+        vec![bob_proof],
+    );
+    assert_reject_reason(&reason, "Access Denied");
+    assert_reject_reason(&reason, "transfer_to");
+
+    // A frozen user cannot unfreeze their own account
+    let alice_vault: VaultId = test
+        .test
+        .extract_component_value(alice_account, "$.user_badge");
+    test.add_account_to_deny_list(alice_pk, alice_account, alice_vault);
+    let unfreeze_reason = test.test.execute_expect_failure(
+        Transaction::builder()
+            .call_method(alice_account, "unfreeze_account", args![alice_proof.clone()])
+            .build_and_seal(&alice_key),
+        vec![alice_proof],
+    );
+    assert_reject_reason(&unfreeze_reason, "Access Denied");
+    assert_reject_reason(&unfreeze_reason, "unfreeze_account");
+}

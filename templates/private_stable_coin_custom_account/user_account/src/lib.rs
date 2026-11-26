@@ -53,8 +53,9 @@ mod stable_coin {
 
             // Create component access rules
             let require_user_permission = rule!(resource(user_badge.resource_address()));
+            let require_user_key = rule!(public_key(user_public_key));
             let component_access_rules = AccessRules::new()
-                .add_method_rule("transfer_to", rule!(allow_all))
+                .add_method_rule("transfer_to", require_user_key)
                 .add_method_rule("deposit", require_user_permission.or(admin_only_access_rule.clone()))
                 .add_method_rule("deposit_auth_badge", admin_only_access_rule.clone())
                 .add_method_rule("freeze_account", admin_only_access_rule.clone())
