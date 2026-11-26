@@ -40,12 +40,12 @@ issuer involvement and no registration (see the `it_allows_anyone_to_hold_and_tr
 | `deposit(bucket)` | Treasurer | Moves coins into the issuer vault. Blocked while paused. |
 | `recall_revealed_tokens(vault_id, amount)` | Compliance | Pulls a revealed amount out of any vault into the issuer vault. |
 | `burn_utxo(utxo, value_proof)` | Burner | Burns a single UTXO, given a stealth value proof. Blocked while paused. |
-| `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls, at most 100 UTXOs per call. |
+| `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls, at most 50 UTXOs per call. |
 | `pause()` / `unpause()` | Pauser / Governor | Sets or clears the paused flag. |
 | `set_config_max_supply(max)` | Governor | Sets or removes (`None`) the supply cap. Cannot go below the current supply. |
 
 Every method emits an event named after the method (`TariStableCoin.<method>`); amounts are under the `amount` key
-and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
+(for `burn_utxo`, the proven value of the burnt UTXO) and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
 the privileged methods do not depend on the transaction having a main signer.
 
 ### Roles
@@ -82,8 +82,9 @@ instructions (Tari Ootle 0.55 and later). No template method is involved.
   transaction. See [`manifests/set_roles.rs`](manifests/set_roles.rs).
 - **Governor handover.** `SetComponentOwnerRule` replaces the owner rule. It is immediate and unconfirmed: the
   engine does not check that anyone holds the new rule. See [`manifests/set_governor.rs`](manifests/set_governor.rs).
-- **No guards.** The engine accepts any valid rule, including `allow_all` on a method and rules naming resources.
-  Check a rule change before signing it. Wallets that list component rule changes before signing help here.
+- **No guards after instantiation.** `instantiate` rejects a governor or role that is `allow_all` and a governor
+  that is `deny_all`. A later rule change is not checked: the engine accepts any valid rule, including `allow_all`
+  on a method and rules naming resources. Check a rule change before signing it. Wallets that list component rule changes before signing help here.
 
 ### Threat model
 

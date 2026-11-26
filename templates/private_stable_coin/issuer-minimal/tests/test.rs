@@ -528,7 +528,7 @@ fn it_caps_freeze_batches() {
         admin_key,
         ..
     } = setup();
-    let utxos: Vec<UtxoId> = (0..=100u8).map(|i| UtxoId::from_array([i; 32])).collect();
+    let utxos: Vec<UtxoId> = (0..=50u8).map(|i| UtxoId::from_array([i; 32])).collect();
 
     for method in ["freeze_utxos", "unfreeze_utxos"] {
         let reason = test.execute_expect_failure(
@@ -542,6 +542,68 @@ fn it_caps_freeze_batches() {
             vec![admin_proof.clone()],
         );
         assert_reject_reason(&reason, "Too many UTXOs in one batch");
+    }
+}
+
+/// The freeze events list every UTXO id, so a full batch has to fit the engine's event size cap.
+#[test]
+fn it_fits_a_full_freeze_batch_in_an_event() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        ..
+    } = setup();
+    // These UTXOs do not exist, so the call still fails, but only once the event has been accepted.
+    let utxos: Vec<UtxoId> = (0..50u8).map(|i| UtxoId::from_array([i; 32])).collect();
+
+    for method in ["freeze_utxos", "unfreeze_utxos"] {
+        let reason = test.execute_expect_failure(
+            call!(
+                test,
+                stable_coin_component,
+                method,
+                args![utxos.clone()],
+                &admin_key
+            ),
+            vec![admin_proof.clone()],
+        );
+        let reason = reason.to_string();
+        assert!(!reason.contains("exceeds maximum size"), "{reason}");
+        assert!(!reason.contains("Too many UTXOs"), "{reason}");
+    }
+}
+
+#[test]
+fn it_rejects_a_governor_or_role_open_to_everyone() {
+    let mut test = TemplateTest::my_crate();
+    let (_, admin_proof, admin_key) = test.create_funded_account();
+    let governor = signer_rule(&admin_key);
+
+    let cases = [
+        (
+            governed_by(AccessRule::AllowAll),
+            "The governor cannot be open to everyone",
+        ),
+        (
+            governed_by(AccessRule::DenyAll),
+            "The governor must be held by someone",
+        ),
+        (
+            RoleConfig {
+                treasurer: Some(AccessRule::AllowAll),
+                ..governed_by(governor)
+            },
+            "A role cannot be open to everyone",
+        ),
+    ];
+    for (roles, expected) in cases {
+        let reason = test.execute_expect_failure(
+            instantiate_transaction(&test, &admin_key, StableCoinConfig::default(), roles),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, expected);
     }
 }
 
