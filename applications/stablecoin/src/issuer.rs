@@ -239,6 +239,7 @@ impl Issuer {
         metadata.insert("provider_name", params.name.as_str());
         let config = StableCoinConfig {
             max_supply: params.max_supply,
+            ..Default::default()
         };
         let view_key = self.view_key;
         let unsigned = IComponent::new(&self.provider, self.max_epoch().await?)
