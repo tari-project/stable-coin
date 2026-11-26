@@ -7,7 +7,7 @@ mod config;
 use config::StableCoinConfig;
 #[path = "../src/roles.rs"]
 mod roles;
-use roles::RoleConfig;
+use roles::{RoleConfig, Roles};
 use tari_template_lib::prelude::rule;
 use tari_template_lib::types::{
     AccessRule, Amount, ComponentAddress, Metadata, NonFungibleAddress, OwnerRule, ResourceAddress,
@@ -616,6 +616,7 @@ fn it_rejects_an_initial_supply_above_max_supply() {
     let (_, admin_proof, admin_key) = test.create_funded_account();
     let config = StableCoinConfig {
         max_supply: Some(Amount::from(INITIAL_SUPPLY - 1)),
+        ..Default::default()
     };
 
     let reason = test.execute_expect_failure(
@@ -740,6 +741,181 @@ fn it_burns_a_utxo_and_reports_the_amount() {
     );
 }
 
+#[test]
+fn it_routes_rule_changes_through_the_template_when_template_managed() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        ..
+    } = setup_with(
+        StableCoinConfig {
+            template_managed_rules: true,
+            ..Default::default()
+        },
+        |_, governor| governed_by(governor),
+    );
+    let (_, minter_proof, minter_key) = test.create_empty_account();
+    let (_, governor_proof, governor_key) = test.create_empty_account();
+    let roles = Roles {
+        minter: Some(signer_rule(&minter_key)),
+        ..Default::default()
+    };
+
+    // The governor cannot change the rules by instruction
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .set_component_access_rules(stable_coin_component, roles.access_rules())
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "rules updater is TemplateManaged");
+    let reason = test.execute_expect_failure(
+        test.transaction()
+            .set_component_owner_rule(
+                stable_coin_component,
+                OwnerRule::ByAccessRule(signer_rule(&governor_key)),
+            )
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    assert_reject_reason(&reason, "rules updater is TemplateManaged");
+
+    // Only the governor changes them through the template
+    let set_roles = |test: &TemplateTest, key: &RistrettoSecretKey| {
+        call!(
+            test,
+            stable_coin_component,
+            "set_roles",
+            args![roles.clone()],
+            key
+        )
+    };
+    let set_governor = |test: &TemplateTest, key: &RistrettoSecretKey| {
+        call!(
+            test,
+            stable_coin_component,
+            "set_governor",
+            args![signer_rule(&governor_key)],
+            key
+        )
+    };
+    for transaction in [
+        set_roles(&test, &minter_key),
+        set_governor(&test, &minter_key),
+    ] {
+        let reason = test.execute_expect_failure(transaction, vec![minter_proof.clone()]);
+        assert_reject_reason(&reason, "Access Denied");
+    }
+
+    // Each role is reported, with its new rule or none
+    let result =
+        test.execute_expect_success(set_roles(&test, &admin_key), vec![admin_proof.clone()]);
+    let reported: Vec<(String, Option<AccessRule>)> = result
+        .finalize
+        .events
+        .iter()
+        .filter(|e| e.topic() == "TariStableCoin.set_roles")
+        .map(|e| {
+            (
+                e.payload().get("role").unwrap().decode().unwrap(),
+                e.payload().get("rule").unwrap().decode().unwrap(),
+            )
+        })
+        .collect();
+    let expected = [
+        ("minter", roles.minter.clone()),
+        ("burner", None),
+        ("treasurer", None),
+        ("compliance", None),
+        ("pauser", None),
+    ];
+    assert_eq!(reported.len(), expected.len());
+    for ((role, rule), (expected_role, expected_rule)) in reported.iter().zip(&expected) {
+        assert_eq!(role, expected_role);
+        assert_eq!(rule, expected_rule);
+    }
+    test.execute_expect_success(
+        call!(
+            test,
+            stable_coin_component,
+            "increase_supply",
+            args![100],
+            &minter_key
+        ),
+        vec![minter_proof],
+    );
+
+    let result =
+        test.execute_expect_success(set_governor(&test, &admin_key), vec![admin_proof.clone()]);
+    let event = result
+        .finalize
+        .events
+        .iter()
+        .find(|e| e.topic() == "TariStableCoin.set_governor")
+        .expect("no set_governor event");
+    let new: AccessRule = event.payload().get("new").unwrap().decode().unwrap();
+    assert_eq!(new, signer_rule(&governor_key));
+
+    // The old governor no longer governs; the new one does
+    let reason = test.execute_expect_failure(set_roles(&test, &admin_key), vec![admin_proof]);
+    assert_reject_reason(&reason, "Access Denied");
+    test.execute_expect_success(set_roles(&test, &governor_key), vec![governor_proof]);
+}
+
+#[test]
+fn it_checks_rules_changed_through_the_template() {
+    // Without `template_managed_rules` the methods work too, alongside the instructions
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        ..
+    } = setup();
+
+    let open_role = Roles {
+        treasurer: Some(AccessRule::AllowAll),
+        ..Default::default()
+    };
+    let cases = [
+        (
+            "set_roles",
+            args![open_role],
+            "A role cannot be open to everyone",
+        ),
+        (
+            "set_governor",
+            args![AccessRule::AllowAll],
+            "The governor cannot be open to everyone",
+        ),
+        (
+            "set_governor",
+            args![AccessRule::DenyAll],
+            "The governor must be held by someone",
+        ),
+    ];
+    for (method, args, expected) in cases {
+        let reason = test.execute_expect_failure(
+            call!(test, stable_coin_component, method, args, &admin_key),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, expected);
+    }
+
+    test.execute_expect_success(
+        call!(
+            test,
+            stable_coin_component,
+            "set_roles",
+            args![Roles::default()],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+}
+
 struct TestSetup {
     test: TemplateTest,
     stable_coin_component: ComponentAddress,
@@ -817,12 +993,19 @@ fn setup() -> TestSetup {
 /// Instantiates the stable coin with the roles `roles` returns. `roles` is given a rule naming the admin key, and may
 /// create accounts in the test first.
 fn setup_with_roles(roles: impl FnOnce(&mut TemplateTest, AccessRule) -> RoleConfig) -> TestSetup {
+    setup_with(StableCoinConfig::default(), roles)
+}
+
+fn setup_with(
+    config: StableCoinConfig,
+    roles: impl FnOnce(&mut TemplateTest, AccessRule) -> RoleConfig,
+) -> TestSetup {
     let mut test = TemplateTest::my_crate();
     let (_, admin_proof, admin_key) = test.create_funded_account();
     let roles = roles(&mut test, signer_rule(&admin_key));
     let template = test.get_template_address("TariStableCoin");
     let result = test.execute_expect_success(
-        instantiate_transaction(&test, &admin_key, StableCoinConfig::default(), roles),
+        instantiate_transaction(&test, &admin_key, config, roles),
         vec![admin_proof.clone()],
     );
 

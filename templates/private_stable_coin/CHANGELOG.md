@@ -55,7 +55,15 @@ existing manifests and event consumers need updating.
   supply. The governor changes it with `set_config_max_supply`, which cannot go below the current supply. In
   `issuer-no-user-badge` and `issuer` the cap counts the coin plus the wrapped token.
 - **Freeze batch cap.** ([#45](https://github.com/tari-project/stable-coin/pull/45)) `freeze_utxos` and
-  `unfreeze_utxos` take at most 100 UTXOs per call.
+  `unfreeze_utxos` take at most 100 UTXOs per call. In `issuer-minimal` the cap is 50
+  ([#52](https://github.com/tari-project/stable-coin/pull/52)).
+- **`issuer-minimal`: rule changes through the template.**
+  ([#53](https://github.com/tari-project/stable-coin/pull/53)) `set_roles(roles)` and `set_governor(rule)`
+  let the governor replace the roles and hand over from the template. Both reject the rules `instantiate`
+  rejects and emit an event. With `StableCoinConfig.template_managed_rules` set at instantiation, the
+  component is created with `RulesUpdater::TemplateManaged` and the `SetComponentAccessRules` and
+  `SetComponentOwnerRule` instructions are rejected, so every change is checked and emits an event. The flag
+  is off by default and cannot be changed later.
 - **Threat model, view key and integration notes** in each template's README.
   ([#46](https://github.com/tari-project/stable-coin/pull/46))
 

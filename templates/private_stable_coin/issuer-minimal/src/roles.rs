@@ -30,6 +30,19 @@ impl Role {
         Role::Pauser,
     ];
 
+    /// The role's name in events.
+    // The tests include this file as a module and never call this.
+    #[allow(dead_code)]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Role::Minter => "minter",
+            Role::Burner => "burner",
+            Role::Treasurer => "treasurer",
+            Role::Compliance => "compliance",
+            Role::Pauser => "pauser",
+        }
+    }
+
     /// The component methods the role may call. Every other method is reserved for the governor.
     pub const fn methods(self) -> &'static [&'static str] {
         match self {
@@ -42,7 +55,7 @@ impl Role {
     }
 }
 
-/// Who governs the coin and who holds each role.
+/// Who governs the coin and who holds each role, as `instantiate` takes them.
 ///
 /// The governor rule becomes the component's owner rule. A role left unset has no rule of its own, so only the
 /// governor can call its methods, whoever the governor is at the time.
@@ -63,6 +76,46 @@ pub struct RoleConfig {
 }
 
 impl RoleConfig {
+    pub fn roles(&self) -> Roles {
+        Roles {
+            minter: self.minter.clone(),
+            burner: self.burner.clone(),
+            treasurer: self.treasurer.clone(),
+            compliance: self.compliance.clone(),
+            pauser: self.pauser.clone(),
+        }
+    }
+
+    /// Rejects the rules that are only ever a mistake: see [`assert_valid_governor`] and [`Roles::assert_valid`].
+    // The tests include this file as a module and never call this.
+    #[allow(dead_code)]
+    pub fn assert_valid(&self) {
+        assert_valid_governor(&self.governor);
+        self.roles().assert_valid();
+    }
+
+    /// The component access rules that give each role its methods. Everything else is denied to all but the owner.
+    pub fn access_rules(&self) -> AccessRules {
+        self.roles().access_rules()
+    }
+}
+
+/// Who holds each role, as `set_roles` takes them. A role left unset stays with the governor.
+#[derive(Clone, Default, minicbor::Encode, minicbor::Decode, minicbor::CborLen)]
+pub struct Roles {
+    #[n(0)]
+    pub minter: Option<AccessRule>,
+    #[n(1)]
+    pub burner: Option<AccessRule>,
+    #[n(2)]
+    pub treasurer: Option<AccessRule>,
+    #[n(3)]
+    pub compliance: Option<AccessRule>,
+    #[n(4)]
+    pub pauser: Option<AccessRule>,
+}
+
+impl Roles {
     pub fn get(&self, role: Role) -> Option<&AccessRule> {
         match role {
             Role::Minter => self.minter.as_ref(),
@@ -73,19 +126,10 @@ impl RoleConfig {
         }
     }
 
-    /// Rejects the rules that are only ever a mistake at instantiation: a governor or role that everyone holds, and
-    /// a governor that no one holds, which would leave the coin without an owner for good.
+    /// Rejects a role that everyone holds.
     // The tests include this file as a module and never call this.
     #[allow(dead_code)]
     pub fn assert_valid(&self) {
-        assert!(
-            !matches!(self.governor, AccessRule::AllowAll),
-            "The governor cannot be open to everyone"
-        );
-        assert!(
-            !matches!(self.governor, AccessRule::DenyAll),
-            "The governor must be held by someone"
-        );
         for role in Role::ALL {
             assert!(
                 !matches!(self.get(role), Some(AccessRule::AllowAll)),
@@ -106,4 +150,19 @@ impl RoleConfig {
         }
         rules
     }
+}
+
+/// Rejects a governor that everyone holds, and one that no one holds, which would leave the coin without an owner for
+/// good.
+// The tests include this file as a module and never call this.
+#[allow(dead_code)]
+pub fn assert_valid_governor(governor: &AccessRule) {
+    assert!(
+        !matches!(governor, AccessRule::AllowAll),
+        "The governor cannot be open to everyone"
+    );
+    assert!(
+        !matches!(governor, AccessRule::DenyAll),
+        "The governor must be held by someone"
+    );
 }

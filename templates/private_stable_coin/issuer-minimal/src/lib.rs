@@ -42,11 +42,12 @@ static TALC: talc::wasm::WasmArenaTalc = {
 mod template {
     use tari_template_lib::types::crypto::CommitmentValueProof;
 
+    use tari_template_lib::types::SubstateOwnerRule;
     use tari_template_lib::types::access_rules::RulesUpdater;
 
     use super::*;
     use crate::config::StableCoinConfig;
-    use crate::roles::RoleConfig;
+    use crate::roles::{Role, RoleConfig, Roles, assert_valid_governor};
 
     /// The most UTXOs `freeze_utxos` and `unfreeze_utxos` take in one call. The event lists every UTXO id, and the
     /// engine caps an event at 2 KiB, which 56 ids fill.
@@ -65,8 +66,9 @@ mod template {
         /// with the governor. The component owns the coin resource, so all privileged actions go through its methods
         /// and are subject to pause and to the access rules.
         ///
-        /// The governor changes who holds a role, or hands over governance, with the `SetComponentAccessRules` and
-        /// `SetComponentOwnerRule` transaction instructions. The template has no code for either.
+        /// The governor changes who holds a role, or hands over governance, with `set_roles` and `set_governor`. Unless
+        /// `config.template_managed_rules` is set, it can also do so with the `SetComponentAccessRules` and
+        /// `SetComponentOwnerRule` transaction instructions, which run no template code.
         #[allow(clippy::too_many_arguments)]
         pub fn instantiate(
             address_alloc: ComponentAddressAllocation,
@@ -86,6 +88,11 @@ mod template {
                     "The initial supply exceeds the max supply"
                 );
             }
+            let rules_updater = if config.template_managed_rules {
+                RulesUpdater::TemplateManaged
+            } else {
+                RulesUpdater::Owner
+            };
             // Minting, burning, recalling and freezing the coin are reserved for this component, so
             // every privileged action goes through a component method, where the role rules and
             // pause apply.
@@ -114,9 +121,9 @@ mod template {
             .with_address_allocation(address_alloc)
             .with_access_rules(roles.access_rules())
             // The governor owns the component: it can call every method, and it alone can replace the access rules
-            // and the owner rule, by transaction instruction.
+            // and the owner rule.
             .with_owner_rule(OwnerRule::ByAccessRule(roles.governor))
-            .with_rules_updater(RulesUpdater::Owner)
+            .with_rules_updater(rules_updater)
             .create()
         }
 
@@ -195,6 +202,27 @@ mod template {
                 metadata!("prev" => self.config.max_supply, "new" => max_supply),
             );
             self.config.max_supply = max_supply;
+        }
+
+        /// Replaces who holds each role. This replaces every role at once: a role left unset goes back to the
+        /// governor. Emits one event per role.
+        pub fn set_roles(&mut self, roles: Roles) {
+            roles.assert_valid();
+            for role in Role::ALL {
+                emit_event(
+                    "set_roles",
+                    metadata!("role" => role.name(), "rule" => roles.get(role)),
+                );
+            }
+            ComponentManager::current().set_access_rules(roles.access_rules());
+        }
+
+        /// Hands the coin to a new governor. This takes effect immediately and nothing checks that anyone holds the
+        /// new rule.
+        pub fn set_governor(&mut self, governor: AccessRule) {
+            assert_valid_governor(&governor);
+            emit_event("set_governor", metadata!("new" => &governor));
+            ComponentManager::current().set_owner_rule(SubstateOwnerRule::ByAccessRule(governor));
         }
 
         pub fn pause(&mut self) {

@@ -1,5 +1,7 @@
 // Replaces who holds each role. Sign with the governor.
 //
+// A coin instantiated with `template_managed_rules` rejects this instruction: call its `set_roles` method instead.
+//
 // The instruction replaces every method rule at once: list each role that is not left with the governor, with all
 // of its methods. A method without a rule can only be called by the governor, so to leave a role with the governor
 // delete its lines.

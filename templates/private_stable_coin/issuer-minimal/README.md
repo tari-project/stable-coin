@@ -43,9 +43,12 @@ issuer involvement and no registration (see the `it_allows_anyone_to_hold_and_tr
 | `freeze_utxos(utxos)` / `unfreeze_utxos(utxos)` | Compliance | UTXO-level freeze controls, at most 50 UTXOs per call. |
 | `pause()` / `unpause()` | Pauser / Governor | Sets or clears the paused flag. |
 | `set_config_max_supply(max)` | Governor | Sets or removes (`None`) the supply cap. Cannot go below the current supply. |
+| `set_roles(roles)` | Governor | Replaces who holds every role at once. Rejects a role that is `allow_all`. |
+| `set_governor(rule)` | Governor | Hands the coin to a new governor, immediately. Rejects `allow_all` and `deny_all`. |
 
 Every method emits an event named after the method (`TariStableCoin.<method>`); amounts are under the `amount` key
-(for `burn_utxo`, the proven value of the burnt UTXO) and config changes carry `prev` and `new`. Events do not name the signer: the transaction records who signed it, and
+(for `burn_utxo`, the proven value of the burnt UTXO) and config changes carry `prev` and `new`. `set_roles` emits one event per role, with `role` and its new `rule`
+(none if the role goes back to the governor); `set_governor` carries the `new` rule. Events do not name the signer: the transaction records who signed it, and
 the privileged methods do not depend on the transaction having a main signer.
 
 ### Roles
@@ -54,8 +57,7 @@ The component, not any key, owns the coin resource: it has no owner, and its min
 name only the component, with locked updaters. Every privileged action therefore goes through a component method,
 where the access rules and pause apply.
 
-The template holds no role state and has no code to change a role. Roles are the component's **access rules**, kept
-by the engine:
+The template holds no role state. Roles are the component's **access rules**, kept by the engine:
 
 - The **governor** is the component's owner rule. The owner may call every method.
 - Every other **role** is the access rule on that role's methods. A role left unset has no rule, so only the
@@ -74,17 +76,28 @@ names signer keys: one key (`public_key(..)`) or a combination (`any_of(..)`, `a
 | Compliance | `recall_revealed_tokens`, `freeze_utxos`, `unfreeze_utxos` | Compliance team key. |
 | Pauser | `pause` | A key that can act quickly. |
 
-The component is created with `RulesUpdater::Owner`, so the governor changes the rules with two transaction
-instructions (Tari Ootle 0.55 and later). No template method is involved.
+The governor changes the rules in one of two ways. Which ones are open is fixed at instantiation by
+`template_managed_rules` in the [configuration](#configuration).
 
-- **Rotation.** `SetComponentAccessRules` replaces **every** method rule at once: send the full set, with each
-  role's methods, and leave out the roles that stay with the governor. The old rules stop working in the same
-  transaction. See [`manifests/set_roles.rs`](manifests/set_roles.rs).
-- **Governor handover.** `SetComponentOwnerRule` replaces the owner rule. It is immediate and unconfirmed: the
-  engine does not check that anyone holds the new rule. See [`manifests/set_governor.rs`](manifests/set_governor.rs).
-- **No guards after instantiation.** `instantiate` rejects a governor or role that is `allow_all` and a governor
-  that is `deny_all`. A later rule change is not checked: the engine accepts any valid rule, including `allow_all`
-  on a method and rules naming resources. Check a rule change before signing it. Wallets that list component rule changes before signing help here.
+**Through the template**, always available:
+
+- **Rotation.** `set_roles(roles)` replaces **every** role at once: `Roles` has one optional rule per role, and a
+  role left unset goes back to the governor. The old rules stop working in the same transaction.
+- **Governor handover.** `set_governor(rule)` replaces the owner rule. It is immediate and unconfirmed: nothing
+  checks that anyone holds the new rule.
+- Both check the new rule as `instantiate` does and emit an event.
+
+**By transaction instruction** (Tari Ootle 0.55 and later), only when `template_managed_rules` is off, the default:
+
+- `SetComponentAccessRules` replaces every method rule at once: send the full set, with each role's methods, and
+  leave out the roles that stay with the governor. See [`manifests/set_roles.rs`](manifests/set_roles.rs).
+- `SetComponentOwnerRule` replaces the owner rule. See [`manifests/set_governor.rs`](manifests/set_governor.rs).
+- **No guards and no event.** No template code runs, so the engine accepts any valid rule, including `allow_all`
+  on a method and a `deny_all` governor, and the template emits nothing. Check a rule change before signing it.
+  Wallets that list component rule changes before signing help here.
+
+With `template_managed_rules` on, the engine rejects both instructions, so every change is checked and emits an
+event. Neither way restricts a rule to signer keys: a rule may name resources.
 
 ### Threat model
 
@@ -124,11 +137,12 @@ with `set_config_max_supply`.
 | Field | Default | Effect |
 |---|---|---|
 | `max_supply` | `None` | Caps the total supply: `increase_supply` fails past it, and `instantiate` rejects a larger initial supply. `None` leaves supply uncapped. |
+| `template_managed_rules` | `false` | When `true`, roles and the governor change only through `set_roles` and `set_governor`; the rule-change instructions are rejected. Fixed at instantiation. See [Roles](#roles). |
 
 ### Incident response
 
-If a role's key is compromised, the governor replaces the access rules in one `SetComponentAccessRules`
-instruction, which covers every affected role at once, so the compromised holder has no window to act between
+If a role's key is compromised, the governor replaces the access rules in one `set_roles` call or
+`SetComponentAccessRules` instruction, which covers every affected role at once, so the compromised holder has no window to act between
 them. Pause
 blocks issuance and treasury movements but not recall or freeze: a compromised compliance role keeps those until it
 is reassigned.
@@ -175,8 +189,10 @@ The release profile is tuned for size (`opt-level = "s"`, LTO, `panic = "abort"`
   deposits into a given account.
 - [`manifests/transfer.rs`](manifests/transfer.rs) — creates an account and transfers funds to it from the
   issuer vault.
-- [`manifests/set_roles.rs`](manifests/set_roles.rs) — replaces who holds each role, signed by the governor.
-- [`manifests/set_governor.rs`](manifests/set_governor.rs) — hands the coin to a new governor.
+- [`manifests/set_roles.rs`](manifests/set_roles.rs) — replaces who holds each role by instruction, signed by the
+  governor. Not for a coin with `template_managed_rules`.
+- [`manifests/set_governor.rs`](manifests/set_governor.rs) — hands the coin to a new governor by instruction. Not
+  for a coin with `template_managed_rules`.
 
 ## Integrating
 
