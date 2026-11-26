@@ -82,7 +82,8 @@ passphrase. There is no recovery phrase: back the file up.
 ## Limits
 
 - Needs a network running Tari Ootle 0.55 or later: `set-role` and `set-governor` use the
-  `SetComponentAccessRules` and `SetComponentOwnerRule` instructions.
+  `SetComponentAccessRules` and `SetComponentOwnerRule` instructions. They do not work on a coin instantiated
+  with `template_managed_rules`, which rejects both instructions.
 - `set-governor` is immediate and nothing confirms that the new key is held by anyone.
 - `set-role` reads the current rules and replaces them all, so two role changes sent at the same time can
   overwrite each other.

@@ -1,5 +1,7 @@
 // Hands the coin to a new governor. Sign with the current governor.
 //
+// A coin instantiated with `template_managed_rules` rejects this instruction: call its `set_governor` method instead.
+//
 // This takes effect immediately and nothing checks that anyone holds the new rule: a mistyped key leaves the coin
 // without a governor for good.
 
