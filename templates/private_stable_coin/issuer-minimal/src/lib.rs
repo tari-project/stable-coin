@@ -48,8 +48,9 @@ mod template {
     use crate::config::StableCoinConfig;
     use crate::roles::RoleConfig;
 
-    /// The most UTXOs `freeze_utxos` and `unfreeze_utxos` take in one call.
-    const MAX_FREEZE_BATCH: usize = 100;
+    /// The most UTXOs `freeze_utxos` and `unfreeze_utxos` take in one call. The event lists every UTXO id, and the
+    /// engine caps an event at 2 KiB, which 56 ids fill.
+    const MAX_FREEZE_BATCH: usize = 50;
 
     pub struct TariStableCoin {
         config: StableCoinConfig,
@@ -77,6 +78,7 @@ mod template {
             config: Option<StableCoinConfig>,
             roles: RoleConfig,
         ) -> Component<Self> {
+            roles.assert_valid();
             let config = config.unwrap_or_default();
             if let Some(max_supply) = config.max_supply {
                 assert!(
@@ -170,8 +172,13 @@ mod template {
 
         pub fn burn_utxo(&mut self, utxo: UtxoId, value_proof: CommitmentValueProof) {
             self.assert_not_paused();
+            // The engine checks the proof against the UTXO, so a burn that succeeds burnt exactly this amount.
+            let amount = value_proof.value;
             self.token_vault_manager().burn_utxo(utxo, value_proof);
-            emit_event("burn_utxo", metadata!("utxo_id" => utxo));
+            emit_event(
+                "burn_utxo",
+                metadata!("utxo_id" => utxo, "amount" => amount),
+            );
         }
 
         /// Sets the cap on outstanding supply, or removes it with `None`. The cap cannot be set below the current

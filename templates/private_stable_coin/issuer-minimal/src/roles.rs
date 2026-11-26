@@ -73,6 +73,27 @@ impl RoleConfig {
         }
     }
 
+    /// Rejects the rules that are only ever a mistake at instantiation: a governor or role that everyone holds, and
+    /// a governor that no one holds, which would leave the coin without an owner for good.
+    // The tests include this file as a module and never call this.
+    #[allow(dead_code)]
+    pub fn assert_valid(&self) {
+        assert!(
+            !matches!(self.governor, AccessRule::AllowAll),
+            "The governor cannot be open to everyone"
+        );
+        assert!(
+            !matches!(self.governor, AccessRule::DenyAll),
+            "The governor must be held by someone"
+        );
+        for role in Role::ALL {
+            assert!(
+                !matches!(self.get(role), Some(AccessRule::AllowAll)),
+                "A role cannot be open to everyone"
+            );
+        }
+    }
+
     /// The component access rules that give each role its methods. Everything else is denied to all but the owner.
     pub fn access_rules(&self) -> AccessRules {
         let mut rules = AccessRules::new();

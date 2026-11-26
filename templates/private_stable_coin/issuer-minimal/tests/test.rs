@@ -11,12 +11,15 @@ use roles::RoleConfig;
 use tari_template_lib::prelude::rule;
 use tari_template_lib::types::{
     AccessRule, Amount, ComponentAddress, Metadata, NonFungibleAddress, OwnerRule, ResourceAddress,
-    UtxoId,
+    UtxoAddress, UtxoId,
 };
 use tari_template_test_tooling::TemplateTest;
 use tari_template_test_tooling::crypto::{PublicKey, RistrettoPublicKey, RistrettoSecretKey};
+use tari_template_test_tooling::engine_types::crypto::ElgamalVerifiableBalance;
 use tari_template_test_tooling::support::assert_error::assert_reject_reason;
+use tari_template_test_tooling::support::stealth::{self, NO_INPUTS};
 use tari_template_test_tooling::transaction::{Transaction, args};
+use tari_template_test_tooling::wallet_crypto::viewable_balance_proof::generate_elgamal_value_proof;
 
 /// A transaction signed by `$key` calling `$method` on `$component`.
 macro_rules! call {
@@ -528,7 +531,7 @@ fn it_caps_freeze_batches() {
         admin_key,
         ..
     } = setup();
-    let utxos: Vec<UtxoId> = (0..=100u8).map(|i| UtxoId::from_array([i; 32])).collect();
+    let utxos: Vec<UtxoId> = (0..=50u8).map(|i| UtxoId::from_array([i; 32])).collect();
 
     for method in ["freeze_utxos", "unfreeze_utxos"] {
         let reason = test.execute_expect_failure(
@@ -542,6 +545,68 @@ fn it_caps_freeze_batches() {
             vec![admin_proof.clone()],
         );
         assert_reject_reason(&reason, "Too many UTXOs in one batch");
+    }
+}
+
+/// The freeze events list every UTXO id, so a full batch has to fit the engine's event size cap.
+#[test]
+fn it_fits_a_full_freeze_batch_in_an_event() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        ..
+    } = setup();
+    // These UTXOs do not exist, so the call still fails, but only once the event has been accepted.
+    let utxos: Vec<UtxoId> = (0..50u8).map(|i| UtxoId::from_array([i; 32])).collect();
+
+    for method in ["freeze_utxos", "unfreeze_utxos"] {
+        let reason = test.execute_expect_failure(
+            call!(
+                test,
+                stable_coin_component,
+                method,
+                args![utxos.clone()],
+                &admin_key
+            ),
+            vec![admin_proof.clone()],
+        );
+        let reason = reason.to_string();
+        assert!(!reason.contains("exceeds maximum size"), "{reason}");
+        assert!(!reason.contains("Too many UTXOs"), "{reason}");
+    }
+}
+
+#[test]
+fn it_rejects_a_governor_or_role_open_to_everyone() {
+    let mut test = TemplateTest::my_crate();
+    let (_, admin_proof, admin_key) = test.create_funded_account();
+    let governor = signer_rule(&admin_key);
+
+    let cases = [
+        (
+            governed_by(AccessRule::AllowAll),
+            "The governor cannot be open to everyone",
+        ),
+        (
+            governed_by(AccessRule::DenyAll),
+            "The governor must be held by someone",
+        ),
+        (
+            RoleConfig {
+                treasurer: Some(AccessRule::AllowAll),
+                ..governed_by(governor)
+            },
+            "A role cannot be open to everyone",
+        ),
+    ];
+    for (roles, expected) in cases {
+        let reason = test.execute_expect_failure(
+            instantiate_transaction(&test, &admin_key, StableCoinConfig::default(), roles),
+            vec![admin_proof.clone()],
+        );
+        assert_reject_reason(&reason, expected);
     }
 }
 
@@ -594,6 +659,85 @@ fn it_emits_an_event_named_after_the_method() {
         .find(|e| e.topic() == "TariStableCoin.pause")
         .expect("no pause event");
     assert!(pause.payload().get("tx_signer").is_none());
+}
+
+#[test]
+fn it_burns_a_utxo_and_reports_the_amount() {
+    let TestSetup {
+        mut test,
+        stable_coin_component,
+        admin_proof,
+        admin_key,
+        token_resource,
+    } = setup();
+    // `instantiate_transaction` makes the admin key the resource view key
+    let view_key = RistrettoPublicKey::from_secret_key(&admin_key);
+
+    // Move 100 out of the issuer vault into a single stealth UTXO
+    let transfer =
+        stealth::generate_transfer_data_with_view_key(NO_INPUTS, 100u64, [100], 0, &view_key);
+    let result = test.execute_expect_success(
+        test.transaction()
+            .call_method(stable_coin_component, "withdraw", args![100])
+            .put_last_instruction_output_on_workspace("funds")
+            .stealth_transfer_with_input_bucket(token_resource, transfer.statement, "funds")
+            .build_and_seal(&admin_key),
+        vec![admin_proof.clone()],
+    );
+    let utxo_id = result
+        .finalize
+        .result
+        .any_accept()
+        .unwrap()
+        .up_iter()
+        .find_map(|(id, _)| id.as_utxo_address().map(|addr| *addr.id()))
+        .expect("no UTXO created");
+    let supply_before = total_supply(&test, token_resource);
+
+    // The view key holder proves the UTXO's value from its viewable balance
+    let utxo = test
+        .read_only_state_store()
+        .get_utxo(UtxoAddress::new(token_resource, utxo_id))
+        .unwrap();
+    let viewable_balance: ElgamalVerifiableBalance = utxo
+        .output()
+        .unwrap()
+        .output
+        .viewable_balance
+        .as_ref()
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let proof = generate_elgamal_value_proof(
+        &admin_key,
+        100,
+        &utxo_id.into_commitment_bytes(),
+        &viewable_balance,
+    );
+
+    let result = test.execute_expect_success(
+        call!(
+            test,
+            stable_coin_component,
+            "burn_utxo",
+            args![utxo_id, proof],
+            &admin_key
+        ),
+        vec![admin_proof],
+    );
+
+    let burn = result
+        .finalize
+        .events
+        .iter()
+        .find(|e| e.topic() == "TariStableCoin.burn_utxo")
+        .expect("no burn_utxo event");
+    let amount: Amount = burn.payload().get("amount").unwrap().decode().unwrap();
+    assert_eq!(amount, Amount::from(100u64));
+    assert_eq!(
+        total_supply(&test, token_resource),
+        supply_before - Amount::from(100u64)
+    );
 }
 
 struct TestSetup {
